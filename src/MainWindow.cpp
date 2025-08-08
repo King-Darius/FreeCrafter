@@ -9,7 +9,7 @@
 #include "GLViewport.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("FreeSketch");
+    setWindowTitle("FreeCrafter");
     resize(1200, 800);
 
     viewport = new GLViewport(this);

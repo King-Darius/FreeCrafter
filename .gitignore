@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+qt/
+
+# CMake cache and temporary files
+CMakeCache.txt
+CMakeFiles/
+cmake-build*/
+Makefile
+*.cmake
+
+# Visual Studio
+*.sln
+*.vcxproj*
+*.user
+
+# Qt Creator
+*.pro.user*
+
+# Misc
+*.o
+*.obj
+*.pdb
+*.dll
+*.exe
+*.app
+.DS_Store

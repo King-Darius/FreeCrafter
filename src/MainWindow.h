@@ -2,6 +2,9 @@
 
 #include <QMainWindow>
 
+#include "Tools/ToolManager.h"
+#include <memory>
+
 class GLViewport;
 
 class MainWindow : public QMainWindow {
@@ -28,5 +31,6 @@ private:
     void createDockPanels();
 
     GLViewport *viewport;
+    std::unique_ptr<ToolManager> toolManager;
 };
 

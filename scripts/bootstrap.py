@@ -41,7 +41,25 @@ def ensure_aqt():
     try:
         import aqtinstall  # noqa: F401
     except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "aqtinstall"])
+        req_file = Path(__file__).with_name("requirements.txt")
+        try:
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--user",
+                    "-r",
+                    str(req_file),
+                ]
+            )
+        except subprocess.CalledProcessError:
+            print(
+                f"Failed to install Python dependencies from {req_file}. "
+                "Please run 'pip install -r scripts/requirements.txt' manually and rerun the script."
+            )
+            raise
 
 
 def ensure_qt():

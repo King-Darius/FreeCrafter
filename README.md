@@ -1,9 +1,10 @@
 # FreeCrafter  <img width="30" height="30" alt="FreeCrafter Logo" src="https://github.com/user-attachments/assets/4fb35500-bc0c-4275-97a9-96ad20268567" />
 
-Still very early WIP.  Nothing "works" just yet.
+Still very early WIP. Nothing "works" just yet.
 
+FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. It currently provides a minimal interface and a handful of prototype tools for sketching and extruding simple geometry.
 
-FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. It currently provides a minimal interface and a handful of prototype tools for sketching and extruding simple geometry.   The long-term goal is to build an CAD/architectural design style application to compliment Blender.  It would fit a gap for game developers and for CAD prototyping where tools like Blender are not ideal.  However, the plan would be to work with Blender to texture or render scenes if required.
+For a breakdown of planned milestones and features, see the [ROADMAP](ROADMAP.md).
 
 ## Features
 - Qt-based desktop interface with a custom OpenGL viewport
@@ -14,21 +15,48 @@ FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. It 
 ## Building
 
 The repository ships with a helper script that fetches a minimal Qt runtime and
-builds the project for you. After cloning, simply run:
+builds the project for you. After cloning, simply run the bootstrap script:
 
 ```bash
 python scripts/bootstrap.py
 ```
 
-The script downloads the necessary Qt libraries using the open‑source
-`aqtinstall` tool, configures CMake with that Qt, compiles FreeCrafter, and runs
-the appropriate deployment utility so the resulting executable already includes
-the Qt runtime.
+The script installs its Python dependencies (including `aqtinstall`) if they are
+missing, downloads the necessary Qt libraries, configures CMake with that Qt,
+compiles FreeCrafter, and runs the appropriate deployment utility so the
+resulting executable already includes the Qt runtime.
 
 The built program can be found in the `build` directory and should run on a
 machine without any additional setup.
 
 Though we hope to skip even this step in future.
+
+### Installing or Packaging
+
+After configuring and building, the project can be staged for distribution.
+
+To copy the app bundle into a separate directory, run:
+
+```bash
+cmake --install build --prefix dist
+# or just
+cmake --install build
+```
+
+The install step writes the executable or bundle into the chosen prefix. For
+example, using the `dist` prefix above yields `dist/FreeCrafter.exe` on Windows
+or `dist/FreeCrafter.app` on macOS.
+
+From within the `build` directory you can also create an installer with
+[`cpack`](https://cmake.org/cmake/help/latest/module/CPack.html):
+
+```bash
+cpack
+```
+
+On Windows this generates an NSIS `.exe` installer; on macOS it creates a
+Drag’n’Drop `.dmg` containing the app bundle. The resulting package is written
+to the `build` directory.
 
 ## Resources
 Icon assets are stored under `resources/icons` and bundled using Qt's resource system.  They are currently only dummy assets.

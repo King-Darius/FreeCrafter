@@ -5,8 +5,10 @@
 #include <QIcon>
 #include <QMenuBar>
 #include <QToolBar>
+#include <QFileDialog>
 
 #include "GLViewport.h"
+#include "CameraController.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("FreeCrafter");
@@ -14,6 +16,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     viewport = new GLViewport(this);
     setCentralWidget(viewport);
+
+    toolManager = std::make_unique<ToolManager>(viewport->getGeometry(), viewport->getCamera());
+    viewport->setToolManager(toolManager.get());
 
     createMenus();
     createToolbars();
@@ -60,15 +65,30 @@ void MainWindow::createDockPanels() {
     addDockWidget(Qt::RightDockWidgetArea, entityInfo);
 }
 
-void MainWindow::newFile() {}
-void MainWindow::openFile() {}
-void MainWindow::saveFile() {}
+void MainWindow::newFile() {
+    viewport->getGeometry()->clear();
+    *viewport->getCamera() = CameraController();
+    viewport->update();
+}
 
-void MainWindow::selectTool() {}
-void MainWindow::lineTool() {}
-void MainWindow::arcTool() {}
-void MainWindow::rectTool() {}
-void MainWindow::moveTool() {}
-void MainWindow::rotateTool() {}
-void MainWindow::scaleTool() {}
+void MainWindow::openFile() {
+    QString fileName = QFileDialog::getOpenFileName(this, "Open", QString(), "Geometry Files (*.geom)");
+    if (fileName.isEmpty()) return;
+    viewport->getGeometry()->loadFromFile(fileName.toStdString());
+    viewport->update();
+}
+
+void MainWindow::saveFile() {
+    QString fileName = QFileDialog::getSaveFileName(this, "Save", QString(), "Geometry Files (*.geom)");
+    if (fileName.isEmpty()) return;
+    viewport->getGeometry()->saveToFile(fileName.toStdString());
+}
+
+void MainWindow::selectTool() { toolManager->activateTool("SelectionTool"); }
+void MainWindow::lineTool() { toolManager->activateTool("SketchTool"); }
+void MainWindow::arcTool() { toolManager->activateTool("SketchTool"); }
+void MainWindow::rectTool() { toolManager->activateTool("SketchTool"); }
+void MainWindow::moveTool() { toolManager->activateTool("MoveTool"); }
+void MainWindow::rotateTool() { toolManager->activateTool("RotateTool"); }
+void MainWindow::scaleTool() { toolManager->activateTool("ScaleTool"); }
 

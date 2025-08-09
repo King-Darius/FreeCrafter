@@ -1,4 +1,6 @@
 #include "GeometryKernel.h"
+#include "Serialization.h"
+#include <fstream>
 
 GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
     auto obj = std::make_unique<Curve>(points);
@@ -23,3 +25,42 @@ void GeometryKernel::deleteObject(GeometryObject* obj) {
         if (it->get() == obj) { objects.erase(it); return; }
     }
 }
+
+void GeometryKernel::clear() {
+    objects.clear();
+}
+
+bool GeometryKernel::saveToFile(const std::string& filename) const {
+    std::ofstream out(filename);
+    if (!out.is_open()) return false;
+    out << objects.size() << "\n";
+    for (const auto& obj : objects) {
+        if (obj->getType() == ObjectType::Curve) {
+            GeometryIO::writeCurve(out, *static_cast<Curve*>(obj.get()));
+        } else if (obj->getType() == ObjectType::Solid) {
+            GeometryIO::writeSolid(out, *static_cast<Solid*>(obj.get()));
+        }
+    }
+    return true;
+}
+
+bool GeometryKernel::loadFromFile(const std::string& filename) {
+    std::ifstream in(filename);
+    if (!in.is_open()) return false;
+    clear();
+    size_t count;
+    if (!(in >> count)) return false;
+    for (size_t i = 0; i < count; ++i) {
+        std::string type;
+        if (!(in >> type)) break;
+        if (type == "Curve") {
+            auto curve = GeometryIO::readCurve(in);
+            if (curve) objects.push_back(std::move(curve));
+        } else if (type == "Solid") {
+            auto solid = GeometryIO::readSolid(in);
+            if (solid) objects.push_back(std::move(solid));
+        }
+    }
+    return true;
+}
+

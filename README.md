@@ -1,16 +1,25 @@
 # FreeCrafter  <img width="30" height="30" alt="FreeCrafter Logo" src="https://github.com/user-attachments/assets/4fb35500-bc0c-4275-97a9-96ad20268567" />
 
-Still very early WIP. Nothing "works" just yet.
+> **Status:** Pre-alpha. Most roadmap features are missing and the application is not yet usable for real work.
 
-FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. It currently provides a minimal interface and a handful of prototype tools for sketching and extruding simple geometry.
+FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. At this stage it only offers a minimal interface and a few prototype tools; many menu items are placeholders and the program may crash.
 
+
+## Current Capabilities
 For a breakdown of planned milestones and features, see the [ROADMAP](ROADMAP.md).
 
 ## Features
+
 - Qt-based desktop interface with a custom OpenGL viewport
 - Camera controller supporting orbit, pan, and zoom
-- Geometry kernel that stores curves and extruded solids
-- Tools for selection, freehand sketching on the ground plane, and basic extrusion
+- Minimal geometry kernel that stores curves and extruded solids
+- Prototype tools for selection and freehand sketching on the ground plane with basic extrusion
+
+## Planned Features
+- Robust sketching and constraint tools
+- File operations (new, open, save) and persistent projects
+- Packaging into ready-to-run installers or app bundles
+- Undo/redo, layers, and many other modeling functions
 
 ## Building
 
@@ -21,9 +30,30 @@ builds the project for you. After cloning, simply run the bootstrap script:
 python scripts/bootstrap.py
 ```
 
-The script installs its Python dependencies (including `aqtinstall`) if they are
-missing, downloads the necessary Qt libraries, configures CMake with that Qt,
-compiles FreeCrafter, and runs the appropriate deployment utility so the
+If you prefer a graphical installer, launch:
+
+```bash
+python scripts/gui_bootstrap.py
+```
+
+This GUI streams progress from `bootstrap.py` and provides an "Install" button to start the build. To create a standalone executable that users can double‑click, run:
+
+```bash
+python scripts/package_gui_bootstrap.py
+```
+
+The command uses [PyInstaller](https://pyinstaller.org/) and writes the bundled executable to the `dist` directory.
+
+
+> **Note:** IDEs or language servers may report `Import "aqtinstall" could not be resolved`
+> until the packages listed in [`scripts/requirements.txt`](scripts/requirements.txt) are
+> installed for the Python interpreter they use. Creating a virtual environment and
+> ensuring `pip` points to that interpreter usually resolves the warning.
+
+The script installs its Python dependencies (including `aqtinstall`) from
+[PyPI](https://pypi.org/project/aqtinstall/) if they are missing, downloads the
+necessary Qt libraries from the official Qt servers, configures CMake with that
+Qt, compiles FreeCrafter, and runs the appropriate deployment utility so the
 resulting executable already includes the Qt runtime.
 
 The built program can be found in the `build` directory and should run on a
@@ -33,7 +63,15 @@ Though we hope to skip even this step in future.
 
 ### Installing or Packaging
 
-After configuring and building, the project can be staged for distribution.
+Official releases ship ready-to-run installers for each platform.  Download the
+appropriate package from the project's GitHub Releases page and double-click to
+run:
+
+- `FreeCrafter-<version>.exe` for Windows
+- `FreeCrafter-<version>.dmg` for macOS
+- `FreeCrafter-<version>.AppImage` for Linux
+
+After configuring and building locally, the project can be staged for distribution.
 
 To copy the app bundle into a separate directory, run:
 

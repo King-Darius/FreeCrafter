@@ -67,6 +67,15 @@ Official releases ship ready-to-run installers for each platform.  Download the
 appropriate package from the project's GitHub Releases page and double-click to
 run:
 
+| Platform | File |
+| --- | --- |
+| **Windows** | `FreeCrafter-<version>.exe` |
+| **macOS** | `FreeCrafter-<version>.dmg` |
+| **Linux** | `FreeCrafter-<version>.AppImage` |
+
+The `<version>` placeholder should match the release version number you're
+downloading (for example, `FreeCrafter-0.1.0.dmg`).
+=======
 - `FreeCrafter-<version>.exe` for Windows
 - `FreeCrafter-<version>.dmg` for macOS
 - `FreeCrafter-<version>.AppImage` for Linux

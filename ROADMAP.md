@@ -4,6 +4,21 @@ A fully expanded, stepwise roadmap to Popular CAD/Archviz parity and beyond. Eac
 
 ---
 
+## High-Level Milestones
+
+The following tracked milestones correspond to major roadmap items A–H:
+
+- [ ] [A. Rendering](docs/milestones/rendering.md)
+- [ ] [B. Tools](docs/milestones/tools.md)
+- [ ] [C. DSM](docs/milestones/dsm.md)
+- [ ] [D. Plugins](docs/milestones/plugins.md)
+- [ ] [E. File I/O](docs/milestones/file-io.md)
+- [ ] [F. UI Polish](docs/milestones/ui-polish.md)
+- [ ] [G. Performance & Stability](docs/milestones/performance-stability.md)
+- [ ] [H. QA & Release](docs/milestones/qa-release.md)
+
+---
+
 ## Legend
 
 ☐ = To do ☑ = Done ➖ = In progress

@@ -4,6 +4,31 @@
 
 FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. At this stage it only offers a minimal interface and a few prototype tools; many menu items are placeholders and the program may crash.
 
+## About FreeCrafter
+
+FreeCrafter is a versatile 3D modeling tool designed for designers, engineers, and creative professionals. With an intuitive, user-friendly interface and a range of powerful modeling tools, FreeCrafter enables you to create 3D models for a wide array of applications—whether you're working on product prototypes, building designs, or creative projects. FreeCrafter is designed for users of all experience levels, offering the flexibility to turn ideas into detailed 3D models.
+Key Features:
+
+    Intuitive 3D Modeling: Use simple tools to draw, shape, and modify 3D objects, making it easy to bring your designs to life, regardless of your experience with 3D software.
+
+    Customizable Models: Build your own models from scratch or modify existing ones to suit your needs, giving you complete control over your design process.
+
+    Precision Tools: Access tools for accurate measurement and alignment, ensuring your models meet exact specifications.
+
+    Multi-Platform Support: FreeCrafter is available for Windows, macOS, and likely Linux, providing compatibility across major desktop operating systems.
+
+Use Cases:
+
+    Building & Architecture: Design 3D models of buildings and architectural elements. While FreeCrafter doesn't have a dedicated floor plan feature, it's perfect for creating detailed models of structures, facades, and interiors.
+
+    Product Design: Quickly prototype and visualize products, from small objects to complex designs, for testing, manufacturing, or presentation.
+
+    Engineering & Manufacturing: Model mechanical components, assemblies, or other engineering designs, ideal for analysis, simulation, or prototyping.
+
+    Creative Projects: Bring your artistic ideas to life, whether for visual arts, conceptual designs, or other creative pursuits.
+
+FreeCrafter provides an approachable yet powerful environment for creating 3D models, offering flexibility for a variety of projects while maintaining simplicity in its design and workflow.
+
 
 ## Current Capabilities
 For a breakdown of planned milestones and features, see the [ROADMAP](ROADMAP.md).
@@ -29,6 +54,20 @@ builds the project for you. After cloning, simply run the bootstrap script:
 ```bash
 python scripts/bootstrap.py
 ```
+
+If you already have Qt 6 installed, set the `CMAKE_PREFIX_PATH` or `Qt6_DIR`
+environment variable so the script can use it:
+
+```bash
+export CMAKE_PREFIX_PATH=/path/to/Qt/6.5.3/gcc_64
+# or
+export Qt6_DIR=/path/to/Qt/6.5.3/gcc_64/lib/cmake/Qt6
+python scripts/bootstrap.py
+```
+
+The script also searches common install locations such as `~/Qt` on Unix
+systems or `C:/Qt` on Windows and falls back to downloading Qt if none is
+found.
 
 If you prefer a graphical installer, launch:
 

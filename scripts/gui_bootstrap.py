@@ -38,7 +38,7 @@ def main():
         [sg.Button("Install"), sg.Button("Exit")],
     ]
 
-    window = sg.Window("FreeSketch Installer", layout)
+    window = sg.Window("FreeCrafter Installer", layout)
 
     while True:
         event, values = window.read()

@@ -6,15 +6,18 @@ minimal Qt installation using the `aqtinstall` utility, configure CMake with
 that Qt, build the project, and run the appropriate deployment tool so the
 resulting executable includes the required Qt libraries next to it.
 
-The user only needs Python and a compiler toolchain; no manual Qt
-installation steps are required.
-"""
+If you already have Qt 6 installed you may point the script at it by setting
+``CMAKE_PREFIX_PATH`` or ``Qt6_DIR`` before running. The script will also
+search common installation directories such as ``~/Qt`` or ``C:/Qt`` and use
+the first Qt it finds. If no suitable Qt is located it falls back to
+downloading one. The user only needs Python and a compiler toolchain; no
+manual Qt installation steps are required."""
 
 import os
-import platform
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 QT_VERSION = "6.5.3"
 HOST = {
@@ -34,7 +37,6 @@ root = Path(__file__).resolve().parent.parent
 qt_root = root / "qt"
 
 install_dir = qt_root / QT_VERSION / ARCH
-bin_dir = install_dir / "bin"
 
 
 def ensure_aqt():
@@ -62,9 +64,51 @@ def ensure_aqt():
             raise
 
 
-def ensure_qt():
-    if install_dir.exists():
-        return
+def _valid_prefix(path: Path) -> bool:
+    return (path / "bin" / "qtpaths").exists()
+
+
+def detect_qt() -> Optional[Path]:
+    """Return the prefix of an existing Qt installation if one is found."""
+
+    candidates = []
+    cprefix = os.environ.get("CMAKE_PREFIX_PATH")
+    if cprefix:
+        candidates.extend(cprefix.split(os.pathsep))
+    qt6_dir = os.environ.get("Qt6_DIR")
+    if qt6_dir:
+        candidates.append(Path(qt6_dir).expanduser().parents[2])
+
+    for c in candidates:
+        p = Path(c).expanduser()
+        if _valid_prefix(p):
+            return p
+
+    if _valid_prefix(install_dir):
+        return install_dir
+
+    search_roots = [Path.home() / "Qt", Path("C:/Qt"), Path("/opt/Qt")]
+    if sys.platform == "darwin":
+        search_roots.append(Path("/Applications/Qt"))
+
+    for base in search_roots:
+        if not base.exists():
+            continue
+        for version_dir in base.glob("6.*"):
+            for arch_dir in version_dir.glob("*"):
+                if _valid_prefix(arch_dir):
+                    return arch_dir
+
+    return None
+
+
+def ensure_qt() -> Path:
+    """Ensure a Qt prefix is available and return its path."""
+
+    prefix = detect_qt()
+    if prefix:
+        return prefix
+
     ensure_aqt()
     cmd = [
         sys.executable,
@@ -80,20 +124,28 @@ def ensure_qt():
     ]
     subprocess.check_call(cmd)
 
+    prefix = detect_qt()
+    if prefix:
+        return prefix
 
-def run_cmake():
+    raise SystemExit(
+        "Qt not found. Install Qt 6 manually and set CMAKE_PREFIX_PATH or Qt6_DIR to its prefix."
+    )
+
+
+def run_cmake(prefix: Path):
     build_dir = root / "build"
     build_dir.mkdir(exist_ok=True)
     env = os.environ.copy()
-    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
-    prefix_arg = f"-DCMAKE_PREFIX_PATH={install_dir}"
+    env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
+    prefix_arg = f"-DCMAKE_PREFIX_PATH={prefix}"
     subprocess.check_call(["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg], env=env)
     subprocess.check_call(["cmake", "--build", str(build_dir)], env=env)
 
 
 def main():
-    ensure_qt()
-    run_cmake()
+    prefix = ensure_qt()
+    run_cmake(prefix)
     print("Build complete. Run the executable in the 'build' directory.")
 
 

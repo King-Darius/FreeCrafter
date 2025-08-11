@@ -2,6 +2,8 @@
 #include "Curve.h"
 #include "Solid.h"
 #include <vector>
+#include <ostream>
+#include <istream>
 
 namespace GeometryIO {
 

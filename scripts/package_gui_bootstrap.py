@@ -13,7 +13,7 @@ def main():
         str(gui_script),
         "--onefile",
         "--name",
-        "FreeSketchInstaller",
+        "FreeCrafterInstaller",
     ])
 
 

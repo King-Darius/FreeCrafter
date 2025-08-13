@@ -5,6 +5,8 @@
 FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. At this stage it only offers a minimal interface and a few prototype tools; many menu items are placeholders and the program may crash.
 
 ## About FreeCrafter
+<img width="437/2" height="657/2" alt="image" src="https://github.com/user-attachments/assets/27a4e54b-a6d0-4513-907d-960175ea2e24" />
+
 
 FreeCrafter is a versatile 3D modeling tool designed for designers, engineers, and creative professionals. With an intuitive, user-friendly interface and a range of powerful modeling tools, FreeCrafter enables you to create 3D models for a wide array of applications—whether you're working on product prototypes, building designs, or creative projects. FreeCrafter is designed for users of all experience levels, offering the flexibility to turn ideas into detailed 3D models.
 Key Features:

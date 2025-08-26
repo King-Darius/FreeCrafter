@@ -1,39 +1,49 @@
 #pragma once
 
-#include <QOpenGLFunctions>
 #include <QOpenGLWidget>
+#include <QOpenGLFunctions>
+#include <QTimer>
+#include <QPoint>
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 
 class ToolManager;
-class QMouseEvent;
-class QKeyEvent;
 
-class GLViewport : public QOpenGLWidget, protected QOpenGLFunctions {
+class GLViewport : public QOpenGLWidget, protected QOpenGLFunctions
+{
     Q_OBJECT
-
 public:
-    explicit GLViewport(QWidget *parent = nullptr);
+    explicit GLViewport(QWidget* parent = nullptr);
 
+    void setToolManager(ToolManager* manager) { toolManager = manager; }
+    ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }
-
-    void setToolManager(ToolManager* manager);
-    ToolManager* getToolManager() const { return toolManager; }
 
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
     void paintGL() override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void keyPressEvent(QKeyEvent* event) override;
+
+    void mousePressEvent(QMouseEvent* e) override;
+    void mouseMoveEvent(QMouseEvent* e) override;
+    void mouseReleaseEvent(QMouseEvent* e) override;
+    void wheelEvent(QWheelEvent* e) override;
+    void keyPressEvent(QKeyEvent* e) override;
 
 private:
+    void drawAxes();
+    void drawGrid();
+    void drawScene();
+
     GeometryKernel geometry;
     CameraController camera;
     ToolManager* toolManager = nullptr;
-};
 
+    QPoint lastMouse;
+    bool rotating = false;
+    bool panning = false;
+
+    QTimer repaintTimer;
+};

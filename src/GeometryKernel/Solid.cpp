@@ -14,10 +14,11 @@ Solid::Solid(const std::vector<Vector3>& baseProfile, float height) {
     for (size_t i = 0; i < N; ++i) vertices.emplace_back(profile[i].x, height, profile[i].z);
 
     faces.clear(); faces.reserve(N + 2);
+    // sides as quads
     for (size_t i = 0; i < N - 1; ++i) {
         Face f; int b0=(int)i, b1=(int)(i+1), t0=(int)(i+N), t1=(int)(i+1+N);
-        f.indices = { b0, b1, t1, t0 }; faces.push_back(f);
+        f.indices = { b0, b1, t1, t0 };
+        faces.push_back(f);
     }
-    Face bottom; for (size_t i=0;i<N-1;++i) bottom.indices.push_back((int)i); faces.push_back(bottom);
-    Face top;    for (size_t i=0;i<N-1;++i) top.indices.push_back((int)(N+i)); faces.push_back(top);
+    // (optional) caps not rendered as quads here; keep for wireframe or future triangulation
 }

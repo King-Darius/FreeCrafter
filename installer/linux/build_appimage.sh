@@ -8,6 +8,16 @@ APPIMAGE="FreeCrafter-${VERSION}.AppImage"
 LINUXDEPLOY=${LINUXDEPLOY:-linuxdeploy}
 APPIMAGETOOL=${APPIMAGETOOL:-appimagetool}
 
+if ! command -v "$LINUXDEPLOY" >/dev/null 2>&1; then
+  echo "Error: $LINUXDEPLOY is required to build AppImages. Install linuxdeploy or set LINUXDEPLOY." >&2
+  exit 1
+fi
+
+if ! command -v "$APPIMAGETOOL" >/dev/null 2>&1; then
+  echo "Error: $APPIMAGETOOL is required to build AppImages. Install appimagetool or set APPIMAGETOOL." >&2
+  exit 1
+fi
+
 if [ ! -f "$BINARY" ]; then
   echo "Binary $BINARY not found" >&2
   exit 1

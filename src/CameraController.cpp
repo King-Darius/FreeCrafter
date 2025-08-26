@@ -4,7 +4,7 @@
 #endif
 
 CameraController::CameraController()
-    : yaw(45.0f), pitch(-30.0f), distance(10.0f), targetX(0.0f), targetY(0.0f), targetZ(0.0f) {}
+    : yaw(45.0f), pitch(-30.0f), distance(20.0f), targetX(0.0f), targetY(0.0f), targetZ(0.0f) {}
 
 void CameraController::getCameraPosition(float& x, float& y, float& z) const {
     float radYaw = yaw * (float)M_PI / 180.0f;
@@ -16,7 +16,7 @@ void CameraController::getCameraPosition(float& x, float& y, float& z) const {
 }
 
 void CameraController::rotateCamera(float dx, float dy) {
-    const float rotateSpeed = 0.2f;
+    const float rotateSpeed = 0.3f;
     yaw += dx * rotateSpeed;
     pitch += dy * rotateSpeed;
     if (yaw < 0) yaw += 360.0f;
@@ -26,34 +26,25 @@ void CameraController::rotateCamera(float dx, float dy) {
 }
 
 void CameraController::panCamera(float dx, float dy) {
+    // pan relative to camera
     float radYaw = yaw * (float)M_PI / 180.0f;
-    float radPitch = pitch * (float)M_PI / 180.0f;
-    float fx = -sinf(radYaw) * cosf(radPitch);
-    float fy = -sinf(radPitch);
-    float fz = -cosf(radYaw) * cosf(radPitch);
-    float rx = fz, ry = 0.0f, rz = -fx;
-    float rLen = sqrtf(rx*rx + ry*ry + rz*rz);
-    if (rLen > 0) { rx /= rLen; ry /= rLen; rz /= rLen; }
-    float ux = ry * fz - rz * fy;
-    float uy = rz * fx - rx * fz;
-    float uz = rx * fy - ry * fx;
-    float uLen = sqrtf(ux*ux + uy*uy + uz*uz);
-    if (uLen > 0) { ux /= uLen; uy /= uLen; uz /= uLen; }
-    const float panSpeed = 0.002f * distance;
-    targetX += - (rx * dx * panSpeed) + - (ux * dy * panSpeed);
-    targetY += - (ry * dx * panSpeed) + - (uy * dy * panSpeed);
-    targetZ += - (rz * dx * panSpeed) + - (uz * dy * panSpeed);
+    float rightX = cos(radYaw), rightZ = -sin(radYaw);
+    float upX = 0.0f, upZ = 0.0f; // ground plane
+    const float panSpeed = 0.02f * distance;
+    targetX -= (rightX * dx + upX * dy) * panSpeed;
+    targetZ -= (rightZ * dx + upZ * dy) * panSpeed;
 }
 
 void CameraController::zoomCamera(float delta) {
-    const float zoomSpeed = 0.1f;
-    distance -= delta * zoomSpeed;
-    if (distance < 0.5f) distance = 0.5f;
-    if (distance > 100.0f) distance = 100.0f;
+    const float zoomSpeed = 1.1f;
+    if (delta > 0) distance /= zoomSpeed;
+    else distance *= zoomSpeed;
+    if (distance < 1.0f) distance = 1.0f;
+    if (distance > 2000.0f) distance = 2000.0f;
 }
 
 void CameraController::setTarget(float tx, float ty, float tz) { targetX = tx; targetY = ty; targetZ = tz; }
-void CameraController::setDistance(float dist) { if (dist > 0.1f) distance = dist; }
+void CameraController::setDistance(float dist) { distance = dist; }
 float CameraController::getYaw() const { return yaw; }
 float CameraController::getPitch() const { return pitch; }
 float CameraController::getDistance() const { return distance; }

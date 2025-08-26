@@ -1,18 +1,19 @@
 #include "MainWindow.h"
-
-#include <QAction>
-#include <QDockWidget>
-#include <QIcon>
 #include <QMenuBar>
 #include <QToolBar>
+#include <QStatusBar>
+#include <QDockWidget>
+#include <QAction>
 #include <QFileDialog>
-
+#include <QIcon>
+#include <QLineEdit>
+#include <QLabel>
 #include "GLViewport.h"
-#include "CameraController.h"
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+{
     setWindowTitle("FreeCrafter");
-    resize(1200, 800);
+    resize(1280, 820);
 
     viewport = new GLViewport(this);
     setCentralWidget(viewport);
@@ -23,72 +24,80 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     createMenus();
     createToolbars();
     createDockPanels();
+
+    // status bar
+    hintLabel = new QLabel("Ready");
+    measurementBox = new QLineEdit();
+    measurementBox->setPlaceholderText("Measurements");
+    statusBar()->addWidget(hintLabel, 1);
+    statusBar()->addPermanentWidget(measurementBox, 0);
 }
 
-void MainWindow::createMenus() {
-    QMenu *fileMenu = menuBar()->addMenu("&File");
-    fileMenu->addAction("New", this, SLOT(newFile()));
-    fileMenu->addAction("Open", this, SLOT(openFile()));
-    fileMenu->addAction("Save", this, SLOT(saveFile()));
+void MainWindow::createMenus()
+{
+    QMenu* fileMenu = menuBar()->addMenu("&File");
+    fileMenu->addAction("New", this, &MainWindow::newFile);
+    fileMenu->addAction("Open...", this, &MainWindow::openFile);
+    fileMenu->addAction("Save...", this, &MainWindow::saveFile);
     fileMenu->addSeparator();
-    fileMenu->addAction("Exit", this, SLOT(close()));
+    fileMenu->addAction("Exit", this, &QWidget::close);
 
-    menuBar()->addMenu("&Edit");
-    menuBar()->addMenu("&View");
+    QMenu* editMenu = menuBar()->addMenu("&Edit");
+    editMenu->addAction("Undo");
+    editMenu->addAction("Redo");
+
+    QMenu* viewMenu = menuBar()->addMenu("&View");
+    viewMenu->addAction("Zoom Extents");
+
     menuBar()->addMenu("&Camera");
     menuBar()->addMenu("&Draw");
     menuBar()->addMenu("&Tools");
-    menuBar()->addMenu("&Extensions");
     menuBar()->addMenu("&Window");
     menuBar()->addMenu("&Help");
 }
 
-void MainWindow::createToolbars() {
-    QToolBar *mainToolbar = addToolBar("Main Tools");
-    auto addTool = [&](const QString &icon, const QString &tip, const QKeySequence &shortcut, const char *slot) {
-        QAction *act = mainToolbar->addAction(QIcon(":/icons/" + icon), tip, this, slot);
-        act->setShortcut(shortcut);
-        act->setToolTip(tip + " (" + shortcut.toString() + ")");
-    };
+void MainWindow::createToolbars()
+{
+    QToolBar* left = addToolBar("Tools");
+    left->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    left->setIconSize(QSize(24,24));
 
-    addTool("select.png", "Select", QKeySequence(Qt::Key_Space), SLOT(selectTool()));
-    addTool("line.png", "Line", QKeySequence(Qt::Key_L), SLOT(lineTool()));
-    addTool("arc.png", "Arc", QKeySequence(Qt::Key_A), SLOT(arcTool()));
-    addTool("rectangle.png", "Rectangle", QKeySequence(Qt::Key_R), SLOT(rectTool()));
-    addTool("move.png", "Move", QKeySequence(Qt::Key_M), SLOT(moveTool()));
-    addTool("rotate.png", "Rotate", QKeySequence(Qt::Key_Q), SLOT(rotateTool()));
-    addTool("scale.png", "Scale", QKeySequence(Qt::Key_S), SLOT(scaleTool()));
+    selectAction = left->addAction(QIcon(":/icons/select.png"), "Select", this, &MainWindow::activateSelect);
+    sketchAction = left->addAction(QIcon(":/icons/line.png"), "Sketch", this, &MainWindow::activateSketch);
+    extrudeAction = left->addAction(QIcon(":/icons/pushpull.png"), "Extrude", this, &MainWindow::activateExtrude);
+
+    addToolBar(Qt::LeftToolBarArea, left);
 }
 
-void MainWindow::createDockPanels() {
-    QDockWidget *entityInfo = new QDockWidget("Entity Info", this);
-    addDockWidget(Qt::RightDockWidgetArea, entityInfo);
+void MainWindow::createDockPanels()
+{
+    QDockWidget* tray = new QDockWidget("Default Tray", this);
+    tray->setAllowedAreas(Qt::RightDockWidgetArea);
+    tray->setWidget(new QWidget(tray));
+    addDockWidget(Qt::RightDockWidgetArea, tray);
 }
 
-void MainWindow::newFile() {
+void MainWindow::newFile()
+{
     viewport->getGeometry()->clear();
-    *viewport->getCamera() = CameraController();
     viewport->update();
 }
 
-void MainWindow::openFile() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Open", QString(), "Geometry Files (*.geom)");
-    if (fileName.isEmpty()) return;
-    viewport->getGeometry()->loadFromFile(fileName.toStdString());
+void MainWindow::openFile()
+{
+    QString fn = QFileDialog::getOpenFileName(this, "Open FreeCrafter Model", QString(), "FreeCrafter (*.fcm)");
+    if (fn.isEmpty()) return;
+    viewport->getGeometry()->loadFromFile(fn.toStdString());
     viewport->update();
 }
 
-void MainWindow::saveFile() {
-    QString fileName = QFileDialog::getSaveFileName(this, "Save", QString(), "Geometry Files (*.geom)");
-    if (fileName.isEmpty()) return;
-    viewport->getGeometry()->saveToFile(fileName.toStdString());
+void MainWindow::saveFile()
+{
+    QString fn = QFileDialog::getSaveFileName(this, "Save FreeCrafter Model", QString(), "FreeCrafter (*.fcm)");
+    if (fn.isEmpty()) return;
+    viewport->getGeometry()->saveToFile(fn.toStdString());
 }
 
-void MainWindow::selectTool() { toolManager->activateTool("SelectionTool"); }
-void MainWindow::lineTool() { toolManager->activateTool("SketchTool"); }
-void MainWindow::arcTool() { toolManager->activateTool("SketchTool"); }
-void MainWindow::rectTool() { toolManager->activateTool("SketchTool"); }
-void MainWindow::moveTool() { toolManager->activateTool("MoveTool"); }
-void MainWindow::rotateTool() { toolManager->activateTool("RotateTool"); }
-void MainWindow::scaleTool() { toolManager->activateTool("ScaleTool"); }
-
+void MainWindow::activateSelect(){ toolManager->activateTool("SelectionTool"); hintLabel->setText("Select: Click to select. Delete to remove."); }
+void MainWindow::activateSketch(){ toolManager->activateTool("SketchTool"); hintLabel->setText("Sketch: Click points on ground plane. Second click finishes."); }
+void MainWindow::activateExtrude(){ toolManager->activateTool("ExtrudeTool"); hintLabel->setText("Extrude: Click to extrude last curve by 1.0."); }

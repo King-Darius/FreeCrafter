@@ -1,4 +1,5 @@
 #include "SketchTool.h"
+#include <cmath>
 
 static bool screenToGround(CameraController* cam,int x,int y,Vector3& out){
     float cx,cy,cz; cam->getCameraPosition(cx,cy,cz);
@@ -12,6 +13,42 @@ static bool screenToGround(CameraController* cam,int x,int y,Vector3& out){
     if (fabs(dir.y) < 1e-6f) return false; float t=-o.y/dir.y; if (t<0) return false; out = o + dir*t; return true;
 }
 
-void SketchTool::onMouseDown(int x,int y){ if(!geometry||!camera) return; Vector3 p; if(!screenToGround(camera,x,y,p)) return; drawing=true; pts.clear(); pts.emplace_back(p.x,0.0f,p.z); }
-void SketchTool::onMouseMove(int x,int y){ if(!drawing||!geometry||!camera) return; Vector3 p; if(!screenToGround(camera,x,y,p)) return; Vector3 np(p.x,0.0f,p.z); if(pts.empty()||(np-pts.back()).length()>0.1f) pts.push_back(np); }
-void SketchTool::onMouseUp(int,int){ if(!drawing||!geometry) return; drawing=false; if(pts.size()>2){ if((pts.back()-pts.front()).length()<0.5f) pts.back()=pts.front(); } if(pts.size()>=2) geometry->addCurve(pts); pts.clear(); }
+static void axisSnap(Vector3& p){
+    // snap near integer grid and axis align (very lightweight)
+    const float grid=0.25f, eps=0.08f;
+    float gx = std::round(p.x/grid)*grid;
+    float gz = std::round(p.z/grid)*grid;
+    if (std::fabs(p.x-gx) < eps) p.x = gx;
+    if (std::fabs(p.z-gz) < eps) p.z = gz;
+}
+
+void SketchTool::onMouseDown(int x,int y){
+    Vector3 p; if(!screenToGround(camera,x,y,p)) return;
+    axisSnap(p);
+    if (!drawing) {
+        drawing = true; pts.clear(); pts.push_back(Vector3(p.x,0,p.z));
+    } else {
+        pts.push_back(Vector3(p.x,0,p.z));
+    }
+}
+
+void SketchTool::onMouseMove(int x,int y){
+    if (!drawing) return;
+    Vector3 p; if(!screenToGround(camera,x,y,p)) return;
+    axisSnap(p);
+    if (pts.empty()) pts.push_back(Vector3(p.x,0,p.z));
+    if (pts.size()==1) {
+        // preview second point
+    } else {
+        // live update last preview point
+        if (pts.size()>1) pts.back() = Vector3(p.x,0,p.z);
+    }
+}
+
+void SketchTool::onMouseUp(int,int){
+    // if double-click–ish length >=2 finalize
+    if (drawing && pts.size()>=2) {
+        geometry->addCurve(pts);
+        drawing=false; pts.clear();
+    }
+}

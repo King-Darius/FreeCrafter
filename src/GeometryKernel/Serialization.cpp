@@ -16,40 +16,31 @@ void writeCurve(std::ostream& os, const Curve& curve) {
 }
 
 std::unique_ptr<Curve> readCurve(std::istream& is) {
-    size_t count;
-    if (!(is >> count)) return nullptr;
-    std::vector<Vector3> pts(count);
-    for (size_t i = 0; i < count; ++i) {
-        is >> pts[i].x >> pts[i].y >> pts[i].z;
+    size_t n=0; is >> n;
+    std::vector<Vector3> pts; pts.reserve(n);
+    for (size_t i=0;i<n;++i) {
+        Vector3 p; is >> p.x >> p.y >> p.z; pts.push_back(p);
     }
     return std::make_unique<Curve>(pts);
 }
 
 void writeSolid(std::ostream& os, const Solid& solid) {
     const auto& verts = solid.getVertices();
-    if (verts.empty()) {
-        os << "Solid 0 0\n";
-        return;
-    }
-    size_t N = verts.size() / 2;
-    float height = verts[N].y;
-    os << "Solid " << N << ' ' << height << "\n";
-    for (size_t i = 0; i < N; ++i) {
-        const auto& v = verts[i];
-        os << v.x << ' ' << v.y << ' ' << v.z << "\n";
+    size_t N = verts.size()/2; // base ring count
+    os << "Solid " << N << ' ' << (N?verts[N].y:0.0f) << "\n";
+    for (size_t i=0;i<N;++i) {
+        const auto& p = verts[i];
+        os << p.x << ' ' << 0.0f << ' ' << p.z << "\n";
     }
 }
 
 std::unique_ptr<Solid> readSolid(std::istream& is) {
-    size_t N;
-    float height;
-    if (!(is >> N >> height)) return nullptr;
-    std::vector<Vector3> profile(N);
-    for (size_t i = 0; i < N; ++i) {
-        is >> profile[i].x >> profile[i].y >> profile[i].z;
+    size_t n=0; float h=0.0f; is >> n >> h;
+    std::vector<Vector3> base; base.reserve(n);
+    for (size_t i=0;i<n;++i) {
+        Vector3 p; is >> p.x >> p.y >> p.z; base.push_back(Vector3(p.x,0.0f,p.z));
     }
-    return std::make_unique<Solid>(profile, height);
+    return std::make_unique<Solid>(base, h);
 }
 
-} // namespace GeometryIO
-
+} // namespace

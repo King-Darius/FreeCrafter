@@ -8,4 +8,8 @@ ToolManager::ToolManager(GeometryKernel* g, CameraController* c){
     active = tools.front().get();
 }
 
-void ToolManager::activateTool(const char* n){ for(auto& t:tools){ if(std::strcmp(t->getName(),n)==0){ active=t.get(); break; } } }
+void ToolManager::activateTool(const char* n){
+    for (auto& t : tools) {
+        if (std::strcmp(t->getName(), n) == 0) { active = t.get(); return; }
+    }
+}

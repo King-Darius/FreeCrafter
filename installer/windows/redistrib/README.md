@@ -1,3 +1,3 @@
 # Windows redistributable
 
-Place the Microsoft Visual C++ 2015‑2022 (x64) Redistributable installer (vcredist_x64.exe) in this directory before running the Windows NSIS packaging. You can download the latest version from Microsoft's official website.
+The Windows NSIS installer automatically downloads and installs the Microsoft Visual C++ 2015–2022 (x64) Redistributable (vcredist_x64.exe) during installation if it is missing. You do not need to place any files in this directory manually. This folder is left here for reference.

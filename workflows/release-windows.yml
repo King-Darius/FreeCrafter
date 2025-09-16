@@ -1,0 +1,51 @@
+name: Release (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'   # triggers when you push a tag like v0.1.0-alpha.2
+
+permissions:
+  contents: write  # needed to upload assets to the release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install NSIS (for CPack)
+        run: choco install nsis -y
+
+      - name: Configure / Bootstrap build
+        shell: pwsh
+        run: |
+          if (Test-Path 'scripts/bootstrap.py') {
+            python scripts/bootstrap.py --ci
+          } else {
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          }
+
+      - name: Build + install to staging
+        run: |
+          cmake --build build --config Release
+          cmake --install build --config Release --prefix dist
+
+      - name: Package with CPack (NSIS)
+        run: |
+          cd build
+          cpack -G NSIS
+
+      - name: Upload .exe to the release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*.exe
+          tag: ${{ github.ref }}
+          overwrite: true

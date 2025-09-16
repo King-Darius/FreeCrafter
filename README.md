@@ -1,6 +1,6 @@
 # FreeCrafter  <img width="30" height="30" alt="FreeCrafter Logo" src="https://github.com/user-attachments/assets/4fb35500-bc0c-4275-97a9-96ad20268567" />
 
-> **Status:** Pre-alpha. Most roadmap features are missing and the application is not yet usable for real work.
+> **Status:** Pre-alpha. Most roadmap features are missing and the application is not yet usable for real work.  Also, like all open source code, use at your own risk.
 
 FreeCrafter is an experimental 3D modeling sandbox built with Qt and OpenGL. At this stage it only offers a minimal interface and a few prototype tools; many menu items are placeholders and the program may crash.
 

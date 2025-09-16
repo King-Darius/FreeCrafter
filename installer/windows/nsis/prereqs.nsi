@@ -1,6 +1,6 @@
 # Runs ONLY on Windows builds (CPack NSIS).
-# 1) Detect VC++ 2015–2022 x64 runtime (common for MSVC builds).
-# 2) If missing, run our bundled vcredist silently.
+# 1) Detect VC++ 2015-2022 x64 runtime.
+# 2) If missing, download via PowerShell and install silently.
 
 !macro InstallPrereqs
   Var /GLOBAL VCInstalled
@@ -13,16 +13,11 @@
     StrCpy $VCInstalled "1"
 
   ${If} $VCInstalled == "0"
-    # Prefer a bundled redistributable if present:
-    IfFileExists "$INSTDIR\vcredist_x64.exe" 0 +3
-      DetailPrint "Installing Microsoft Visual C++ Redistributable (x64)..."
-      ExecWait '"$INSTDIR\vcredist_x64.exe" /quiet /norestart'
-      Goto +3
+    DetailPrint "Downloading Microsoft Visual C++ Redistributable (x64)..."
+    # Use PowerShell to download to %TEMP%\vcredist_x64.exe
+    nsExec::ExecToStack 'powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \"https://aka.ms/vs/17/release/vc_redist.x64.exe\" -OutFile \"$env:TEMP\\vcredist_x64.exe\""'
 
-    # (Optional fallback) Download at install time if not bundled (requires NSIS inetc plugin):
-    ; inetc::get /popup "" /caption "Downloading VC++ Redistributable" \
-    ;   /url "https://aka.ms/vs/17/release/vc_redist.x64.exe" /end \
-    ;   /file "$INSTDIR\vcredist_x64.exe"
-    ; ExecWait '"$INSTDIR\vcredist_x64.exe" /quiet /norestart'
+    DetailPrint "Installing Microsoft Visual C++ Redistributable (x64)..."
+    ExecWait '"$TEMP\\vcredist_x64.exe" /install /passive /norestart'
   ${EndIf}
 !macroend

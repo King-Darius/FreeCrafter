@@ -33,8 +33,6 @@ install(TARGETS ${PROJECT_NAME}
 
 # Include Windows redistributable if present
 if(WIN32)
-  if(EXISTS "${CMAKE_SOURCE_DIR}/installer/windows/redistrib/vcredist_x64.exe")
-    install(FILES "${CMAKE_SOURCE_DIR}/installer/windows/redistrib/vcredist_x64.exe" DESTINATION .)
   endif()
 endif()
 

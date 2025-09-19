@@ -3,10 +3,10 @@ name: Release (Windows)
 on:
   push:
     tags:
-      - 'v*'   # triggers when you push a tag like v0.1.0-alpha.2
+      - 'v*'   # e.g. v0.1.0-alpha.2
 
 permissions:
-  contents: write  # needed to upload assets to the release
+  contents: write  # needed to upload assets to the Release
 
 jobs:
   build-windows:
@@ -21,9 +21,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install NSIS (for CPack)
-        run: choco install nsis -y
+        run: choco install nsis -y  # provides makensis.exe for NSIS generator
 
-      - name: Configure / Bootstrap build
+      # If you have scripts/bootstrap.py, keep this; otherwise the fallback config runs.
+      - name: Configure
         shell: pwsh
         run: |
           if (Test-Path 'scripts/bootstrap.py') {

@@ -1,37 +1,89 @@
-name: Build and Release
+name: Build and Release (All OS)
 
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
+      fail-fast: false           # don't cancel macOS/Windows if Ubuntu fails
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     runs-on: ${{ matrix.os }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: Bootstrap and build
+      # Linux dependencies commonly needed for Qt/X11/OpenGL builds
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          python scripts/bootstrap.py
-          cmake --install build --prefix dist
-          cd build
-          cpack
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build \
+            libgl1-mesa-dev libx11-xcb-dev libxrender-dev libxi-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 '^libxcb.*-dev'
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
+      # Windows: NSIS so CPack can make the .exe
+      - name: Install NSIS (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install nsis -y
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ -f scripts/bootstrap.py ]; then
+            python scripts/bootstrap.py --ci
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build + install to staging
+        run: |
+          cmake --build build --config Release
+          cmake --install build --config Release --prefix dist
+
+      - name: Package with CPack
+        run: |
+          cd build
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then cpack -G TGZ; fi
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then cpack -G DragNDrop; fi
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then cpack -G NSIS; fi
+
+      # Upload each platform's asset to the Release for this tag
+      - name: Upload Windows .exe
+        if: matrix.os == 'windows-latest'
+        uses: svenstaro/upload-release-action@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: FreeCrafter ${{ github.ref_name }}
-          prerelease: true
-          files: |
-            build/FreeCrafter-*.*
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*.exe
+          tag: ${{ github.ref }}
+          overwrite: true
+
+      - name: Upload macOS .dmg
+        if: matrix.os == 'macos-latest'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*.dmg
+          tag: ${{ github.ref }}
+          overwrite: true
+
+      - name: Upload Linux .tar.gz
+        if: matrix.os == 'ubuntu-latest'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true

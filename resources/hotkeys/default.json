@@ -1,0 +1,11 @@
+{
+  "actions": [
+    { "id": "file.new", "shortcut": "Ctrl+N" },
+    { "id": "file.open", "shortcut": "Ctrl+O" },
+    { "id": "file.save", "shortcut": "Ctrl+S" },
+    { "id": "tool.select", "shortcut": "Space" },
+    { "id": "tool.sketch", "shortcut": "L" },
+    { "id": "tool.extrude", "shortcut": "P" },
+    { "id": "view.zoomExtents", "shortcut": "Shift+Z" }
+  ]
+}

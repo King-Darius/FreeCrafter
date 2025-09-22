@@ -2,6 +2,8 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QtMath>
+#include <QPainter>
+#include <QColor>
 
 #include "Tools/ToolManager.h"
 #include "GeometryKernel/Curve.h"
@@ -15,6 +17,7 @@ GLViewport::GLViewport(QWidget* parent)
     repaintTimer.setInterval(16);
     connect(&repaintTimer, &QTimer::timeout, this, QOverload<>::of(&GLViewport::update));
     repaintTimer.start();
+    frameTimer.start();
 }
 
 void GLViewport::initializeGL()
@@ -31,6 +34,23 @@ void GLViewport::resizeGL(int w, int h)
 
 void GLViewport::paintGL()
 {
+    if (frameTimer.isValid()) {
+        qint64 nanos = frameTimer.nsecsElapsed();
+        frameTimer.restart();
+        if (nanos > 0) {
+            double ms = static_cast<double>(nanos) / 1'000'000.0;
+            lastFrameMs = ms;
+            double instFps = ms > 0.0 ? 1000.0 / ms : 0.0;
+            const double smoothing = 0.1;
+            if (smoothedFps <= 0.0) {
+                smoothedFps = instFps;
+            } else {
+                smoothedFps = smoothedFps * (1.0 - smoothing) + instFps * smoothing;
+            }
+        }
+    }
+    drawCallCount = 0;
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // very small fixed function style camera (compat profile)
@@ -71,6 +91,8 @@ void GLViewport::paintGL()
     drawGrid();
     drawAxes();
     drawScene();
+
+    paintHud();
 }
 
 void GLViewport::drawAxes()
@@ -81,6 +103,7 @@ void GLViewport::drawAxes()
     glColor3f(0,1,0); glVertex3f(0,0,0); glVertex3f(0,1,0); // Y
     glColor3f(0,0,1); glVertex3f(0,0,0); glVertex3f(0,0,1); // Z
     glEnd();
+    ++drawCallCount;
 }
 
 void GLViewport::drawGrid()
@@ -97,6 +120,7 @@ void GLViewport::drawGrid()
         glVertex3f( N*S, 0, i*S);
     }
     glEnd();
+    ++drawCallCount;
 }
 
 void GLViewport::drawScene()
@@ -112,6 +136,7 @@ void GLViewport::drawScene()
             glBegin(GL_LINE_STRIP);
             for (const auto& p : pts) glVertex3f(p.x, p.y, p.z);
             glEnd();
+            ++drawCallCount;
         } else if (uptr->getType() == ObjectType::Solid) {
             const Solid* s = static_cast<const Solid*>(uptr.get());
             const auto& verts = s->getVertices();
@@ -127,6 +152,7 @@ void GLViewport::drawScene()
                 }
             }
             glEnd();
+            ++drawCallCount;
             // draw edges
             glColor3f(0.1f,0.1f,0.1f);
             glLineWidth(1.5f);
@@ -136,8 +162,25 @@ void GLViewport::drawScene()
                 glVertex3f(v.x,v.y,v.z);
             }
             glEnd();
+            ++drawCallCount;
         }
     }
+}
+
+void GLViewport::paintHud()
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+    QRect hudRect(10, 10, 210, 70);
+    painter.setBrush(QColor(255, 255, 255, 220));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(hudRect, 8, 8);
+    painter.setPen(QColor(30, 30, 30));
+    QString text = tr("FPS: %1\nFrame: %2 ms\nDraw Calls: %3")
+                       .arg(smoothedFps, 0, 'f', 1)
+                       .arg(lastFrameMs, 0, 'f', 2)
+                       .arg(drawCallCount);
+    painter.drawText(hudRect.adjusted(10, 8, -10, -8), Qt::AlignLeft | Qt::AlignTop, text);
 }
 
 void GLViewport::mousePressEvent(QMouseEvent* e)

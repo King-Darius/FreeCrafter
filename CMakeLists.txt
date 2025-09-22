@@ -20,12 +20,13 @@ add_executable(${PROJECT_NAME}
     src/Tools/SketchTool.cpp
     src/Tools/ExtrudeTool.cpp
     src/Tools/ToolManager.cpp
+    src/Hotkeys/HotkeyManager.cpp
+    src/Hotkeys/HotkeyEditorDialog.cpp
     resources.qrc
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools)
-target_link_libr
-aries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
+target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools src/Hotkeys)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
 # Installation
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
@@ -33,7 +34,7 @@ install(TARGETS ${PROJECT_NAME}
 
 # Include Windows redistributable if present
 if(WIN32)
-  endif()
+  # Placeholder for future redistributable bundling logic
 endif()
 
 # Uninstall target

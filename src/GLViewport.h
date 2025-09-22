@@ -4,6 +4,7 @@
 #include <QOpenGLFunctions>
 #include <QTimer>
 #include <QPoint>
+#include <QElapsedTimer>
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
@@ -36,6 +37,7 @@ private:
     void drawAxes();
     void drawGrid();
     void drawScene();
+    void paintHud();
 
     GeometryKernel geometry;
     CameraController camera;
@@ -46,4 +48,8 @@ private:
     bool panning = false;
 
     QTimer repaintTimer;
+    QElapsedTimer frameTimer;
+    double smoothedFps = 0.0;
+    double lastFrameMs = 0.0;
+    int drawCallCount = 0;
 };

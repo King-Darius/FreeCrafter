@@ -28,4 +28,7 @@
     <file>resources/icons/style_hiddenline.png</file>
     <file>resources/icons/style_monochrome.png</file>
   </qresource>
+  <qresource prefix="/hotkeys">
+    <file>resources/hotkeys/default.json</file>
+  </qresource>
 </RCC>

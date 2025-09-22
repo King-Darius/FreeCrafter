@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(FreeCrafter LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -7,7 +8,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets)
 
-add_executable(${PROJECT_NAME}
+set(FREECRAFTER_SOURCES
     src/main.cpp
     src/MainWindow.cpp
     src/GLViewport.cpp
@@ -25,17 +26,27 @@ add_executable(${PROJECT_NAME}
     resources.qrc
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools src/Hotkeys)
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
+add_executable(${PROJECT_NAME} ${FREECRAFTER_SOURCES})
+
+target_include_directories(${PROJECT_NAME}
+    PRIVATE
+        src
+        src/GeometryKernel
+        src/Tools
+        src/Hotkeys
+)
+
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+        Qt6::Widgets
+        Qt6::OpenGL
+        Qt6::OpenGLWidgets
+)
+
 # Installation
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .)
-
-# Include Windows redistributable if present
-if(WIN32)
-  # Placeholder for future redistributable bundling logic
-endif()
 
 # Uninstall target
 configure_file(cmake/cmake_uninstall.cmake.in

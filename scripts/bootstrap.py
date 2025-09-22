@@ -124,7 +124,12 @@ def run(cmd, *, retries: int = 3, **kwargs) -> int:
         logging.info("Retrying (%s/%s)...", attempt + 1, retries)
         time.sleep(1)
 
-def ensure_aqt(offline: bool, wheel_cache: Optional[Path]) -> None:
+def ensure_aqt(
+    offline: bool,
+    wheel_cache: Optional[Path],
+    *,
+    use_user_site: bool = True,
+) -> None:
     try:
         import aqtinstall  # noqa: F401
         return
@@ -138,7 +143,7 @@ def ensure_aqt(offline: bool, wheel_cache: Optional[Path]) -> None:
         if offline:
             verify_checksums(wheel_cache)
             cmd += ["--no-index", "--find-links", str(wheel_cache)]
-        else:
+        elif use_user_site:
             cmd += ["--user"]
         cmd += ["-r", str(req_file)]
         rc = run(cmd)
@@ -174,19 +179,32 @@ def ensure_qt(offline: bool) -> Path:
         raise RuntimeError("Qt installation failed")
     return prefix
 
-def run_cmake(prefix: Path) -> None:
+def run_cmake(
+    prefix: Path,
+    *,
+    build: bool = True,
+    build_type: Optional[str] = None,
+) -> None:
     build_dir = root / "build"
     build_dir.mkdir(exist_ok=True)
     env = os.environ.copy()
     bin_dir = prefix / "bin"
     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
     prefix_arg = f"-DCMAKE_PREFIX_PATH={prefix}"
-    rc = run(["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg], env=env)
+    configure_cmd = ["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg]
+    if build_type:
+        configure_cmd.append(f"-DCMAKE_BUILD_TYPE={build_type}")
+    rc = run(configure_cmd, env=env)
     if rc != 0:
-        raise subprocess.CalledProcessError(rc, ["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg])
-    rc = run(["cmake", "--build", str(build_dir)], env=env)
+        raise subprocess.CalledProcessError(rc, configure_cmd)
+    if not build:
+        return
+    build_cmd = ["cmake", "--build", str(build_dir)]
+    if build_type:
+        build_cmd += ["--config", build_type]
+    rc = run(build_cmd, env=env)
     if rc != 0:
-        raise subprocess.CalledProcessError(rc, ["cmake", "--build", str(build_dir)])
+        raise subprocess.CalledProcessError(rc, build_cmd)
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser()
@@ -200,21 +218,34 @@ def main(argv: Optional[List[str]] = None) -> int:
         type=Path,
         help="Directory containing pre-downloaded wheels for offline mode",
     )
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help=(
+            "Configure the project for CI environments without building. "
+            "Sets CMAKE_BUILD_TYPE=Release for single-config generators."
+        ),
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     try:
-        ensure_aqt(args.offline, args.wheel_cache)
+        ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)
         prefix = ensure_qt(args.offline)
-        run_cmake(prefix)
+        run_cmake(prefix, build=not args.ci, build_type="Release" if args.ci else None)
     except subprocess.CalledProcessError as exc:  # pragma: no cover
         logging.error("Command '%s' failed with code %s", " ".join(map(str, exc.cmd)), exc.returncode)
         return exc.returncode
     except Exception as exc:  # pragma: no cover - visible to caller
         logging.error(str(exc))
         return 1
-    logging.info("Build complete. Run the executable in the 'build' directory.")
+    if args.ci:
+        logging.info(
+            "Configuration complete. Run 'cmake --build build --config Release' to compile."
+        )
+    else:
+        logging.info("Build complete. Run the executable in the 'build' directory.")
     return 0
 
 if __name__ == "__main__":

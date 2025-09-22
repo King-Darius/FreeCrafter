@@ -24,17 +24,13 @@ add_executable(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools)
-target_link_libr
-aries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
 # Installation
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .)
 
 # Include Windows redistributable if present
-if(WIN32)
-  endif()
-endif()
 
 # Uninstall target
 configure_file(cmake/cmake_uninstall.cmake.in

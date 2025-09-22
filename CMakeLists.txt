@@ -8,7 +8,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets)
 
-set(FREECRAFTER_SOURCES
+add_executable(${PROJECT_NAME}
     src/main.cpp
     src/MainWindow.cpp
     src/GLViewport.cpp
@@ -26,8 +26,6 @@ set(FREECRAFTER_SOURCES
     resources.qrc
 )
 
-add_executable(${PROJECT_NAME} ${FREECRAFTER_SOURCES})
-
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         src
@@ -36,12 +34,7 @@ target_include_directories(${PROJECT_NAME}
         src/Hotkeys
 )
 
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-        Qt6::Widgets
-        Qt6::OpenGL
-        Qt6::OpenGLWidgets
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets)
 
 # Installation
 install(TARGETS ${PROJECT_NAME}
@@ -70,6 +63,7 @@ set(CPACK_NSIS_DELETE_ICONS_EXTRA
   "Delete '$SMPROGRAMS\\FreeCrafter\\FreeCrafter.lnk'"
   "RMDir '$SMPROGRAMS\\FreeCrafter'")
 
+# Include Windows redistributable if present
 if(WIN32)
   set(CPACK_NSIS_INCLUDE_SCRIPT "${CMAKE_SOURCE_DIR}/installer/windows/nsis/prereqs.nsi")
   set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS " !insertmacro InstallPrereqs ")

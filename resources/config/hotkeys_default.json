@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "actions": {
+    "file.new": "Ctrl+N",
+    "file.open": "Ctrl+O",
+    "file.save": "Ctrl+S",
+    "file.saveAs": "Ctrl+Shift+S",
+    "file.export": "Ctrl+E",
+    "file.exit": "Ctrl+Q",
+    "edit.undo": "Ctrl+Z",
+    "edit.redo": "Ctrl+Y",
+    "edit.preferences": "Ctrl+,",
+    "view.zoomIn": "Ctrl+=",
+    "view.zoomOut": "Ctrl+-",
+    "view.zoomExtents": "Ctrl+0",
+    "view.toggleRightDock": "Ctrl+Shift+P",
+    "theme.toggle": "Ctrl+T",
+    "palette.show": "Ctrl+P",
+    "tools.select": "V",
+    "tools.sketch": "L",
+    "tools.extrude": "E",
+    "tools.pan": "Space",
+    "tools.orbit": "O",
+    "tools.measure": "M",
+    "tools.grid": "G",
+    "help.shortcuts": "F1"
+  }
+}

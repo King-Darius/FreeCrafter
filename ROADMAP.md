@@ -27,19 +27,19 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ## Phase 0 — Planning & Foundation
 
-- [ ] **Scope lock:** Popular CAD/Archviz parity + additional integrated features
-- [ ] **UX research:** Catalog micro‑behaviors (sticky inference, axis lock keys, dynamic hints, VCB behaviors, modifier keys)
-- [ ] **Design:** High‑fidelity wireframes for menus, trays, toolbars; icon language; dark/light themes
-- [ ] **Legal/Tech:** License review (Qt, OpenGL, CGAL/libIGL); file formats plan
+- [x] **Scope lock:** Popular CAD/Archviz parity + additional integrated features
+- [x] **UX research:** Catalog micro‑behaviors (sticky inference, axis lock keys, dynamic hints, VCB behaviors, modifier keys)
+- [x] **Design:** High‑fidelity wireframes for menus, trays, toolbars; icon language; dark/light themes
+- [x] **Legal/Tech:** License review (Qt, OpenGL, CGAL/libIGL); file formats plan
 
 ---
 
 ## Phase 1 — Core Shell
 
-- [ ] **QMainWindow scaffolding:** Multi‑toolbar, docking system, layout persistence
-- [ ] **Status bar:** Live hints + Measurements (VCB) widget; unit settings
-- [ ] **Hotkey map import:** Popular CAD/Archviz‑style defaults + rebinding UI
-- [ ] **Viewport placeholder:** Frame budget HUD (FPS, draw calls)
+- [x] **QMainWindow scaffolding:** Multi‑toolbar, docking system, layout persistence
+- [x] **Status bar:** Live hints + Measurements (VCB) widget; unit settings
+- [x] **Hotkey map import:** Popular CAD/Archviz‑style defaults + rebinding UI
+- [x] **Viewport placeholder:** Frame budget HUD (FPS, draw calls)
 
 ---
 

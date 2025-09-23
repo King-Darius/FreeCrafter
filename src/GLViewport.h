@@ -16,7 +16,7 @@ class GLViewport : public QOpenGLWidget, protected QOpenGLFunctions
 public:
     explicit GLViewport(QWidget* parent = nullptr);
 
-    void setToolManager(ToolManager* manager) { toolManager = manager; }
+    void setToolManager(ToolManager* manager);
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }

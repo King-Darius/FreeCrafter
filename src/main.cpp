@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QCoreApplication>
 #include <QSurfaceFormat>
 #include "MainWindow.h"
 
@@ -10,6 +11,9 @@ int main(int argc, char *argv[]) {
     QSurfaceFormat::setDefaultFormat(fmt);
 
     QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName("FreeCrafter");
+    QCoreApplication::setOrganizationDomain("freecrafter.io");
+    QCoreApplication::setApplicationName("FreeCrafter");
     MainWindow w;
     w.show();
     return app.exec();

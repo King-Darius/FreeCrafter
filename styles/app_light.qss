@@ -1,0 +1,79 @@
+QMainWindow {
+    background: #FFFFFF;
+    color: #111827;
+}
+
+QToolBar {
+    background: #F7F7F8;
+    border: none;
+    spacing: 8px;
+    padding: 0 8px;
+}
+
+QToolBar::separator {
+    background: rgba(0,0,0,0.08);
+    width: 1px;
+    margin: 8px 4px;
+}
+
+QToolBar QToolButton {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 6px;
+    color: #111827;
+}
+
+QToolBar QToolButton:checked {
+    background: rgba(37,99,235,0.18);
+}
+
+QToolBar QToolButton:hover {
+    background: rgba(17,24,39,0.06);
+}
+
+QStatusBar {
+    background: #F7F7F8;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    min-height: 28px;
+}
+
+QStatusBar QLabel {
+    color: #111827;
+}
+
+QComboBox, QLineEdit {
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #111827;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QTabWidget::pane {
+    border: none;
+}
+
+QTabBar::tab {
+    height: 36px;
+    padding: 0 12px;
+    color: #111827;
+    background: transparent;
+    border-radius: 6px;
+}
+
+QTabBar::tab:selected {
+    background: rgba(17,24,39,0.08);
+}
+
+QTabBar::tab:hover {
+    background: rgba(17,24,39,0.12);
+}
+
+*:focus {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
+}

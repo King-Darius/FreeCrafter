@@ -1,14 +1,15 @@
 #include "SketchTool.h"
 #include <cmath>
 
-static bool screenToGround(CameraController* cam,int x,int y,Vector3& out){
+static bool screenToGround(CameraController* cam,int x,int y,int viewportW,int viewportH,Vector3& out){
+    if (viewportW <= 0 || viewportH <= 0) return false;
     float cx,cy,cz; cam->getCameraPosition(cx,cy,cz);
     float yaw=cam->getYaw(), pitch=cam->getPitch();
     float ry=yaw*(float)M_PI/180.0f, rp=pitch*(float)M_PI/180.0f;
     Vector3 f(-sinf(ry)*cosf(rp), -sinf(rp), -cosf(ry)*cosf(rp)); f=f.normalized();
     Vector3 up(0,1,0); Vector3 r=f.cross(up).normalized(); up=r.cross(f).normalized();
-    const float fov=60.0f; const int W=800,H=600; float aspect=(float)W/H;
-    float nx=(2.0f*x/W)-1.0f, ny=1.0f-(2.0f*y/H); float th=tanf((fov*(float)M_PI/180.0f)/2.0f);
+    const float fov=60.0f; float aspect = static_cast<float>(viewportW) / static_cast<float>(viewportH);
+    float nx=(2.0f*x/viewportW)-1.0f, ny=1.0f-(2.0f*y/viewportH); float th=tanf((fov*(float)M_PI/180.0f)/2.0f);
     Vector3 dir=(f + r*(nx*th*aspect) + up*(ny*th)).normalized(); Vector3 o(cx,cy,cz);
     if (fabs(dir.y) < 1e-6f) return false; float t=-o.y/dir.y; if (t<0) return false; out = o + dir*t; return true;
 }
@@ -23,7 +24,7 @@ static void axisSnap(Vector3& p){
 }
 
 void SketchTool::onMouseDown(int x,int y){
-    Vector3 p; if(!screenToGround(camera,x,y,p)) return;
+    Vector3 p; if(!screenToGround(camera,x,y,viewportWidth,viewportHeight,p)) return;
     axisSnap(p);
     if (!drawing) {
         drawing = true; pts.clear(); pts.push_back(Vector3(p.x,0,p.z));
@@ -34,7 +35,7 @@ void SketchTool::onMouseDown(int x,int y){
 
 void SketchTool::onMouseMove(int x,int y){
     if (!drawing) return;
-    Vector3 p; if(!screenToGround(camera,x,y,p)) return;
+    Vector3 p; if(!screenToGround(camera,x,y,viewportWidth,viewportHeight,p)) return;
     axisSnap(p);
     if (pts.empty()) pts.push_back(Vector3(p.x,0,p.z));
     if (pts.size()==1) {

@@ -226,9 +226,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Sets CMAKE_BUILD_TYPE=Release for single-config generators."
         ),
     )
-    args = parser.parse_args(argv)
+    args, unknown = parser.parse_known_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if unknown:
+        logging.warning("Ignoring unknown arguments: %s", " ".join(unknown))
 
     try:
         ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)

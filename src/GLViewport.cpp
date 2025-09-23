@@ -3,6 +3,9 @@
 #include <QWheelEvent>
 #include <QtMath>
 
+#include <algorithm>
+#include <cmath>
+
 #include "Tools/ToolManager.h"
 #include "GeometryKernel/Curve.h"
 #include "GeometryKernel/Solid.h"
@@ -27,6 +30,23 @@ void GLViewport::initializeGL()
 void GLViewport::resizeGL(int w, int h)
 {
     glViewport(0,0,w,h);
+    if (toolManager) {
+        const auto ratio = devicePixelRatioF();
+        const int pixelW = std::max(1, static_cast<int>(std::lround(w * ratio)));
+        const int pixelH = std::max(1, static_cast<int>(std::lround(h * ratio)));
+        toolManager->setViewportSize(pixelW, pixelH);
+    }
+}
+
+void GLViewport::setToolManager(ToolManager* manager)
+{
+    toolManager = manager;
+    if (toolManager) {
+        const auto ratio = devicePixelRatioF();
+        const int pixelW = std::max(1, static_cast<int>(std::lround(width() * ratio)));
+        const int pixelH = std::max(1, static_cast<int>(std::lround(height() * ratio)));
+        toolManager->setViewportSize(pixelW, pixelH);
+    }
 }
 
 void GLViewport::paintGL()
@@ -130,12 +150,30 @@ void GLViewport::drawScene()
             // draw edges
             glColor3f(0.1f,0.1f,0.1f);
             glLineWidth(1.5f);
-            glBegin(GL_LINE_LOOP);
-            for (size_t i=0;i<verts.size();++i) {
-                const auto& v = verts[i];
-                glVertex3f(v.x,v.y,v.z);
+            for (const auto& face : faces) {
+                if (face.indices.size() < 2) continue;
+                glBegin(GL_LINE_LOOP);
+                for (int idx : face.indices) {
+                    const auto& v = verts[(size_t)idx];
+                    glVertex3f(v.x, v.y, v.z);
+                }
+                glEnd();
             }
-            glEnd();
+            size_t ringSize = verts.size() / 2;
+            if (ringSize >= 2) {
+                glBegin(GL_LINE_LOOP);
+                for (size_t i=0;i<ringSize;++i) {
+                    const auto& v = verts[i];
+                    glVertex3f(v.x, v.y, v.z);
+                }
+                glEnd();
+                glBegin(GL_LINE_LOOP);
+                for (size_t i=0;i<ringSize;++i) {
+                    const auto& v = verts[i + ringSize];
+                    glVertex3f(v.x, v.y, v.z);
+                }
+                glEnd();
+            }
         }
     }
 }
@@ -150,7 +188,9 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
     }
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
-            t->onMouseDown(e->pos().x(), e->pos().y());
+            const auto ratio = devicePixelRatioF();
+            const QPointF devicePos = e->position() * ratio;
+            t->onMouseDown(std::lround(devicePos.x()), std::lround(devicePos.y()));
         }
     }
 }
@@ -171,7 +211,9 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
 
     if (toolManager) {
         if (auto* t = toolManager->getActiveTool()) {
-            t->onMouseMove(e->pos().x(), e->pos().y());
+            const auto ratio = devicePixelRatioF();
+            const QPointF devicePos = e->position() * ratio;
+            t->onMouseMove(std::lround(devicePos.x()), std::lround(devicePos.y()));
         }
     }
 }
@@ -183,7 +225,9 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
-            t->onMouseUp(e->pos().x(), e->pos().y());
+            const auto ratio = devicePixelRatioF();
+            const QPointF devicePos = e->position() * ratio;
+            t->onMouseUp(std::lround(devicePos.x()), std::lround(devicePos.y()));
         }
     }
 }

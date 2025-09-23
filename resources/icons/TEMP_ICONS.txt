@@ -1,0 +1,33 @@
+# FreeCrafter / Codex — Temporary Icon Map (Flowbite placeholders)
+# Placeholders live under resources/icons/. Do NOT change paths used in code; replace art in-place when final assets arrive.
+
+[meta]
+source = Flowbite Icons (MIT)
+style  = outline (monochrome, inherits currentColor)
+
+[mapping]
+branch.svg       -> code-branch                  | final: git branch with checkpoints
+close.svg        -> xmark                        | final: close glyph to match brand
+export.svg       -> file-export                  | final: export/share arrow
+file.svg         -> file                         | final: brand file/document
+folder.svg       -> folder                       | final: brand folder
+git.svg          -> github                       | final: generic git glyph (not brand-specific)
+grid.svg         -> squares-2x2                  | final: brand grid
+help.svg         -> question-mark-circle         | final: brand help/info
+measure.svg      -> ruler-combined               | final: caliper/ruler
+newfile.svg      -> file-circle-plus             | final: new file sheet + plus
+open.svg         -> folder-open                  | final: folder-open with brand hinge
+orbit.svg        -> globe                        | final: orbit/3D camera (globe)
+palette.svg      -> paint-brush                  | final: brand color palette/brush
+pan.svg          -> arrow-up-right-down-left     | final: hand-grab
+redo.svg         -> arrow-uturn-right            | final: bespoke curved-arrow (brand style)
+run.svg          -> play                         | final: brand run/play
+save.svg         -> floppy-disk                  | final: save-box (brand)
+search.svg       -> magnifying-glass             | final: brand lens
+settings.svg     -> cog-6-tooth                  | final: brand gear
+terminal.svg     -> command-line                 | final: brand terminal/console
+theme_dark.svg   -> moon                         | final: brand moon/dark
+theme_light.svg  -> sun                          | final: brand sun/light
+undo.svg         -> arrow-uturn-left             | final: bespoke curved-arrow (brand style)
+zoom_in.svg      -> magnifying-glass-plus        | final: brand zoom-in
+zoom_out.svg     -> magnifying-glass-minus       | final: brand zoom-out

@@ -189,15 +189,13 @@ void HotkeyManager::importFromFile(const QString& path)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return;
+
     const auto doc = QJsonDocument::fromJson(file.readAll());
-    const QJsonObject obj = doc.object();
-    const int version = obj.value(QStringLiteral("version")).toInt(schemaVersion);
-    if (version != schemaVersion)
+    QHash<QString, QKeySequence> updated = shortcuts;
+    if (!readShortcuts(doc.object(), updated))
         return;
-    const QJsonObject actions = obj.value(QStringLiteral("actions")).toObject();
-    for (auto it = actions.begin(); it != actions.end(); ++it) {
-        shortcuts.insert(it.key(), QKeySequence(it.value().toString()));
-    }
+
+    shortcuts = updated;
     save();
     for (auto it = shortcuts.begin(); it != shortcuts.end(); ++it)
         applyShortcut(it.key());
@@ -207,12 +205,7 @@ void HotkeyManager::importFromFile(const QString& path)
 void HotkeyManager::exportToFile(const QString& path) const
 {
     QJsonObject obj;
-    obj.insert(QStringLiteral("version"), schemaVersion);
-    QJsonObject actions;
-    for (auto it = shortcuts.constBegin(); it != shortcuts.constEnd(); ++it) {
-        actions.insert(it.key(), it.value().toString(QKeySequence::PortableText));
-    }
-    obj.insert(QStringLiteral("actions"), actions);
+    writeShortcuts(obj);
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -229,26 +222,15 @@ void HotkeyManager::load()
         return;
     if (!file.open(QIODevice::ReadOnly))
         return;
+
     const auto doc = QJsonDocument::fromJson(file.readAll());
-    const QJsonObject obj = doc.object();
-    const int version = obj.value(QStringLiteral("version")).toInt(schemaVersion);
-    if (version != schemaVersion)
-        return;
-    const QJsonObject actions = obj.value(QStringLiteral("actions")).toObject();
-    for (auto it = actions.begin(); it != actions.end(); ++it) {
-        shortcuts.insert(it.key(), QKeySequence(it.value().toString()));
-    }
+    readShortcuts(doc.object(), shortcuts);
 }
 
 void HotkeyManager::save() const
 {
     QJsonObject obj;
-    obj.insert(QStringLiteral("version"), schemaVersion);
-    QJsonObject actions;
-    for (auto it = shortcuts.constBegin(); it != shortcuts.constEnd(); ++it) {
-        actions.insert(it.key(), it.value().toString(QKeySequence::PortableText));
-    }
-    obj.insert(QStringLiteral("actions"), actions);
+    writeShortcuts(obj);
 
     QFile file(configPath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -284,9 +266,47 @@ void HotkeyManager::loadDefaults()
     const auto doc = QJsonDocument::fromJson(file.readAll());
     const QJsonObject obj = doc.object();
     schemaVersion = obj.value(QStringLiteral("version")).toInt(schemaVersion);
-    const QJsonObject actions = obj.value(QStringLiteral("actions")).toObject();
-    for (auto it = actions.begin(); it != actions.end(); ++it) {
-        defaultShortcuts.insert(it.key(), QKeySequence(it.value().toString()));
+
+    QHash<QString, QKeySequence> defaults = defaultShortcuts;
+    if (readShortcuts(obj, defaults)) {
+        defaultShortcuts = defaults;
     }
     shortcuts = defaultShortcuts;
+}
+
+bool HotkeyManager::readShortcuts(const QJsonObject& obj, QHash<QString, QKeySequence>& target) const
+{
+    if (obj.isEmpty())
+        return false;
+
+    const int version = obj.value(QStringLiteral("version")).toInt(schemaVersion);
+    if (version != schemaVersion)
+        return false;
+
+    const QJsonObject actions = obj.value(QStringLiteral("actions")).toObject();
+    for (auto it = actions.begin(); it != actions.end(); ++it) {
+        target.insert(it.key(), QKeySequence(it.value().toString()));
+    }
+    return true;
+}
+
+bool HotkeyManager::readShortcuts(const QJsonObject& obj)
+{
+    return readShortcuts(obj, shortcuts);
+}
+
+void HotkeyManager::writeShortcuts(QJsonObject& obj, const QHash<QString, QKeySequence>& source) const
+{
+    obj.insert(QStringLiteral("version"), schemaVersion);
+
+    QJsonObject actions;
+    for (auto it = source.constBegin(); it != source.constEnd(); ++it) {
+        actions.insert(it.key(), it.value().toString(QKeySequence::PortableText));
+    }
+    obj.insert(QStringLiteral("actions"), actions);
+}
+
+void HotkeyManager::writeShortcuts(QJsonObject& obj) const
+{
+    writeShortcuts(obj, shortcuts);
 }

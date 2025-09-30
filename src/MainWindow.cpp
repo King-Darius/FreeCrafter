@@ -8,11 +8,16 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QObject>
+#include <QPushButton>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTabBar>
@@ -23,9 +28,12 @@
 #include <QVBoxLayout>
 #include <QWidgetAction>
 #include <cmath>
+#include <QStringList>
 
 #include "GLViewport.h"
 #include "Tools/ToolManager.h"
+#include "NavigationPreferences.h"
+#include "NavigationConfig.h"
 #include "ui/MeasurementWidget.h"
 
 namespace {
@@ -318,6 +326,88 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 }
 }
 
+QString MainWindow::navigationHintForTool(const QString& toolName) const
+{
+    QString base;
+    if (toolName == QLatin1String("PanTool")) {
+        base = tr("Pan: Drag to move the view target.");
+    } else if (toolName == QLatin1String("OrbitTool")) {
+        base = tr("Orbit: Drag to rotate around the target. Hold Shift while orbiting to pan.");
+    } else if (toolName == QLatin1String("ZoomTool")) {
+        base = tr("Zoom: Drag vertically to change distance. Hold Shift to invert drag direction. Ctrl-click zooms extents; Alt-click zooms the current selection.");
+    } else {
+        base = tr("Navigation tool");
+    }
+
+    if (!navigationPrefs)
+        return base;
+
+    const NavigationConfig& config = navigationPrefs->config();
+    QStringList combos;
+
+    auto buttonToText = [this](Qt::MouseButton button) -> QString {
+        switch (button) {
+        case Qt::LeftButton:
+            return tr("Left mouse");
+        case Qt::RightButton:
+            return tr("Right mouse");
+        case Qt::MiddleButton:
+            return tr("Middle mouse");
+        case Qt::ExtraButton1:
+            return tr("Mouse button 4");
+        case Qt::ExtraButton2:
+            return tr("Mouse button 5");
+        default:
+            return QString();
+        }
+    };
+
+    for (const auto& binding : config.dragBindings) {
+        if (QString::fromStdString(binding.toolName) != toolName)
+            continue;
+        QString button = buttonToText(binding.button);
+        if (button.isEmpty())
+            continue;
+        QStringList parts;
+        if (binding.modifiers.testFlag(Qt::ShiftModifier))
+            parts << tr("Shift");
+        if (binding.modifiers.testFlag(Qt::ControlModifier))
+            parts << tr("Ctrl");
+        if (binding.modifiers.testFlag(Qt::AltModifier))
+            parts << tr("Alt");
+        parts << button;
+        QString combo = parts.join(QStringLiteral(" + "));
+        if (!binding.temporary)
+            combo = tr("%1 (toggle)").arg(combo);
+        combos << combo;
+    }
+
+    if (toolName == QLatin1String("ZoomTool"))
+        combos << tr("Scroll wheel");
+
+    if (!combos.isEmpty())
+        base += QStringLiteral(" ") + tr("Bindings: %1.").arg(combos.join(tr(", ")));
+
+    if (toolName == QLatin1String("ZoomTool")) {
+        base += QStringLiteral(" ");
+        base += config.zoomToCursor ? tr("Zoom focuses on the cursor.") : tr("Zoom centers on the view target.");
+        base += QStringLiteral(" ");
+        base += tr("Zoom Extents (Ctrl+0) and Zoom Selection (Shift+Z) remain available.");
+    }
+
+    return base;
+}
+
+void MainWindow::refreshNavigationActionHints()
+{
+    if (panAction)
+        panAction->setStatusTip(navigationHintForTool(QStringLiteral("PanTool")));
+    if (orbitAction)
+        orbitAction->setStatusTip(navigationHintForTool(QStringLiteral("OrbitTool")));
+    if (zoomAction)
+        zoomAction->setStatusTip(navigationHintForTool(QStringLiteral("ZoomTool")));
+}
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
     setWindowTitle("FreeCrafter");
@@ -344,11 +434,28 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     setCentralWidget(central);
 
+    navigationPrefs = std::make_unique<NavigationPreferences>(this);
     toolManager = std::make_unique<ToolManager>(viewport->getGeometry(), viewport->getCamera());
+    toolManager->setNavigationConfig(navigationPrefs->config());
     viewport->setToolManager(toolManager.get());
+    viewport->setNavigationPreferences(navigationPrefs.get());
 
     connect(viewport, &GLViewport::cursorPositionChanged, this, &MainWindow::updateCursor);
     connect(viewport, &GLViewport::frameStatsUpdated, this, &MainWindow::updateFrameStats);
+
+    connect(navigationPrefs.get(), &NavigationPreferences::configChanged, this, [this]() {
+        if (toolManager)
+            toolManager->setNavigationConfig(navigationPrefs->config());
+        refreshNavigationActionHints();
+        if (hintLabel) {
+            if (panAction && panAction->isChecked())
+                hintLabel->setText(navigationHintForTool(QStringLiteral("PanTool")));
+            else if (orbitAction && orbitAction->isChecked())
+                hintLabel->setText(navigationHintForTool(QStringLiteral("OrbitTool")));
+            else if (zoomAction && zoomAction->isChecked())
+                hintLabel->setText(navigationHintForTool(QStringLiteral("ZoomTool")));
+        }
+    });
 
     // Load persisted theme and render style before applying styles
     {
@@ -609,6 +716,7 @@ void MainWindow::createToolbars()
     activateSelect();
 
     setRenderStyle(renderStyleChoice);
+    refreshNavigationActionHints();
 }
 
 void MainWindow::createDockPanels()
@@ -766,7 +874,7 @@ void MainWindow::setActiveTool(QAction* action, const QString& toolId, const QSt
         return;
     Tool::MeasurementKind kind = Tool::MeasurementKind::None;
     if (!toolId.isEmpty()) {
-        toolManager->activateTool(toolId.toUtf8().constData());
+        toolManager->activateTool(toolId.toUtf8().constData(), false);
         kind = toolManager->getMeasurementKind();
     }
     action->setChecked(true);
@@ -868,7 +976,87 @@ void MainWindow::onRedo()
 
 void MainWindow::showPreferences()
 {
-    showKeyboardShortcuts();
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Preferences"));
+    dialog.resize(440, 360);
+
+    auto* layout = new QVBoxLayout(&dialog);
+
+    auto* navLabel = new QLabel(tr("Navigation style"), &dialog);
+    navLabel->setWordWrap(true);
+    layout->addWidget(navLabel);
+
+    auto* schemeCombo = new QComboBox(&dialog);
+    QList<NavigationPreferences::SchemeInfo> schemes = navigationPrefs ? navigationPrefs->availableSchemes() : QList<NavigationPreferences::SchemeInfo>{};
+    int activeIndex = 0;
+    QString activeSchemeId = navigationPrefs ? navigationPrefs->activeScheme() : QString();
+    for (int i = 0; i < schemes.size(); ++i) {
+        schemeCombo->addItem(schemes[i].label, schemes[i].id);
+        if (schemes[i].id == activeSchemeId)
+            activeIndex = i;
+    }
+    layout->addWidget(schemeCombo);
+
+    auto* schemeDescription = new QLabel(&dialog);
+    schemeDescription->setWordWrap(true);
+    layout->addWidget(schemeDescription);
+
+    auto* cursorCheck = new QCheckBox(tr("Zoom towards cursor"), &dialog);
+    layout->addWidget(cursorCheck);
+
+    auto* invertCheck = new QCheckBox(tr("Invert scroll direction"), &dialog);
+    layout->addWidget(invertCheck);
+
+    auto* shortcutsButton = new QPushButton(tr("Customize Shortcuts…"), &dialog);
+    layout->addWidget(shortcutsButton);
+
+    connect(shortcutsButton, &QPushButton::clicked, this, [this, &dialog]() {
+        hotkeys.showEditor(&dialog);
+    });
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    auto updateControls = [&](int index, bool useStored) {
+        if (index < 0 || index >= schemes.size())
+            return;
+        const auto& info = schemes[index];
+        schemeDescription->setText(info.description);
+        if (navigationPrefs && useStored && info.id == navigationPrefs->activeScheme()) {
+            cursorCheck->setChecked(navigationPrefs->config().zoomToCursor);
+            invertCheck->setChecked(navigationPrefs->config().invertWheel);
+        } else if (navigationPrefs) {
+            NavigationConfig preview = navigationPrefs->schemeConfig(info.id);
+            cursorCheck->setChecked(preview.zoomToCursor);
+            invertCheck->setChecked(preview.invertWheel);
+        } else {
+            cursorCheck->setChecked(true);
+            invertCheck->setChecked(false);
+        }
+    };
+
+    schemeCombo->blockSignals(true);
+    schemeCombo->setCurrentIndex(activeIndex);
+    schemeCombo->blockSignals(false);
+    updateControls(activeIndex, true);
+
+    connect(schemeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, [=, &updateControls](int index) {
+        updateControls(index, false);
+    });
+
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    if (!navigationPrefs)
+        return;
+
+    const QString chosenScheme = schemeCombo->currentData().toString();
+    navigationPrefs->setActiveScheme(chosenScheme);
+    navigationPrefs->setZoomToCursor(cursorCheck->isChecked());
+    navigationPrefs->setInvertWheel(invertCheck->isChecked());
+    navigationPrefs->save();
 }
 
 void MainWindow::showCommandPalette()
@@ -944,17 +1132,17 @@ void MainWindow::activateExtrude()
 
 void MainWindow::activatePan()
 {
-    setActiveTool(panAction, QString(), tr("Pan: Hold Shift+middle mouse or press H to pan."));
+    setActiveTool(panAction, QStringLiteral("PanTool"), navigationHintForTool(QStringLiteral("PanTool")));
 }
 
 void MainWindow::activateOrbit()
 {
-    setActiveTool(orbitAction, QString(), tr("Orbit: Drag with middle mouse or press O for Orbit."));
+    setActiveTool(orbitAction, QStringLiteral("OrbitTool"), navigationHintForTool(QStringLiteral("OrbitTool")));
 }
 
 void MainWindow::activateZoom()
 {
-    setActiveTool(zoomAction, QString(), tr("Zoom: Scroll wheel, press Z, or use Zoom Extents/Selection."));
+    setActiveTool(zoomAction, QStringLiteral("ZoomTool"), navigationHintForTool(QStringLiteral("ZoomTool")));
 }
 
 void MainWindow::activateMeasure()

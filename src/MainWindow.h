@@ -13,6 +13,7 @@ class QTabWidget;
 class QTabBar;
 class QActionGroup;
 class MeasurementWidget;
+class NavigationPreferences;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -65,6 +66,8 @@ private:
     void restoreWindowState();
     void persistWindowState();
     void setActiveTool(QAction* action, const QString& toolId, const QString& hint);
+    QString navigationHintForTool(const QString& toolName) const;
+    void refreshNavigationActionHints();
     void updateThemeActionIcon();
     void setRenderStyle(Renderer::RenderStyle style);
 
@@ -72,6 +75,7 @@ private:
 
     GLViewport* viewport = nullptr;
     std::unique_ptr<ToolManager> toolManager;
+    std::unique_ptr<NavigationPreferences> navigationPrefs;
     MeasurementWidget* measurementWidget = nullptr;
     QLabel* hintLabel = nullptr;
     QLabel* coordLabel = nullptr;

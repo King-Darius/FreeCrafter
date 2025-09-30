@@ -56,5 +56,6 @@
   </qresource>
   <qresource prefix="/config">
     <file>resources/config/hotkeys_default.json</file>
+    <file>resources/config/navigation_default.json</file>
   </qresource>
 </RCC>

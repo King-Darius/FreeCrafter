@@ -26,6 +26,7 @@ public:
         int x = 0;
         int y = 0;
         ModifierState modifiers;
+        float devicePixelRatio = 1.0f;
     };
 
     enum class State {
@@ -105,6 +106,7 @@ public:
     virtual const char* getName() const = 0;
     virtual MeasurementKind getMeasurementKind() const { return MeasurementKind::None; }
     virtual OverrideResult applyMeasurementOverride(double) { return OverrideResult::Ignored; }
+    virtual bool isNavigationTool() const { return false; }
 
 protected:
     virtual void onPointerDown(const PointerInput&) {}

@@ -12,7 +12,9 @@ add_library(freecrafter_lib
     src/GLViewport.cpp
     src/Renderer.cpp
     src/CameraController.cpp
+    src/CameraNavigation.cpp
     src/HotkeyManager.cpp
+    src/NavigationPreferences.cpp
     src/GeometryKernel/Curve.cpp
     src/GeometryKernel/HalfEdgeMesh.cpp
     src/GeometryKernel/MeshUtils.cpp
@@ -28,6 +30,9 @@ add_library(freecrafter_lib
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
+    src/Tools/OrbitTool.cpp
+    src/Tools/PanTool.cpp
+    src/Tools/ZoomTool.cpp
     src/Tools/ToolManager.cpp
     src/Interaction/InferenceEngine.cpp
     src/ui/MeasurementWidget.cpp

@@ -34,26 +34,87 @@ ToolManager::ToolManager(GeometryKernel* g, CameraController* c)
     tools.push_back(std::make_unique<RotateTool>(g, c));
     tools.push_back(std::make_unique<ScaleTool>(g, c));
     tools.push_back(std::make_unique<ExtrudeTool>(g, c));
+    tools.push_back(std::make_unique<OrbitTool>(g, c));
+    tools.push_back(std::make_unique<PanTool>(g, c));
+    tools.push_back(std::make_unique<ZoomTool>(g, c));
     active = tools.empty() ? nullptr : tools.front().get();
+    if (active && !active->isNavigationTool()) {
+        lastModelingTool = active;
+    }
     propagateViewport();
     pushInferenceToActive();
     if (active) {
         Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
         active->setModifiers(mods);
     }
+    setNavigationConfig(navigationConfig);
 }
 
-void ToolManager::activateTool(const char* name)
+void ToolManager::activateTool(const char* name, bool temporary)
 {
+    Tool* found = nullptr;
     for (auto& tool : tools) {
         if (std::strcmp(tool->getName(), name) == 0) {
-            active = tool.get();
-            pushInferenceToActive();
-            if (active) {
-                Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
-                active->setModifiers(mods);
-            }
-            return;
+            found = tool.get();
+            break;
+        }
+    }
+    if (!found)
+        return;
+
+    if (temporary) {
+        if (!temporaryTool)
+            previousTool = active;
+        temporaryTool = found;
+        active = found;
+    } else {
+        active = found;
+        temporaryTool = nullptr;
+        previousTool = nullptr;
+        if (!found->isNavigationTool())
+            lastModelingTool = found;
+    }
+
+    pushInferenceToActive();
+    if (active) {
+        active->setViewportSize(viewportWidth, viewportHeight);
+        Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
+        active->setModifiers(mods);
+    }
+}
+
+void ToolManager::restorePreviousTool()
+{
+    if (!temporaryTool)
+        return;
+
+    Tool* target = previousTool;
+    if (!target)
+        target = lastModelingTool;
+    if (!target && !tools.empty())
+        target = tools.front().get();
+
+    temporaryTool = nullptr;
+    previousTool = nullptr;
+
+    if (target)
+        active = target;
+
+    pushInferenceToActive();
+    if (active) {
+        active->setViewportSize(viewportWidth, viewportHeight);
+        Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
+        active->setModifiers(mods);
+    }
+}
+
+void ToolManager::setNavigationConfig(const NavigationConfig& config)
+{
+    navigationConfig = config;
+    for (auto& tool : tools) {
+        if (auto* zoom = dynamic_cast<ZoomTool*>(tool.get())) {
+            zoom->setZoomToCursor(navigationConfig.zoomToCursor);
+            zoom->setDragSensitivity(std::max(0.02f, navigationConfig.wheelStep * 0.08f));
         }
     }
 }

@@ -10,8 +10,12 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
+#include "NavigationConfig.h"
+
+#include <optional>
 
 class ToolManager;
+class NavigationPreferences;
 
 class GLViewport : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -20,6 +24,7 @@ public:
     explicit GLViewport(QWidget* parent = nullptr);
 
     void setToolManager(ToolManager* manager);
+    void setNavigationPreferences(NavigationPreferences* prefs);
     void setRenderStyle(Renderer::RenderStyle style);
     Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
     ToolManager* getToolManager() const { return toolManager; }
@@ -61,13 +66,14 @@ private:
     GeometryKernel geometry;
     CameraController camera;
     ToolManager* toolManager = nullptr;
+    NavigationPreferences* navigationPrefs = nullptr;
+    NavigationConfig navigationConfig;
 
     QPoint lastMouse;
     QPoint lastDeviceMouse;
     bool hasDeviceMouse = false;
-    enum class NavigationDragMode { None, Orbit, Pan };
-    NavigationDragMode navigationMode = NavigationDragMode::None;
     Qt::MouseButton navigationButton = Qt::NoButton;
+    std::optional<NavigationConfig::DragBinding> activeNavigationBinding;
 
     QTimer repaintTimer;
     QElapsedTimer frameTimer;

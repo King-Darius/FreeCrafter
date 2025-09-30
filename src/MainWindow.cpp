@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QObject>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTabBar>
@@ -35,6 +36,7 @@
 #include "NavigationPreferences.h"
 #include "NavigationConfig.h"
 #include "ui/MeasurementWidget.h"
+#include "ui/ViewSettingsDialog.h"
 
 namespace {
 constexpr int kToolbarHeight = 48;
@@ -458,16 +460,31 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     });
 
     // Load persisted theme and render style before applying styles
+    QString storedViewPreset = QStringLiteral("iso");
+    float storedFov = 60.0f;
+    QString storedProjection = QStringLiteral("perspective");
     {
         QSettings settings("FreeCrafter", "FreeCrafter");
         darkTheme = settings.value(QStringLiteral("%1/darkTheme").arg(kSettingsGroup), true).toBool();
         renderStyleChoice = renderStyleFromSetting(settings.value(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), QStringLiteral("shadedEdges")).toString());
+        storedViewPreset = settings.value(QStringLiteral("%1/viewPreset").arg(kSettingsGroup), storedViewPreset).toString();
+        storedFov = settings.value(QStringLiteral("%1/viewFov").arg(kSettingsGroup), storedFov).toFloat();
+        storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
     }
 
     viewport->setRenderStyle(renderStyleChoice);
+    viewport->setFieldOfView(storedFov);
+    if (storedProjection.compare(QLatin1String("parallel"), Qt::CaseInsensitive) == 0)
+        viewport->setProjectionMode(CameraController::ProjectionMode::Parallel);
+    else
+        viewport->setProjectionMode(CameraController::ProjectionMode::Perspective);
+    if (!viewport->applyViewPreset(storedViewPreset))
+        viewport->applyViewPreset(ViewPresetManager::StandardView::Iso);
+    currentViewPresetId = viewport->currentViewPresetId();
 
     createMenus();
     createToolbars();
+    syncViewSettingsUI();
     createDockPanels();
     createStatusBarWidgets();
     registerShortcuts();
@@ -562,6 +579,53 @@ void MainWindow::createMenus()
             statusBar()->showMessage(tr("Select objects to zoom"), 1500);
         }
     });
+    viewMenu->addSeparator();
+    actionViewIso = viewMenu->addAction(tr("Iso View"));
+    actionViewIso->setShortcut(QKeySequence(QStringLiteral("Ctrl+1")));
+    actionViewIso->setStatusTip(tr("Align the camera to an isometric three-quarter view"));
+    connect(actionViewIso, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Iso); });
+
+    actionViewTop = viewMenu->addAction(tr("Top View"));
+    actionViewTop->setShortcut(QKeySequence(QStringLiteral("Ctrl+2")));
+    actionViewTop->setStatusTip(tr("Look straight down from the top"));
+    connect(actionViewTop, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Top); });
+
+    actionViewBottom = viewMenu->addAction(tr("Bottom View"));
+    actionViewBottom->setShortcut(QKeySequence(QStringLiteral("Ctrl+3")));
+    actionViewBottom->setStatusTip(tr("Look straight up from beneath the model"));
+    connect(actionViewBottom, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Bottom); });
+
+    actionViewFront = viewMenu->addAction(tr("Front View"));
+    actionViewFront->setShortcut(QKeySequence(QStringLiteral("Ctrl+4")));
+    actionViewFront->setStatusTip(tr("Look directly at the front elevation"));
+    connect(actionViewFront, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Front); });
+
+    actionViewBack = viewMenu->addAction(tr("Back View"));
+    actionViewBack->setShortcut(QKeySequence(QStringLiteral("Ctrl+5")));
+    actionViewBack->setStatusTip(tr("Look directly at the back elevation"));
+    connect(actionViewBack, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Back); });
+
+    actionViewLeft = viewMenu->addAction(tr("Left View"));
+    actionViewLeft->setShortcut(QKeySequence(QStringLiteral("Ctrl+6")));
+    actionViewLeft->setStatusTip(tr("Look from the model's left side"));
+    connect(actionViewLeft, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Left); });
+
+    actionViewRight = viewMenu->addAction(tr("Right View"));
+    actionViewRight->setShortcut(QKeySequence(QStringLiteral("Ctrl+7")));
+    actionViewRight->setStatusTip(tr("Look from the model's right side"));
+    connect(actionViewRight, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Right); });
+
+    actionToggleProjection = viewMenu->addAction(tr("Parallel Projection"));
+    actionToggleProjection->setCheckable(true);
+    actionToggleProjection->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+O")));
+    actionToggleProjection->setStatusTip(tr("Toggle between perspective and parallel projections"));
+    connect(actionToggleProjection, &QAction::toggled, this, [this](bool checked) {
+        setProjectionMode(checked ? CameraController::ProjectionMode::Parallel : CameraController::ProjectionMode::Perspective);
+    });
+
+    actionViewSettings = viewMenu->addAction(tr("Camera Settings…"), this, &MainWindow::showViewSettingsDialog);
+    actionViewSettings->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
+    actionViewSettings->setStatusTip(tr("Adjust field of view and projection settings"));
     QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
         statusBar()->showMessage(tr("Split view is coming soon"), 2000);
     });
@@ -653,6 +717,27 @@ void MainWindow::createToolbars()
     auto* renderWidgetAction = new QWidgetAction(primaryToolbar);
     renderWidgetAction->setDefaultWidget(renderStyleButton);
     primaryToolbar->addAction(renderWidgetAction);
+
+    viewPresetToolButton = new QToolButton(primaryToolbar);
+    viewPresetToolButton->setPopupMode(QToolButton::InstantPopup);
+    viewPresetToolButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    QMenu* viewPresetMenu = new QMenu(viewPresetToolButton);
+    viewPresetMenu->addAction(actionViewIso);
+    viewPresetMenu->addAction(actionViewTop);
+    viewPresetMenu->addAction(actionViewBottom);
+    viewPresetMenu->addAction(actionViewFront);
+    viewPresetMenu->addAction(actionViewBack);
+    viewPresetMenu->addAction(actionViewLeft);
+    viewPresetMenu->addAction(actionViewRight);
+    viewPresetMenu->addSeparator();
+    viewPresetMenu->addAction(actionToggleProjection);
+    viewPresetMenu->addAction(actionViewSettings);
+    viewPresetToolButton->setMenu(viewPresetMenu);
+    viewPresetToolButton->setToolTip(tr("Select standard views and projection options"));
+    auto* viewPresetWidgetAction = new QWidgetAction(primaryToolbar);
+    viewPresetWidgetAction->setDefaultWidget(viewPresetToolButton);
+    primaryToolbar->addAction(viewPresetWidgetAction);
+    updateViewPresetButtonLabel();
 
     toolRibbon = new QToolBar(tr("Tools"), this);
     toolRibbon->setOrientation(Qt::Vertical);
@@ -786,6 +871,15 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("view.zoomOut"), actionZoomOut);
     hotkeys.registerAction(QStringLiteral("view.zoomExtents"), actionZoomExtents);
     hotkeys.registerAction(QStringLiteral("view.zoomSelection"), actionZoomSelection);
+    hotkeys.registerAction(QStringLiteral("view.iso"), actionViewIso);
+    hotkeys.registerAction(QStringLiteral("view.top"), actionViewTop);
+    hotkeys.registerAction(QStringLiteral("view.bottom"), actionViewBottom);
+    hotkeys.registerAction(QStringLiteral("view.front"), actionViewFront);
+    hotkeys.registerAction(QStringLiteral("view.back"), actionViewBack);
+    hotkeys.registerAction(QStringLiteral("view.left"), actionViewLeft);
+    hotkeys.registerAction(QStringLiteral("view.right"), actionViewRight);
+    hotkeys.registerAction(QStringLiteral("view.toggleProjection"), actionToggleProjection);
+    hotkeys.registerAction(QStringLiteral("view.cameraSettings"), actionViewSettings);
     hotkeys.registerAction(QStringLiteral("view.toggleRightDock"), actionToggleRightDock);
     hotkeys.registerAction(QStringLiteral("theme.toggle"), actionToggleTheme);
     hotkeys.registerAction(QStringLiteral("tools.select"), selectAction);
@@ -864,6 +958,7 @@ void MainWindow::persistWindowState()
     settings.setValue("state", saveState());
     settings.setValue("darkTheme", darkTheme);
     settings.endGroup();
+    persistViewSettings();
 }
 
 void MainWindow::setActiveTool(QAction* action, const QString& toolId, const QString& hint)
@@ -928,6 +1023,78 @@ void MainWindow::setRenderStyle(Renderer::RenderStyle style)
         QSettings settings("FreeCrafter", "FreeCrafter");
         settings.setValue(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), renderStyleToSetting(style));
     }
+}
+
+void MainWindow::applyStandardView(ViewPresetManager::StandardView view)
+{
+    if (!viewport)
+        return;
+    if (!viewport->applyViewPreset(view))
+        return;
+    if (const auto* preset = viewPresetManager.preset(view))
+        currentViewPresetId = preset->id;
+    else
+        currentViewPresetId = viewport->currentViewPresetId();
+    syncViewSettingsUI();
+    const QString label = viewPresetManager.labelForId(currentViewPresetId);
+    if (!label.isEmpty())
+        statusBar()->showMessage(tr("Switched to %1 view").arg(label), 1500);
+    persistViewSettings();
+}
+
+void MainWindow::setProjectionMode(CameraController::ProjectionMode mode, bool showStatus)
+{
+    if (!viewport)
+        return;
+    viewport->setProjectionMode(mode);
+    if (actionToggleProjection) {
+        QSignalBlocker blocker(actionToggleProjection);
+        actionToggleProjection->setChecked(mode == CameraController::ProjectionMode::Parallel);
+    }
+    if (showStatus) {
+        statusBar()->showMessage(mode == CameraController::ProjectionMode::Parallel ? tr("Projection: Parallel")
+                                                                                : tr("Projection: Perspective"),
+                                 1500);
+    }
+    updateViewPresetButtonLabel();
+    persistViewSettings();
+}
+
+void MainWindow::updateViewPresetButtonLabel()
+{
+    if (!viewPresetToolButton)
+        return;
+    QString label = viewPresetManager.labelForId(currentViewPresetId);
+    if (label.isEmpty())
+        label = tr("Custom");
+    QString projectionText = viewport && viewport->projectionMode() == CameraController::ProjectionMode::Parallel
+                                 ? tr("Ortho")
+                                 : tr("Persp");
+    viewPresetToolButton->setText(tr("%1 • %2").arg(label, projectionText));
+    viewPresetToolButton->setToolTip(tr("%1 view (%2 projection)").arg(label, projectionText));
+}
+
+void MainWindow::persistViewSettings() const
+{
+    if (!viewport)
+        return;
+    QSettings settings("FreeCrafter", "FreeCrafter");
+    settings.beginGroup(kSettingsGroup);
+    settings.setValue(QStringLiteral("viewPreset"), currentViewPresetId);
+    settings.setValue(QStringLiteral("viewFov"), viewport->fieldOfView());
+    settings.setValue(QStringLiteral("viewProjection"),
+                      viewport->projectionMode() == CameraController::ProjectionMode::Parallel ? QStringLiteral("parallel")
+                                                                                              : QStringLiteral("perspective"));
+    settings.endGroup();
+}
+
+void MainWindow::syncViewSettingsUI()
+{
+    if (actionToggleProjection && viewport) {
+        QSignalBlocker blocker(actionToggleProjection);
+        actionToggleProjection->setChecked(viewport->projectionMode() == CameraController::ProjectionMode::Parallel);
+    }
+    updateViewPresetButtonLabel();
 }
 
 void MainWindow::newFile()
@@ -1155,6 +1322,28 @@ void MainWindow::toggleGrid()
     if (hintLabel)
         hintLabel->setText(gridAction->isChecked() ? tr("Grid enabled") : tr("Grid hidden"));
     viewport->update();
+}
+
+void MainWindow::showViewSettingsDialog()
+{
+    if (!viewport)
+        return;
+    ViewSettingsDialog dialog(this);
+    dialog.setFieldOfView(viewport->fieldOfView());
+    dialog.setProjectionMode(viewport->projectionMode());
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    viewport->setFieldOfView(dialog.fieldOfView());
+    setProjectionMode(dialog.projectionMode(), false);
+    const QString projectionText = dialog.projectionMode() == CameraController::ProjectionMode::Parallel ? tr("Parallel")
+                                                                                                          : tr("Perspective");
+    statusBar()->showMessage(tr("Field of view set to %1° (%2)")
+                                 .arg(dialog.fieldOfView(), 0, 'f', 1)
+                                 .arg(projectionText),
+                             2000);
+    syncViewSettingsUI();
+    persistViewSettings();
 }
 
 void MainWindow::updateCursor(double x, double y, double z)

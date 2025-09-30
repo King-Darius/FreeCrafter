@@ -23,6 +23,9 @@ add_library(freecrafter_lib
     src/GeometryKernel/TransformUtils.cpp
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp
+    src/Scene/Document.cpp
+    src/Scene/SceneSettings.cpp
+    src/Scene/SectionPlane.cpp
     src/Tools/Tool.cpp
     src/Tools/ToolGeometryUtils.cpp
     src/Tools/LineTool.cpp
@@ -31,6 +34,7 @@ add_library(freecrafter_lib
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
+    src/Tools/SectionTool.cpp
     src/Tools/OrbitTool.cpp
     src/Tools/PanTool.cpp
     src/Tools/ZoomTool.cpp
@@ -41,7 +45,7 @@ add_library(freecrafter_lib
     resources.qrc
 )
 
-target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui)
+target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui src/Scene)
 target_link_libraries(freecrafter_lib PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
 add_executable(${PROJECT_NAME}

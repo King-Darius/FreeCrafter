@@ -8,6 +8,7 @@
 #include <QVector3D>
 #include <QVector4D>
 #include <vector>
+#include <array>
 
 class QOpenGLFunctions;
 
@@ -32,6 +33,7 @@ public:
 
     void initialize(QOpenGLFunctions* functions);
     void beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, RenderStyle style);
+    void setClipPlanes(const std::vector<QVector4D>& planes);
 
     void addLineSegments(const std::vector<QVector3D>& segments,
                          const QVector4D& color,
@@ -107,6 +109,9 @@ private:
 
     std::vector<LineBatch> lineBatches;
     std::vector<TriangleVertex> triangleVertices;
+
+    std::array<QVector4D, 4> clipPlanes;
+    int clipPlaneCount = 0;
 
     QMatrix4x4 mvp;
     QMatrix3x3 normalMatrix;

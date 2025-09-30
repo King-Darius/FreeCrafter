@@ -6,16 +6,21 @@
 #include <QPoint>
 #include <QElapsedTimer>
 #include <QVector3D>
+#include <QString>
+#include <QMatrix4x4>
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
+#include "Navigation/ViewPresetManager.h"
 #include "NavigationConfig.h"
 
 #include <optional>
 
 class ToolManager;
 class NavigationPreferences;
+
+class QPainter;
 
 class GLViewport : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -30,6 +35,17 @@ public:
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }
+    CameraController::ProjectionMode projectionMode() const { return camera.getProjectionMode(); }
+    void setProjectionMode(CameraController::ProjectionMode mode);
+    void toggleProjectionMode();
+    float fieldOfView() const { return camera.getFieldOfView(); }
+    void setFieldOfView(float degrees);
+    float orthoHeight() const { return camera.getOrthoHeight(); }
+    void setOrthoHeight(float height);
+    bool applyViewPreset(ViewPresetManager::StandardView view);
+    bool applyViewPreset(const QString& id);
+    QString currentViewPresetId() const { return activePresetId; }
+    QString currentViewPresetLabel() const;
     void zoomInStep();
     void zoomOutStep();
     bool zoomExtents();
@@ -56,6 +72,9 @@ private:
     void drawAxes();
     void drawGrid();
     void drawScene();
+    void drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const;
+    QMatrix4x4 buildProjectionMatrix(float aspect) const;
+    QMatrix4x4 buildViewMatrix() const;
     bool projectCursorToGround(const QPointF& pos, QVector3D& world) const;
     bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
     bool projectWorldToScreen(const QVector3D& world, const QMatrix4x4& projection, const QMatrix4x4& view, QPointF& out) const;
@@ -83,4 +102,6 @@ private:
     mutable int currentDrawCalls = 0;
     Renderer renderer;
     Renderer::RenderStyle renderStyle = Renderer::RenderStyle::ShadedWithEdges;
+    ViewPresetManager viewPresets;
+    QString activePresetId = QStringLiteral("iso");
 };

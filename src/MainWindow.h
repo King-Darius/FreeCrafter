@@ -18,6 +18,8 @@ class NavigationPreferences;
 #include "HotkeyManager.h"
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
+#include "CameraController.h"
+#include "Navigation/ViewPresetManager.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -55,6 +57,7 @@ private slots:
     void updateCursor(double x, double y, double z);
     void updateFrameStats(double fps, double frameMs, int drawCalls);
     void handleMeasurementCommit(const QString& value, const QString& unitSystem);
+    void showViewSettingsDialog();
 
 private:
     void createMenus();
@@ -70,6 +73,11 @@ private:
     void refreshNavigationActionHints();
     void updateThemeActionIcon();
     void setRenderStyle(Renderer::RenderStyle style);
+    void applyStandardView(ViewPresetManager::StandardView view);
+    void setProjectionMode(CameraController::ProjectionMode mode, bool showStatus = true);
+    void updateViewPresetButtonLabel();
+    void persistViewSettings() const;
+    void syncViewSettingsUI();
 
     void closeEvent(QCloseEvent* event) override;
 
@@ -88,6 +96,7 @@ private:
     QPointer<QTabWidget> rightTabs;
     QPointer<QTabBar> documentTabs;
     QPointer<QToolButton> renderStyleButton;
+    QPointer<QToolButton> viewPresetToolButton;
 
     QAction* actionNew = nullptr;
     QAction* actionOpen = nullptr;
@@ -105,6 +114,15 @@ private:
     QAction* actionZoomSelection = nullptr;
     QAction* actionToggleRightDock = nullptr;
     QAction* actionToggleTheme = nullptr;
+    QAction* actionViewIso = nullptr;
+    QAction* actionViewTop = nullptr;
+    QAction* actionViewBottom = nullptr;
+    QAction* actionViewFront = nullptr;
+    QAction* actionViewBack = nullptr;
+    QAction* actionViewLeft = nullptr;
+    QAction* actionViewRight = nullptr;
+    QAction* actionToggleProjection = nullptr;
+    QAction* actionViewSettings = nullptr;
     QAction* actionRun = nullptr;
     QAction* actionTerminal = nullptr;
     QAction* actionGit = nullptr;
@@ -133,4 +151,6 @@ private:
     HotkeyManager hotkeys;
     bool darkTheme = true;
     Renderer::RenderStyle renderStyleChoice = Renderer::RenderStyle::ShadedWithEdges;
+    QString currentViewPresetId = QStringLiteral("iso");
+    ViewPresetManager viewPresetManager;
 };

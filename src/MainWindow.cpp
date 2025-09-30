@@ -448,7 +448,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     setCentralWidget(central);
 
     navigationPrefs = std::make_unique<NavigationPreferences>(this);
-    toolManager = std::make_unique<ToolManager>(viewport->getGeometry(), viewport->getCamera());
+    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera());
     toolManager->setNavigationConfig(navigationPrefs->config());
     viewport->setToolManager(toolManager.get());
     viewport->setNavigationPreferences(navigationPrefs.get());
@@ -817,6 +817,10 @@ void MainWindow::createToolbars()
     extrudeAction->setCheckable(true);
     toolActionGroup->addAction(extrudeAction);
 
+    sectionAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/section.png")), tr("Section"), this, &MainWindow::activateSection);
+    sectionAction->setCheckable(true);
+    toolActionGroup->addAction(sectionAction);
+
     toolRibbon->addSeparator();
 
     panAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pan.svg")), tr("Pan"), this, &MainWindow::activatePan);
@@ -932,6 +936,7 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("tools.rotate"), rotateAction);
     hotkeys.registerAction(QStringLiteral("tools.scale"), scaleAction);
     hotkeys.registerAction(QStringLiteral("tools.extrude"), extrudeAction);
+    hotkeys.registerAction(QStringLiteral("tools.section"), sectionAction);
     hotkeys.registerAction(QStringLiteral("tools.pan"), panAction);
     hotkeys.registerAction(QStringLiteral("tools.orbit"), orbitAction);
     hotkeys.registerAction(QStringLiteral("tools.zoom"), zoomAction);
@@ -1163,7 +1168,9 @@ void MainWindow::syncViewSettingsUI()
 
 void MainWindow::newFile()
 {
-    viewport->getGeometry()->clear();
+    if (auto* doc = viewport->getDocument()) {
+        doc->reset();
+    }
     viewport->update();
     statusBar()->showMessage(tr("New document created"), 1500);
 }
@@ -1172,17 +1179,25 @@ void MainWindow::openFile()
 {
     const QString fn = QFileDialog::getOpenFileName(this, tr("Open FreeCrafter Model"), QString(), tr("FreeCrafter (*.fcm)"));
     if (fn.isEmpty()) return;
-    viewport->getGeometry()->loadFromFile(fn.toStdString());
+    bool ok = viewport->getDocument() && viewport->getDocument()->loadFromFile(fn.toStdString());
     viewport->update();
-    statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(fn).fileName()), 1500);
+    if (ok) {
+        statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(fn).fileName()), 1500);
+    } else {
+        statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(fn).fileName()), 2000);
+    }
 }
 
 void MainWindow::saveFile()
 {
     const QString fn = QFileDialog::getSaveFileName(this, tr("Save FreeCrafter Model"), QString(), tr("FreeCrafter (*.fcm)"));
     if (fn.isEmpty()) return;
-    viewport->getGeometry()->saveToFile(fn.toStdString());
-    statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(fn).fileName()), 1500);
+    bool ok = viewport->getDocument() && viewport->getDocument()->saveToFile(fn.toStdString());
+    if (ok) {
+        statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(fn).fileName()), 1500);
+    } else {
+        statusBar()->showMessage(tr("Failed to save %1").arg(QFileInfo(fn).fileName()), 2000);
+    }
 }
 
 void MainWindow::saveFileAs()
@@ -1359,6 +1374,13 @@ void MainWindow::activateScale()
 void MainWindow::activateExtrude()
 {
     setActiveTool(extrudeAction, QStringLiteral("ExtrudeTool"), tr("Extrude: Click to extrude last curve by 1.0."));
+}
+
+void MainWindow::activateSection()
+{
+    setActiveTool(sectionAction,
+                  QStringLiteral("SectionTool"),
+                  tr("Section Plane: Click to place a cutting plane using current inference cues."));
 }
 
 void MainWindow::activatePan()

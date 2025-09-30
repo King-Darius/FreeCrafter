@@ -32,6 +32,8 @@ public:
     void setNavigationPreferences(NavigationPreferences* prefs);
     void setRenderStyle(Renderer::RenderStyle style);
     Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
+    void setShowHiddenGeometry(bool show);
+    bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }
@@ -102,6 +104,7 @@ private:
     mutable int currentDrawCalls = 0;
     Renderer renderer;
     Renderer::RenderStyle renderStyle = Renderer::RenderStyle::ShadedWithEdges;
+    bool showHiddenGeometry = false;
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");
 };

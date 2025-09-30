@@ -92,6 +92,15 @@ void GLViewport::setRenderStyle(Renderer::RenderStyle style)
     update();
 }
 
+void GLViewport::setShowHiddenGeometry(bool show)
+{
+    if (showHiddenGeometry == show) {
+        return;
+    }
+    showHiddenGeometry = show;
+    update();
+}
+
 void GLViewport::setProjectionMode(CameraController::ProjectionMode mode)
 {
     if (camera.getProjectionMode() == mode)
@@ -302,7 +311,11 @@ Vector3 applyGhostTransform(const Vector3& position, const Tool::PreviewGhost& g
     return result;
 }
 
-void drawCurve(Renderer& renderer, const Curve& curve, bool selected)
+void drawCurve(Renderer& renderer,
+               const Curve& curve,
+               bool selected,
+               bool treatAsHidden,
+               Renderer::RenderStyle style)
 {
     const auto& pts = curve.getBoundaryLoop();
     if (pts.size() < 2) {
@@ -313,36 +326,75 @@ void drawCurve(Renderer& renderer, const Curve& curve, bool selected)
     for (const auto& p : pts) {
         positions.push_back(toQt(p));
     }
-    QVector4D color = selected ? QVector4D(0.95f, 0.35f, 0.25f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
-    renderer.addLineStrip(positions, color, selected ? 3.0f : 2.0f, false, true, false);
+    QVector4D color;
+    float width = selected ? 3.0f : 2.0f;
+    if (treatAsHidden) {
+        color = QVector4D(0.35f, 0.35f, 0.35f, 0.65f);
+        width = 1.8f;
+    } else if (style == Renderer::RenderStyle::Monochrome) {
+        color = selected ? QVector4D(0.22f, 0.22f, 0.22f, 1.0f) : QVector4D(0.13f, 0.13f, 0.13f, 1.0f);
+        width = selected ? 2.6f : 1.8f;
+    } else if (style == Renderer::RenderStyle::HiddenLine) {
+        color = selected ? QVector4D(0.18f, 0.18f, 0.18f, 1.0f) : QVector4D(0.12f, 0.12f, 0.12f, 1.0f);
+        width = selected ? 2.4f : 1.6f;
+    } else {
+        color = selected ? QVector4D(0.95f, 0.35f, 0.25f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
+    }
+    bool depthTest = !treatAsHidden;
+    bool blend = treatAsHidden;
+    Renderer::LineCategory category = treatAsHidden ? Renderer::LineCategory::HiddenEdge : Renderer::LineCategory::Generic;
+    renderer.addLineStrip(positions,
+                          color,
+                          width,
+                          false,
+                          depthTest,
+                          blend,
+                          category,
+                          treatAsHidden,
+                          6.0f);
 }
 
-void drawSolid(Renderer& renderer, const Solid& solid, bool selected)
+void drawSolid(Renderer& renderer,
+               const Solid& solid,
+               bool selected,
+               bool treatAsHidden,
+               Renderer::RenderStyle style)
 {
     const HalfEdgeMesh& mesh = solid.getMesh();
     const auto& vertices = mesh.getVertices();
     const auto& triangles = mesh.getTriangles();
 
     QVector4D fillColor = selected ? QVector4D(0.85f, 0.73f, 0.42f, 1.0f) : QVector4D(0.7f, 0.75f, 0.8f, 1.0f);
-    for (const auto& tri : triangles) {
-        if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0) {
-            continue;
+    if (style == Renderer::RenderStyle::Monochrome) {
+        fillColor = selected ? QVector4D(0.93f, 0.93f, 0.93f, 1.0f) : QVector4D(0.82f, 0.84f, 0.86f, 1.0f);
+    }
+    if (!treatAsHidden) {
+        for (const auto& tri : triangles) {
+            if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0) {
+                continue;
+            }
+            if (tri.v0 >= static_cast<int>(vertices.size()) ||
+                tri.v1 >= static_cast<int>(vertices.size()) ||
+                tri.v2 >= static_cast<int>(vertices.size())) {
+                continue;
+            }
+            QVector3D normal = toQt(tri.normal);
+            renderer.addTriangle(
+                toQt(vertices[(size_t)tri.v0].position),
+                toQt(vertices[(size_t)tri.v1].position),
+                toQt(vertices[(size_t)tri.v2].position),
+                normal,
+                fillColor);
         }
-        if (tri.v0 >= static_cast<int>(vertices.size()) ||
-            tri.v1 >= static_cast<int>(vertices.size()) ||
-            tri.v2 >= static_cast<int>(vertices.size())) {
-            continue;
-        }
-        QVector3D normal = toQt(tri.normal);
-        renderer.addTriangle(
-            toQt(vertices[(size_t)tri.v0].position),
-            toQt(vertices[(size_t)tri.v1].position),
-            toQt(vertices[(size_t)tri.v2].position),
-            normal,
-            fillColor);
     }
 
     QVector4D edgeColor = selected ? QVector4D(0.35f, 0.15f, 0.05f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
+    if (style == Renderer::RenderStyle::Monochrome || style == Renderer::RenderStyle::HiddenLine) {
+        edgeColor = selected ? QVector4D(0.2f, 0.2f, 0.2f, 1.0f) : QVector4D(0.13f, 0.13f, 0.13f, 1.0f);
+    }
+    if (treatAsHidden) {
+        edgeColor = QVector4D(0.38f, 0.38f, 0.38f, 0.75f);
+    }
     const auto& faces = mesh.getFaces();
     for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
         auto loop = collectFaceLoop(mesh, faceIndex);
@@ -361,7 +413,32 @@ void drawSolid(Renderer& renderer, const Solid& solid, bool selected)
         if (positions.size() < 2) {
             continue;
         }
-        renderer.addLineStrip(positions, edgeColor, selected ? 2.2f : 1.5f, true, true, false, Renderer::LineCategory::Edge);
+        if (style == Renderer::RenderStyle::HiddenLine && !treatAsHidden) {
+            QVector4D hiddenEdgeColor = selected ? QVector4D(0.65f, 0.65f, 0.65f, 1.0f)
+                                                 : QVector4D(0.55f, 0.55f, 0.55f, 1.0f);
+            renderer.addLineStrip(positions,
+                                  hiddenEdgeColor,
+                                  selected ? 1.9f : 1.4f,
+                                  true,
+                                  false,
+                                  false,
+                                  Renderer::LineCategory::HiddenEdge,
+                                  true,
+                                  6.5f);
+        }
+        bool depthTest = !treatAsHidden;
+        bool blend = treatAsHidden;
+        Renderer::LineCategory category = treatAsHidden ? Renderer::LineCategory::HiddenEdge : Renderer::LineCategory::Edge;
+        float width = treatAsHidden ? 1.6f : (selected ? 2.2f : 1.5f);
+        renderer.addLineStrip(positions,
+                              edgeColor,
+                              width,
+                              true,
+                              depthTest,
+                              blend,
+                              category,
+                              treatAsHidden,
+                              6.5f);
     }
 }
 
@@ -422,10 +499,26 @@ void GLViewport::drawScene()
 
     const auto& objs = geometry.getObjects();
     for (const auto& uptr : objs) {
+        if (!uptr->isVisible()) {
+            continue;
+        }
+        const bool hidden = uptr->isHidden();
+        if (hidden && !showHiddenGeometry) {
+            continue;
+        }
+        const bool treatAsHidden = hidden && showHiddenGeometry;
         if (uptr->getType() == ObjectType::Curve) {
-            drawCurve(renderer, *static_cast<const Curve*>(uptr.get()), uptr->isSelected());
+            drawCurve(renderer,
+                      *static_cast<const Curve*>(uptr.get()),
+                      uptr->isSelected(),
+                      treatAsHidden,
+                      renderStyle);
         } else if (uptr->getType() == ObjectType::Solid) {
-            drawSolid(renderer, *static_cast<const Solid*>(uptr.get()), uptr->isSelected());
+            drawSolid(renderer,
+                      *static_cast<const Solid*>(uptr.get()),
+                      uptr->isSelected(),
+                      treatAsHidden,
+                      renderStyle);
         }
     }
 

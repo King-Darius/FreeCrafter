@@ -21,8 +21,17 @@ void main() {
 const char* kLineFragmentShader = R"(\
 #version 330 core
 in vec4 v_color;
+uniform float u_stippleEnabled;
+uniform float u_stippleScale;
 out vec4 fragColor;
 void main() {
+    if (u_stippleEnabled > 0.5) {
+        float scale = max(u_stippleScale, 1.0);
+        float pattern = mod(gl_FragCoord.x + gl_FragCoord.y, scale);
+        if (pattern < 0.5 * scale) {
+            discard;
+        }
+    }
     fragColor = v_color;
 }
 )";
@@ -53,8 +62,14 @@ const char* kTriangleFragmentShader = R"(\
 in vec3 v_normal;
 in vec4 v_color;
 in float v_lighting;
+uniform int u_styleMode;
 out vec4 fragColor;
 void main() {
+    if (u_styleMode == 1) {
+        vec3 base = mix(vec3(0.82), v_color.rgb, 0.35);
+        fragColor = vec4(base, v_color.a);
+        return;
+    }
     float ambient = 0.25;
     float lighting = ambient + (1.0 - ambient) * clamp(v_lighting, 0.0, 1.0);
     vec3 color = v_color.rgb * lighting;
@@ -104,13 +119,20 @@ void Renderer::beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, 
     }
 }
 
-Renderer::LineBatch& Renderer::fetchBatch(float width, bool depthTest, bool blend, LineCategory category)
+Renderer::LineBatch& Renderer::fetchBatch(float width,
+                                          bool depthTest,
+                                          bool blend,
+                                          LineCategory category,
+                                          bool stippled,
+                                          float stippleScale)
 {
     for (auto& batch : lineBatches) {
         if (qFuzzyCompare(batch.config.width, width)
             && batch.config.depthTest == depthTest
             && batch.config.blend == blend
-            && batch.config.category == category) {
+            && batch.config.category == category
+            && batch.config.stippled == stippled
+            && qFuzzyCompare(batch.config.stippleScale, stippleScale)) {
             return batch;
         }
     }
@@ -119,6 +141,8 @@ Renderer::LineBatch& Renderer::fetchBatch(float width, bool depthTest, bool blen
     batch.config.depthTest = depthTest;
     batch.config.blend = blend;
     batch.config.category = category;
+    batch.config.stippled = stippled;
+    batch.config.stippleScale = stippleScale;
     lineBatches.push_back(std::move(batch));
     return lineBatches.back();
 }
@@ -128,12 +152,14 @@ void Renderer::addLineSegments(const std::vector<QVector3D>& segments,
                                float width,
                                bool depthTest,
                                bool blend,
-                               LineCategory category)
+                               LineCategory category,
+                               bool stippled,
+                               float stippleScale)
 {
     if (segments.size() < 2) {
         return;
     }
-    auto& batch = fetchBatch(width, depthTest, blend, category);
+    auto& batch = fetchBatch(width, depthTest, blend, category, stippled, stippleScale);
     batch.vertices.reserve(batch.vertices.size() + segments.size());
     for (size_t i = 1; i < segments.size(); i += 2) {
         const QVector3D& a = segments[i - 1];
@@ -149,12 +175,14 @@ void Renderer::addLineStrip(const std::vector<QVector3D>& points,
                             bool closed,
                             bool depthTest,
                             bool blend,
-                            LineCategory category)
+                            LineCategory category,
+                            bool stippled,
+                            float stippleScale)
 {
     if (points.size() < 2) {
         return;
     }
-    auto& batch = fetchBatch(width, depthTest, blend, category);
+    auto& batch = fetchBatch(width, depthTest, blend, category, stippled, stippleScale);
     batch.vertices.reserve(batch.vertices.size() + (points.size() - 1 + (closed ? 1 : 0)) * 2);
     for (size_t i = 1; i < points.size(); ++i) {
         batch.vertices.push_back({ points[i - 1], color });
@@ -207,6 +235,8 @@ void Renderer::ensureLineState(const LineBatch& batch)
 
     lineProgram.bind();
     lineProgram.setUniformValue("u_mvp", mvp);
+    lineProgram.setUniformValue("u_stippleEnabled", batch.config.stippled ? 1.0f : 0.0f);
+    lineProgram.setUniformValue("u_stippleScale", batch.config.stippleScale);
     lineProgram.enableAttributeArray(0);
     lineProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(LineVertex, position), 3, sizeof(LineVertex));
     lineProgram.enableAttributeArray(1);
@@ -237,6 +267,11 @@ void Renderer::ensureTriangleState()
     triangleProgram.setUniformValue("u_mvp", mvp);
     triangleProgram.setUniformValue("u_normalMatrix", normalMatrix);
     triangleProgram.setUniformValue("u_lightDir", lightDir);
+    int styleMode = 0;
+    if (currentStyle == RenderStyle::Monochrome) {
+        styleMode = 1;
+    }
+    triangleProgram.setUniformValue("u_styleMode", styleMode);
     triangleProgram.enableAttributeArray(0);
     triangleProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
     triangleProgram.enableAttributeArray(1);
@@ -254,7 +289,21 @@ int Renderer::flush()
     ensurePrograms();
     int draws = 0;
 
-    if (currentStyle != RenderStyle::Wireframe && !triangleVertices.empty()) {
+    bool colorMaskDisabled = false;
+    if (currentStyle == RenderStyle::HiddenLine) {
+        if (!triangleVertices.empty()) {
+            ensureTriangleState();
+            if (functions) {
+                functions->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                colorMaskDisabled = true;
+            }
+            functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
+            ++draws;
+        }
+        if (colorMaskDisabled && functions) {
+            functions->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        }
+    } else if (currentStyle != RenderStyle::Wireframe && !triangleVertices.empty()) {
         ensureTriangleState();
         functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
         ++draws;

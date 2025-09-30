@@ -17,12 +17,15 @@ public:
     enum class RenderStyle {
         Wireframe,
         Shaded,
-        ShadedWithEdges
+        ShadedWithEdges,
+        HiddenLine,
+        Monochrome
     };
 
     enum class LineCategory {
         Generic,
-        Edge
+        Edge,
+        HiddenEdge
     };
 
     Renderer();
@@ -35,7 +38,9 @@ public:
                          float width,
                          bool depthTest,
                          bool blend,
-                         LineCategory category = LineCategory::Generic);
+                         LineCategory category = LineCategory::Generic,
+                         bool stippled = false,
+                         float stippleScale = 8.0f);
 
     void addLineStrip(const std::vector<QVector3D>& points,
                       const QVector4D& color,
@@ -43,7 +48,9 @@ public:
                       bool closed,
                       bool depthTest,
                       bool blend,
-                      LineCategory category = LineCategory::Generic);
+                      LineCategory category = LineCategory::Generic,
+                      bool stippled = false,
+                      float stippleScale = 8.0f);
 
     void addTriangle(const QVector3D& a,
                      const QVector3D& b,
@@ -70,6 +77,8 @@ private:
         bool depthTest = true;
         bool blend = false;
         LineCategory category = LineCategory::Generic;
+        bool stippled = false;
+        float stippleScale = 8.0f;
     };
 
     struct LineBatch {
@@ -77,7 +86,12 @@ private:
         std::vector<LineVertex> vertices;
     };
 
-    LineBatch& fetchBatch(float width, bool depthTest, bool blend, LineCategory category);
+    LineBatch& fetchBatch(float width,
+                          bool depthTest,
+                          bool blend,
+                          LineCategory category,
+                          bool stippled,
+                          float stippleScale);
 
     void ensurePrograms();
     void ensureLineState(const LineBatch& batch);

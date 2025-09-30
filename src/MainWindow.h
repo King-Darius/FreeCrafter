@@ -48,6 +48,7 @@ private slots:
     void activateExtrude();
     void activatePan();
     void activateOrbit();
+    void activateZoom();
     void activateMeasure();
     void toggleGrid();
     void updateCursor(double x, double y, double z);
@@ -97,6 +98,7 @@ private:
     QAction* actionZoomIn = nullptr;
     QAction* actionZoomOut = nullptr;
     QAction* actionZoomExtents = nullptr;
+    QAction* actionZoomSelection = nullptr;
     QAction* actionToggleRightDock = nullptr;
     QAction* actionToggleTheme = nullptr;
     QAction* actionRun = nullptr;
@@ -113,6 +115,7 @@ private:
     QAction* extrudeAction = nullptr;
     QAction* panAction = nullptr;
     QAction* orbitAction = nullptr;
+    QAction* zoomAction = nullptr;
     QAction* measureAction = nullptr;
     QAction* gridAction = nullptr;
 

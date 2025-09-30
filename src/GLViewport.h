@@ -25,6 +25,10 @@ public:
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }
+    void zoomInStep();
+    void zoomOutStep();
+    bool zoomExtents();
+    bool zoomSelection();
 
 signals:
     void cursorPositionChanged(double x, double y, double z);
@@ -51,6 +55,8 @@ private:
     bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
     bool projectWorldToScreen(const QVector3D& world, const QMatrix4x4& projection, const QMatrix4x4& view, QPointF& out) const;
     void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
+    bool computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const;
+    bool applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds);
 
     GeometryKernel geometry;
     CameraController camera;
@@ -59,8 +65,9 @@ private:
     QPoint lastMouse;
     QPoint lastDeviceMouse;
     bool hasDeviceMouse = false;
-    bool rotating = false;
-    bool panning = false;
+    enum class NavigationDragMode { None, Orbit, Pan };
+    NavigationDragMode navigationMode = NavigationDragMode::None;
+    Qt::MouseButton navigationButton = Qt::NoButton;
 
     QTimer repaintTimer;
     QElapsedTimer frameTimer;

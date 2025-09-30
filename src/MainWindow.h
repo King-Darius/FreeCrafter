@@ -14,12 +14,14 @@ class QTabBar;
 class QActionGroup;
 class MeasurementWidget;
 class NavigationPreferences;
+class EnvironmentPanel;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
 #include "CameraController.h"
 #include "Navigation/ViewPresetManager.h"
+#include "SunSettings.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -79,6 +81,8 @@ private:
     void updateViewPresetButtonLabel();
     void persistViewSettings() const;
     void syncViewSettingsUI();
+    void handleSunSettingsChanged(const SunSettings& settings);
+    void updateShadowStatus(const SunSettings& previous, const SunSettings& current);
 
     void closeEvent(QCloseEvent* event) override;
 
@@ -159,4 +163,6 @@ private:
     bool showHiddenGeometry = false;
     QString currentViewPresetId = QStringLiteral("iso");
     ViewPresetManager viewPresetManager;
+    SunSettings sunSettings;
+    EnvironmentPanel* environmentPanel = nullptr;
 };

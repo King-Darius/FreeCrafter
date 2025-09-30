@@ -11,6 +11,8 @@ add_library(freecrafter_lib
     src/MainWindow.cpp
     src/GLViewport.cpp
     src/Renderer.cpp
+    src/SunModel.cpp
+    src/SunSettings.cpp
     src/CameraController.cpp
     src/CameraNavigation.cpp
     src/HotkeyManager.cpp
@@ -42,6 +44,7 @@ add_library(freecrafter_lib
     src/Interaction/InferenceEngine.cpp
     src/ui/MeasurementWidget.cpp
     src/ui/ViewSettingsDialog.cpp
+    src/ui/EnvironmentPanel.cpp
     resources.qrc
 )
 

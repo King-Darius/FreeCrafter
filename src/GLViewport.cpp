@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QMatrix4x4>
 #include <QVector4D>
+#include <QByteArray>
 #include <QtMath>
 #include <limits>
 
@@ -11,6 +12,8 @@
 #include <cmath>
 
 #include "Tools/ToolManager.h"
+#include "NavigationPreferences.h"
+#include "CameraNavigation.h"
 #include "GeometryKernel/Curve.h"
 #include "GeometryKernel/Solid.h"
 #include "GeometryKernel/Vector3.h"
@@ -55,7 +58,27 @@ void GLViewport::setToolManager(ToolManager* manager)
         const int pixelW = std::max(1, static_cast<int>(std::lround(width() * ratio)));
         const int pixelH = std::max(1, static_cast<int>(std::lround(height() * ratio)));
         toolManager->setViewportSize(pixelW, pixelH);
+        toolManager->setNavigationConfig(navigationConfig);
     }
+}
+
+void GLViewport::setNavigationPreferences(NavigationPreferences* prefs)
+{
+    if (navigationPrefs == prefs)
+        return;
+    if (navigationPrefs)
+        disconnect(navigationPrefs, nullptr, this, nullptr);
+    navigationPrefs = prefs;
+    if (navigationPrefs) {
+        navigationConfig = navigationPrefs->config();
+        connect(navigationPrefs, &NavigationPreferences::configChanged, this, [this]() {
+            navigationConfig = navigationPrefs->config();
+            if (toolManager)
+                toolManager->setNavigationConfig(navigationConfig);
+        });
+    }
+    if (toolManager)
+        toolManager->setNavigationConfig(navigationConfig);
 }
 
 void GLViewport::setRenderStyle(Renderer::RenderStyle style)
@@ -563,28 +586,8 @@ bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outM
 
 bool GLViewport::applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds)
 {
-    Vector3 center = (minBounds + maxBounds) * 0.5f;
-    Vector3 extents = (maxBounds - minBounds) * 0.5f;
-
-    float radius = extents.length();
-    float largestComponent = std::max({ std::fabs(extents.x), std::fabs(extents.y), std::fabs(extents.z) });
-    radius = std::max(radius, largestComponent);
-    if (radius < 1e-3f) {
-        radius = std::max(largestComponent, 0.5f);
-    }
-
-    const float fovRadians = qDegreesToRadians(60.0f);
-    const float halfFov = fovRadians * 0.5f;
-    float aspect = (width() > 0 && height() > 0) ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
-    float horizontalHalfFov = std::atan(std::tan(halfFov) * aspect);
-
-    float minDistanceVertical = radius / std::max(std::tan(halfFov), 1e-3f);
-    float minDistanceHorizontal = radius / std::max(std::tan(horizontalHalfFov), 1e-3f);
-    float distance = std::max({ minDistanceVertical, minDistanceHorizontal, radius + 0.5f, 1.0f });
-    distance *= 1.2f;
-
-    camera.setTarget(center.x, center.y, center.z);
-    camera.setDistance(distance);
+    if (!CameraNavigation::frameBounds(camera, minBounds, maxBounds, width(), height()))
+        return false;
     update();
     return true;
 }
@@ -627,23 +630,38 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
     lastMouse = e->pos();
-    if (e->button() == Qt::MiddleButton) {
-        navigationButton = Qt::MiddleButton;
-        navigationMode = e->modifiers().testFlag(Qt::ShiftModifier) ? NavigationDragMode::Pan : NavigationDragMode::Orbit;
-    } else if (e->button() == Qt::RightButton) {
-        navigationButton = Qt::RightButton;
-        navigationMode = NavigationDragMode::Orbit;
+    const auto ratio = devicePixelRatioF();
+    const QPointF devicePos = e->position() * ratio;
+    lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
+    hasDeviceMouse = true;
+
+    if (toolManager) {
+        if (auto binding = navigationConfig.matchDrag(e->button(), e->modifiers())) {
+            navigationButton = e->button();
+            activeNavigationBinding = binding;
+            QByteArray nameBytes(binding->toolName.c_str());
+            toolManager->activateTool(nameBytes.constData(), binding->temporary);
+            Tool::PointerInput input;
+            input.x = lastDeviceMouse.x();
+            input.y = lastDeviceMouse.y();
+            input.modifiers = toModifierState(e->modifiers());
+            input.devicePixelRatio = ratio;
+            toolManager->updatePointerModifiers(input.modifiers);
+            if (Tool* tool = toolManager->getActiveTool()) {
+                tool->handleMouseDown(input);
+            }
+            update();
+            return;
+        }
     }
+
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
-            const auto ratio = devicePixelRatioF();
-            const QPointF devicePos = e->position() * ratio;
-            lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
-            hasDeviceMouse = true;
             Tool::PointerInput input;
             input.x = std::lround(devicePos.x());
             input.y = std::lround(devicePos.y());
             input.modifiers = toModifierState(e->modifiers());
+            input.devicePixelRatio = ratio;
             toolManager->updatePointerModifiers(input.modifiers);
             t->handleMouseDown(input);
         }
@@ -652,7 +670,6 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
 
 void GLViewport::mouseMoveEvent(QMouseEvent* e)
 {
-    QPoint delta = e->pos() - lastMouse;
     lastMouse = e->pos();
 
     const auto ratio = devicePixelRatioF();
@@ -660,37 +677,38 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
     lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
     hasDeviceMouse = true;
 
-    const bool middleHeld = e->buttons().testFlag(Qt::MiddleButton);
-    const bool rightHeld = e->buttons().testFlag(Qt::RightButton);
-    if (navigationButton == Qt::MiddleButton && !middleHeld) {
-        navigationMode = NavigationDragMode::None;
-        navigationButton = Qt::NoButton;
-    } else if (navigationButton == Qt::RightButton && !rightHeld) {
-        navigationMode = NavigationDragMode::None;
-        navigationButton = Qt::NoButton;
-    }
+    Tool::PointerInput input;
+    input.x = lastDeviceMouse.x();
+    input.y = lastDeviceMouse.y();
+    input.modifiers = toModifierState(e->modifiers());
+    input.devicePixelRatio = ratio;
 
-    if (navigationMode != NavigationDragMode::None) {
-        if (navigationButton == Qt::MiddleButton) {
-            navigationMode = e->modifiers().testFlag(Qt::ShiftModifier) ? NavigationDragMode::Pan : NavigationDragMode::Orbit;
-        }
-        if (navigationMode == NavigationDragMode::Orbit) {
-            camera.rotateCamera(delta.x(), delta.y());
-        } else if (navigationMode == NavigationDragMode::Pan) {
-            camera.panCamera(delta.x(), delta.y());
-        }
-        update();
-        return;
-    }
+    bool navigationHandled = false;
 
     if (toolManager) {
-        Tool::PointerInput input;
-        input.x = std::lround(devicePos.x());
-        input.y = std::lround(devicePos.y());
-        input.modifiers = toModifierState(e->modifiers());
         toolManager->updatePointerModifiers(input.modifiers);
-        if (auto* t = toolManager->getActiveTool()) {
-            t->handleMouseMove(input);
+        if (activeNavigationBinding) {
+            if (!e->buttons().testFlag(navigationButton)) {
+                if (Tool* tool = toolManager->getActiveTool()) {
+                    tool->handleMouseUp(input);
+                }
+                if (activeNavigationBinding->temporary && toolManager) {
+                    toolManager->restorePreviousTool();
+                }
+                activeNavigationBinding.reset();
+                navigationButton = Qt::NoButton;
+            } else {
+                if (Tool* tool = toolManager->getActiveTool()) {
+                    tool->handleMouseMove(input);
+                }
+                navigationHandled = true;
+            }
+        }
+
+        if (!navigationHandled) {
+            if (Tool* tool = toolManager->getActiveTool()) {
+                tool->handleMouseMove(input);
+            }
         }
     }
 
@@ -698,6 +716,9 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
     if (projectCursorToGround(e->position(), world)) {
         emit cursorPositionChanged(world.x(), world.y(), world.z());
     }
+
+    if (navigationHandled)
+        update();
 }
 
 void GLViewport::mouseReleaseEvent(QMouseEvent* e)
@@ -705,21 +726,33 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
-    if (navigationButton == e->button()) {
-        navigationMode = NavigationDragMode::None;
+    const auto ratio = devicePixelRatioF();
+    const QPointF devicePos = e->position() * ratio;
+    lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
+    hasDeviceMouse = true;
+
+    Tool::PointerInput input;
+    input.x = lastDeviceMouse.x();
+    input.y = lastDeviceMouse.y();
+    input.modifiers = toModifierState(e->modifiers());
+    input.devicePixelRatio = ratio;
+
+    if (activeNavigationBinding && e->button() == navigationButton) {
+        if (toolManager) {
+            if (Tool* tool = toolManager->getActiveTool()) {
+                tool->handleMouseUp(input);
+            }
+            if (activeNavigationBinding->temporary)
+                toolManager->restorePreviousTool();
+        }
+        activeNavigationBinding.reset();
         navigationButton = Qt::NoButton;
+        update();
+        return;
     }
 
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
-            const auto ratio = devicePixelRatioF();
-            const QPointF devicePos = e->position() * ratio;
-            lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
-            hasDeviceMouse = true;
-            Tool::PointerInput input;
-            input.x = std::lround(devicePos.x());
-            input.y = std::lround(devicePos.y());
-            input.modifiers = toModifierState(e->modifiers());
             toolManager->updatePointerModifiers(input.modifiers);
             t->handleMouseUp(input);
         }
@@ -728,7 +761,34 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 
 void GLViewport::wheelEvent(QWheelEvent* e)
 {
-    camera.zoomCamera(e->angleDelta().y()/120.0f);
+    if (toolManager) {
+        toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
+    }
+    double delta = 0.0;
+    if (!e->angleDelta().isNull())
+        delta = e->angleDelta().y() / 120.0;
+    else if (!e->pixelDelta().isNull())
+        delta = e->pixelDelta().y() / 120.0;
+
+    if (qFuzzyIsNull(delta)) {
+        QOpenGLWidget::wheelEvent(e);
+        return;
+    }
+
+    if (navigationConfig.invertWheel)
+        delta = -delta;
+    delta *= navigationConfig.wheelStep;
+
+    const auto ratio = devicePixelRatioF();
+    const QPointF devicePos = e->position() * ratio;
+    lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
+    hasDeviceMouse = true;
+
+    int pixelW = std::max(1, static_cast<int>(std::lround(width() * ratio)));
+    int pixelH = std::max(1, static_cast<int>(std::lround(height() * ratio)));
+
+    CameraNavigation::zoomAboutCursor(camera, static_cast<float>(delta), lastDeviceMouse.x(), lastDeviceMouse.y(), pixelW,
+                                      pixelH, navigationConfig.zoomToCursor);
     update();
 }
 
@@ -768,7 +828,11 @@ void GLViewport::leaveEvent(QEvent* event)
 {
     QOpenGLWidget::leaveEvent(event);
     hasDeviceMouse = false;
-    navigationMode = NavigationDragMode::None;
+    if (activeNavigationBinding) {
+        if (toolManager && activeNavigationBinding->temporary)
+            toolManager->restorePreviousTool();
+        activeNavigationBinding.reset();
+    }
     navigationButton = Qt::NoButton;
     if (toolManager) {
         toolManager->clearInference();

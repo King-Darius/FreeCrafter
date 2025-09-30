@@ -10,8 +10,12 @@
 #include "RotateTool.h"
 #include "ScaleTool.h"
 #include "ExtrudeTool.h"
+#include "OrbitTool.h"
+#include "PanTool.h"
+#include "ZoomTool.h"
 
 #include "../Interaction/InferenceEngine.h"
+#include "../NavigationConfig.h"
 
 struct ToolInferenceUpdateRequest {
     bool hasRay = false;
@@ -23,7 +27,9 @@ class ToolManager {
 public:
     ToolManager(GeometryKernel* g, CameraController* c);
     Tool* getActiveTool() const { return active; }
-    void activateTool(const char* name);
+    void activateTool(const char* name, bool temporary = false);
+    void restorePreviousTool();
+    void setNavigationConfig(const NavigationConfig& config);
     void setViewportSize(int w, int h);
 
     void updateInference(const ToolInferenceUpdateRequest& request);
@@ -45,6 +51,9 @@ private:
 
     std::vector<std::unique_ptr<Tool>> tools;
     Tool* active = nullptr;
+    Tool* lastModelingTool = nullptr;
+    Tool* temporaryTool = nullptr;
+    Tool* previousTool = nullptr;
     int viewportWidth = 1;
     int viewportHeight = 1;
     GeometryKernel* geometry = nullptr;
@@ -62,5 +71,6 @@ private:
     bool axisAnchorValid = false;
     Vector3 lastSnapPoint;
     bool lastSnapValid = false;
+    NavigationConfig navigationConfig;
 };
 

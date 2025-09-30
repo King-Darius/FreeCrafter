@@ -84,8 +84,8 @@ void CameraController::panCamera(float dx, float dy) {
 
 void CameraController::zoomCamera(float delta) {
     const float zoomSpeed = 1.1f;
-    if (delta > 0) distance /= zoomSpeed;
-    else distance *= zoomSpeed;
+    float factor = std::pow(zoomSpeed, -delta);
+    distance *= factor;
     if (distance < 1.0f) distance = 1.0f;
     if (distance > 2000.0f) distance = 2000.0f;
 }

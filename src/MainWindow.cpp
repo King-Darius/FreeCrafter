@@ -421,16 +421,39 @@ void MainWindow::createMenus()
     actionZoomIn = viewMenu->addAction(tr("Zoom In"));
     actionZoomIn->setIcon(QIcon(QStringLiteral(":/icons/zoom_in.svg")));
     connect(actionZoomIn, &QAction::triggered, this, [this]() {
-        statusBar()->showMessage(tr("Zoom In not implemented"), 1500);
+        if (!viewport)
+            return;
+        viewport->zoomInStep();
+        statusBar()->showMessage(tr("Zoomed in"), 600);
     });
     actionZoomOut = viewMenu->addAction(tr("Zoom Out"));
     actionZoomOut->setIcon(QIcon(QStringLiteral(":/icons/zoom_out.svg")));
     connect(actionZoomOut, &QAction::triggered, this, [this]() {
-        statusBar()->showMessage(tr("Zoom Out not implemented"), 1500);
+        if (!viewport)
+            return;
+        viewport->zoomOutStep();
+        statusBar()->showMessage(tr("Zoomed out"), 600);
     });
     actionZoomExtents = viewMenu->addAction(tr("Zoom Extents"));
     connect(actionZoomExtents, &QAction::triggered, this, [this]() {
-        statusBar()->showMessage(tr("Zoom Extents not implemented"), 1500);
+        if (!viewport)
+            return;
+        if (viewport->zoomExtents()) {
+            statusBar()->showMessage(tr("Zoomed to extents"), 1500);
+        } else {
+            statusBar()->showMessage(tr("No geometry to frame"), 1500);
+        }
+    });
+    actionZoomSelection = viewMenu->addAction(tr("Zoom Selection"));
+    actionZoomSelection->setIcon(QIcon(QStringLiteral(":/icons/zoom.png")));
+    connect(actionZoomSelection, &QAction::triggered, this, [this]() {
+        if (!viewport)
+            return;
+        if (viewport->zoomSelection()) {
+            statusBar()->showMessage(tr("Zoomed to selection"), 1500);
+        } else {
+            statusBar()->showMessage(tr("Select objects to zoom"), 1500);
+        }
     });
     QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
         statusBar()->showMessage(tr("Split view is coming soon"), 2000);
@@ -568,6 +591,10 @@ void MainWindow::createToolbars()
     orbitAction->setCheckable(true);
     toolActionGroup->addAction(orbitAction);
 
+    zoomAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/zoom.png")), tr("Zoom"), this, &MainWindow::activateZoom);
+    zoomAction->setCheckable(true);
+    toolActionGroup->addAction(zoomAction);
+
     measureAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/measure.svg")), tr("Measure"), this, &MainWindow::activateMeasure);
     measureAction->setCheckable(true);
     toolActionGroup->addAction(measureAction);
@@ -650,6 +677,7 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("view.zoomIn"), actionZoomIn);
     hotkeys.registerAction(QStringLiteral("view.zoomOut"), actionZoomOut);
     hotkeys.registerAction(QStringLiteral("view.zoomExtents"), actionZoomExtents);
+    hotkeys.registerAction(QStringLiteral("view.zoomSelection"), actionZoomSelection);
     hotkeys.registerAction(QStringLiteral("view.toggleRightDock"), actionToggleRightDock);
     hotkeys.registerAction(QStringLiteral("theme.toggle"), actionToggleTheme);
     hotkeys.registerAction(QStringLiteral("tools.select"), selectAction);
@@ -660,6 +688,7 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("tools.extrude"), extrudeAction);
     hotkeys.registerAction(QStringLiteral("tools.pan"), panAction);
     hotkeys.registerAction(QStringLiteral("tools.orbit"), orbitAction);
+    hotkeys.registerAction(QStringLiteral("tools.zoom"), zoomAction);
     hotkeys.registerAction(QStringLiteral("tools.measure"), measureAction);
     hotkeys.registerAction(QStringLiteral("tools.grid"), gridAction);
     hotkeys.registerAction(QStringLiteral("help.shortcuts"), actionShortcuts);
@@ -686,6 +715,7 @@ void MainWindow::registerShortcuts()
         if (scaleAction) scaleAction->setToolTip(format(scaleAction, tr("Scale")));
         if (panAction) panAction->setToolTip(format(panAction, tr("Pan")));
         if (orbitAction) orbitAction->setToolTip(format(orbitAction, tr("Orbit")));
+        if (zoomAction) zoomAction->setToolTip(format(zoomAction, tr("Zoom")));
         if (extrudeAction) extrudeAction->setToolTip(format(extrudeAction, tr("Extrude")));
         if (measureAction) measureAction->setToolTip(format(measureAction, tr("Measure")));
         if (gridAction) gridAction->setToolTip(format(gridAction, tr("Toggle Grid")));
@@ -914,12 +944,17 @@ void MainWindow::activateExtrude()
 
 void MainWindow::activatePan()
 {
-    setActiveTool(panAction, QString(), tr("Pan: Hold middle mouse button or Space+drag"));
+    setActiveTool(panAction, QString(), tr("Pan: Hold Shift+middle mouse or press H to pan."));
 }
 
 void MainWindow::activateOrbit()
 {
-    setActiveTool(orbitAction, QString(), tr("Orbit: Hold right mouse or O+drag"));
+    setActiveTool(orbitAction, QString(), tr("Orbit: Drag with middle mouse or press O for Orbit."));
+}
+
+void MainWindow::activateZoom()
+{
+    setActiveTool(zoomAction, QString(), tr("Zoom: Scroll wheel, press Z, or use Zoom Extents/Selection."));
 }
 
 void MainWindow::activateMeasure()

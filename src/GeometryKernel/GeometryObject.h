@@ -12,6 +12,12 @@ public:
     virtual HalfEdgeMesh& getMesh() = 0;
     void setSelected(bool sel) { selected = sel; }
     bool isSelected() const { return selected; }
+    void setVisible(bool vis) { visible = vis; }
+    bool isVisible() const { return visible; }
+    void setHidden(bool hiddenState) { hidden = hiddenState; }
+    bool isHidden() const { return hidden; }
 private:
     bool selected = false;
+    bool visible = true;
+    bool hidden = false;
 };

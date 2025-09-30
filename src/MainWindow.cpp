@@ -52,6 +52,11 @@ QString renderStyleToSetting(Renderer::RenderStyle style)
     case Renderer::RenderStyle::Shaded:
         return QStringLiteral("shaded");
     case Renderer::RenderStyle::ShadedWithEdges:
+        return QStringLiteral("shadedEdges");
+    case Renderer::RenderStyle::HiddenLine:
+        return QStringLiteral("hiddenLine");
+    case Renderer::RenderStyle::Monochrome:
+        return QStringLiteral("monochrome");
     default:
         return QStringLiteral("shadedEdges");
     }
@@ -64,6 +69,12 @@ Renderer::RenderStyle renderStyleFromSetting(const QString& value)
     }
     if (value == QLatin1String("shaded")) {
         return Renderer::RenderStyle::Shaded;
+    }
+    if (value == QLatin1String("hiddenLine")) {
+        return Renderer::RenderStyle::HiddenLine;
+    }
+    if (value == QLatin1String("monochrome")) {
+        return Renderer::RenderStyle::Monochrome;
     }
     return Renderer::RenderStyle::ShadedWithEdges;
 }
@@ -467,12 +478,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         QSettings settings("FreeCrafter", "FreeCrafter");
         darkTheme = settings.value(QStringLiteral("%1/darkTheme").arg(kSettingsGroup), true).toBool();
         renderStyleChoice = renderStyleFromSetting(settings.value(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), QStringLiteral("shadedEdges")).toString());
+        showHiddenGeometry = settings.value(QStringLiteral("%1/showHiddenGeometry").arg(kSettingsGroup), false).toBool();
         storedViewPreset = settings.value(QStringLiteral("%1/viewPreset").arg(kSettingsGroup), storedViewPreset).toString();
         storedFov = settings.value(QStringLiteral("%1/viewFov").arg(kSettingsGroup), storedFov).toFloat();
         storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
     }
 
     viewport->setRenderStyle(renderStyleChoice);
+    viewport->setShowHiddenGeometry(showHiddenGeometry);
     viewport->setFieldOfView(storedFov);
     if (storedProjection.compare(QLatin1String("parallel"), Qt::CaseInsensitive) == 0)
         viewport->setProjectionMode(CameraController::ProjectionMode::Parallel);
@@ -640,6 +653,10 @@ void MainWindow::createMenus()
     renderWireframeAction->setCheckable(true);
     renderWireframeAction->setStatusTip(tr("Display geometry as wireframe"));
     renderStyleGroup->addAction(renderWireframeAction);
+    renderHiddenLineAction = renderStyleMenu->addAction(tr("Hidden Line"));
+    renderHiddenLineAction->setCheckable(true);
+    renderHiddenLineAction->setStatusTip(tr("Display visible edges with dashed hidden lines"));
+    renderStyleGroup->addAction(renderHiddenLineAction);
     renderShadedAction = renderStyleMenu->addAction(tr("Shaded"));
     renderShadedAction->setCheckable(true);
     renderShadedAction->setStatusTip(tr("Display solid shading without edge overlays"));
@@ -648,14 +665,39 @@ void MainWindow::createMenus()
     renderShadedEdgesAction->setCheckable(true);
     renderShadedEdgesAction->setStatusTip(tr("Display shading with edge overlays"));
     renderStyleGroup->addAction(renderShadedEdgesAction);
+    renderMonochromeAction = renderStyleMenu->addAction(tr("Monochrome"));
+    renderMonochromeAction->setCheckable(true);
+    renderMonochromeAction->setStatusTip(tr("Display flat gray shading with edge outlines"));
+    renderStyleGroup->addAction(renderMonochromeAction);
 
     connect(renderWireframeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Wireframe); });
+    connect(renderHiddenLineAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::HiddenLine); });
     connect(renderShadedAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Shaded); });
     connect(renderShadedEdgesAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::ShadedWithEdges); });
+    connect(renderMonochromeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Monochrome); });
 
     renderWireframeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Wireframe);
     renderShadedAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Shaded);
     renderShadedEdgesAction->setChecked(renderStyleChoice == Renderer::RenderStyle::ShadedWithEdges);
+    renderHiddenLineAction->setChecked(renderStyleChoice == Renderer::RenderStyle::HiddenLine);
+    renderMonochromeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Monochrome);
+
+    viewMenu->addSeparator();
+    actionViewHiddenGeometry = viewMenu->addAction(tr("View Hidden Geometry"));
+    actionViewHiddenGeometry->setCheckable(true);
+    actionViewHiddenGeometry->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+H")));
+    actionViewHiddenGeometry->setStatusTip(tr("Toggle visibility of objects marked as hidden"));
+    actionViewHiddenGeometry->setChecked(showHiddenGeometry);
+    connect(actionViewHiddenGeometry, &QAction::toggled, this, [this](bool checked) {
+        showHiddenGeometry = checked;
+        if (viewport) {
+            viewport->setShowHiddenGeometry(checked);
+        }
+        if (statusBar()) {
+            statusBar()->showMessage(checked ? tr("Hidden geometry shown") : tr("Hidden geometry hidden"), 2000);
+        }
+        persistViewSettings();
+    });
 
     QMenu* insertMenu = menuBar()->addMenu(tr("Insert"));
     insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
@@ -711,9 +753,11 @@ void MainWindow::createToolbars()
     renderStyleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     renderStyleButton->setMenu(new QMenu(renderStyleButton));
     renderStyleButton->menu()->addAction(renderWireframeAction);
+    renderStyleButton->menu()->addAction(renderHiddenLineAction);
     renderStyleButton->menu()->addAction(renderShadedAction);
     renderStyleButton->menu()->addAction(renderShadedEdgesAction);
-    renderStyleButton->setToolTip(tr("Select render style"));
+    renderStyleButton->menu()->addAction(renderMonochromeAction);
+    renderStyleButton->setToolTip(tr("Select render style (Wireframe, Hidden Line, Shaded, Shaded + Edges, Monochrome)"));
     auto* renderWidgetAction = new QWidgetAction(primaryToolbar);
     renderWidgetAction->setDefaultWidget(renderStyleButton);
     primaryToolbar->addAction(renderWidgetAction);
@@ -997,11 +1041,17 @@ void MainWindow::setRenderStyle(Renderer::RenderStyle style)
     if (renderWireframeAction) {
         renderWireframeAction->setChecked(style == Renderer::RenderStyle::Wireframe);
     }
+    if (renderHiddenLineAction) {
+        renderHiddenLineAction->setChecked(style == Renderer::RenderStyle::HiddenLine);
+    }
     if (renderShadedAction) {
         renderShadedAction->setChecked(style == Renderer::RenderStyle::Shaded);
     }
     if (renderShadedEdgesAction) {
         renderShadedEdgesAction->setChecked(style == Renderer::RenderStyle::ShadedWithEdges);
+    }
+    if (renderMonochromeAction) {
+        renderMonochromeAction->setChecked(style == Renderer::RenderStyle::Monochrome);
     }
     if (renderStyleButton) {
         QString label;
@@ -1009,10 +1059,18 @@ void MainWindow::setRenderStyle(Renderer::RenderStyle style)
         case Renderer::RenderStyle::Wireframe:
             label = tr("Style: Wireframe");
             break;
+        case Renderer::RenderStyle::HiddenLine:
+            label = tr("Style: Hidden Line");
+            break;
         case Renderer::RenderStyle::Shaded:
             label = tr("Style: Shaded");
             break;
         case Renderer::RenderStyle::ShadedWithEdges:
+            label = tr("Style: Shaded+Edges");
+            break;
+        case Renderer::RenderStyle::Monochrome:
+            label = tr("Style: Monochrome");
+            break;
         default:
             label = tr("Style: Shaded+Edges");
             break;
@@ -1085,6 +1143,8 @@ void MainWindow::persistViewSettings() const
     settings.setValue(QStringLiteral("viewProjection"),
                       viewport->projectionMode() == CameraController::ProjectionMode::Parallel ? QStringLiteral("parallel")
                                                                                               : QStringLiteral("perspective"));
+    settings.setValue(QStringLiteral("renderStyle"), renderStyleToSetting(renderStyleChoice));
+    settings.setValue(QStringLiteral("showHiddenGeometry"), viewport->isHiddenGeometryVisible());
     settings.endGroup();
 }
 
@@ -1093,6 +1153,10 @@ void MainWindow::syncViewSettingsUI()
     if (actionToggleProjection && viewport) {
         QSignalBlocker blocker(actionToggleProjection);
         actionToggleProjection->setChecked(viewport->projectionMode() == CameraController::ProjectionMode::Parallel);
+    }
+    if (actionViewHiddenGeometry && viewport) {
+        QSignalBlocker blocker(actionViewHiddenGeometry);
+        actionViewHiddenGeometry->setChecked(viewport->isHiddenGeometryVisible());
     }
     updateViewPresetButtonLabel();
 }

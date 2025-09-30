@@ -151,4 +151,131 @@ The following tracked milestones correspond to major roadmap items A–H:
 - If you want to help with a feature, check the [issues](../../issues) and mention the corresponding roadmap item in your PR or discussion.
 - For suggestions or clarifications, open a [discussion](../../discussions).
 
+# Phase Δ — Artist‑First NURBS & Direct‑Modeling
+
+**Goal:** Fast, creativity‑centric direct modeling (history‑light) with NURBS surfacing, robust booleans, high‑quality fillets, precision snapping, and a Live Blender Bridge.
+
+**Legend:** ☐ To do ☑ Done ➖ In progress
+
+## Objectives
+
+* ☐ Direct NURBS toolset covering curves and surfaces (create/edit; loft, sweep, revolve, network; shell/thicken; trim, split, project, offset).
+* ☐ Reliable booleans (union/difference/intersection) with tolerance controls, auto‑heal of small gaps, watertight checks, and non‑manifold detection.
+* ☐ Fillets & blends: constant and variable radius; G1/G2 continuity options; zebra/curvature‑comb previews.
+* ☐ Artist‑first interaction: manipulator/gumball with inline numeric micro‑entry, radial menu, construction planes from view/selection/3‑point, precision snapping.
+* ☐ History‑light action stack: reorder/disable recent operations without heavy parametrics.
+* ☐ Interop: Freecrafter ↔ Blender Live Link (one‑click send, preservation of names/layers/material identifiers).
+* ☐ Learnability: command palette, inline help, printable shortcuts.
+
+---
+
+## Engineering Issue Checklist (with Milestones & Labels)
+
+**Milestones**
+• M1 — Kernel & Reliability (4–6 weeks)
+• M2 — Surfacing Toolkit (3–4 weeks)
+• M3 — Interaction Layer (3 weeks)
+• M4 — Blender Bridge (2–3 weeks)
+• M5 — Polish & Learnability (2 weeks)
+
+**Labels**
+`area:kernel` `area:surfacing` `area:ux` `area:interop` `area:docs` `area:testing`
+`type:feature` `type:bug` `type:perf` `type:spec` `type:qa`
+`priority:P0` `priority:P1` `priority:P2`
+`risk:high` `risk:med` `risk:low`
+`blocked` `needs design` `help wanted`
+
+### M1 — Kernel & Reliability (`area:kernel`, `priority:P0`)
+
+* ☐ Boolean reliability wrapper: tolerant façade over boolean ops; sew/solidify; small‑gap auto‑heal; actionable failure reporting.
+* ☐ Non‑manifold detection and auto‑fix where possible.
+* ☐ Regression suite: 50+ boolean stress cases; watertight shell assertions.
+* ☐ Fillet/Blend enhancements: constant and variable radius; edge‑chain selection; selectable G1/G2; continuity report in UI.
+* ☐ Curvature diagnostics: zebra and curvature‑comb overlays in viewport.
+* ☐ Geometry health & tolerances: centralized tolerance profile (length/angle/merge) with “Pro” panel exposure.
+* ☐ Performance & stability: async previews and cancelation for heavy operations; CI geometry tests with time budgets.
+
+### M2 — Surfacing Toolkit (`area:surfacing`, `priority:P1`)
+
+* ☐ Curves: BSpline creation/editing (degree, knots, end conditions).
+* ☐ Surfaces: loft/sweep/network with robust rail/profile handling and self‑intersection checks.
+* ☐ Project/Trim/Split; Offset (2D/3D); Shell/Thicken.
+* ☐ Surface‑to‑surface blend with live preview and continuity controls.
+* ☐ Unit and visual tests with numeric continuity thresholds.
+
+### M3 — Interaction Layer (`area:ux`, `priority:P1`)
+
+* ☐ Manipulator/gumball: translate/rotate/scale; inline numeric micro‑entry; axis/plane constraints; incremental snaps.
+* ☐ Radial menu: context‑aware actions; user‑editable mappings.
+* ☐ Construction planes: create from view/face/three‑point; named planes; quick toggle.
+* ☐ Precision snapping: endpoint, midpoint, center, tangent, perpendicular; smart pick filters.
+* ☐ Action stack: reorder/disable recent operations (non‑parametric, history‑light).
+
+### M4 — Blender Bridge (`area:interop`, `priority:P0`)
+
+* ☐ Built‑in socket server: JSON over WebSocket (TCP fallback), versioned handshake, optional token; endpoints include ping, get_scene, push_scene, subscribe, apply_ops, error.
+* ☐ Blender add‑on (MVP): preferences for host/port/token; “Send Selection” operator; Live Link toggle for subscriptions; preserves object names, layers, material identifiers.
+* ☐ Transfer formats: OBJ inline (MVP) and/or GLTF; NURBS transferred as tessellated proxy for MVP; optional STEP export for later.
+* ☐ Acceptance: round‑trip push of ~100k faces in under one second on localhost, with correct names/layers/materials and lossless transforms.
+
+### M5 — Polish & Learnability (`area:docs`, `area:ux`, `priority:P2`)
+
+* ☐ Command palette with fuzzy search and inline command help.
+* ☐ Tooltips for major operations and printable shortcuts (PDF).
+* ☐ Example scenes for QA (booleans, fillets, surfacing edge cases).
+* ☐ Documentation: “Artist‑first Modeling” quickstart and troubleshooting.
+
+---
+
+## Minimal Spec — Freecrafter ↔ Blender Live Link (No Code)
+
+**Transport & Session**
+• Transport: WebSocket preferred; TCP fallback. Messages are JSON.
+• Default endpoint: localhost on a configurable port.
+• Handshake: client identifies itself (e.g., Blender), version, and optional token. Server acknowledges with capabilities (mesh, transforms, materials).
+• Heartbeat: lightweight ping/pong to keep the connection alive.
+• Security: bind to localhost by default; optional static token; warn if binding publicly; plan for stronger auth later.
+
+**Client Requests (Blender → Freecrafter)**
+• Ping: liveness check.
+• Get Scene: returns a compact snapshot (whole scene or selection only).
+• Push Scene: uploads one or more objects with transforms, layer/group info, and material identifiers.
+• Subscribe: registers for server events (model changes, selection changes).
+• Apply Ops: asks Freecrafter to apply operations (e.g., transform an object, assign a material) — future‑ready and versioned.
+
+**Server Events (Freecrafter → Blender)**
+• Hello OK: handshake success and capability advertisement.
+• Model Changed: indicates that specific objects or the scene have changed; includes reason (e.g., user edit, push).
+• Selection Changed: provides the current selection set identifiers.
+• Error: returns a code, message, and optional context describing what failed.
+• Log: debug/information messages gated by a verbosity setting.
+
+**Data Model (Conceptual)**
+• Scene Identifier: a token naming the current scene/session.
+• Object: id, type (mesh or future NURBS/solid), transform (4×4 flattened), layer/tag, material slots (names and simple attributes), and mesh payload.
+• Mesh Payload (MVP): OBJ serialized inline for simplicity. GLTF supported as an alternative; for GLTF, either inline (encoded) or referenced by a local file URI.
+• NURBS/STEP (Later): surfaces/solids provided via STEP or a native BREP container; MVP sends tessellated proxies only.
+
+**Event Flows (Narrative)**
+• Push Flow: Blender connects and handshakes → user sends selection → Freecrafter imports/updates objects → Freecrafter emits a Model Changed event (and updates any subscribers).
+• Live Update Flow (future): On edit/transform in Freecrafter, a Model Changed event lists the affected object ids; Blender pulls deltas via Get Scene and updates in place.
+
+**Acceptance & Diagnostics**
+• Performance: pushing a ~100k‑face mesh completes under one second on localhost.
+• Correctness: object names, layer mappings, and world transforms preserved; material slot names are stable across a round‑trip.
+• Robustness: invalid payloads and non‑manifold meshes produce an Error event with a clear, actionable code and context.
+• Logging: server and add‑on write JSON‑line logs suitable for capture and replay; verbosity is user‑configurable.
+
+**Folder Layout (Descriptive, not code)**
+• Interop/Server: lightweight socket server source, JSON handling, WebSocket wrapper, build files.
+• Blender Add‑on: single add‑on package with preferences, panel, and send operator.
+• Tests/Interop: boolean stress meshes and case descriptors for automated checks.
+• Docs: protocol overview and usage instructions.
+
+---
+
+**How to contribute (Phase Δ):**
+Please open issues using the labels above and reference **Phase Δ** and the relevant milestone (M1–M5). For interop changes, attach a brief log excerpt showing the handshake and a push/acknowledge cycle, or a short screen capture demonstrating the round‑trip.
+
+
 ---

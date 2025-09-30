@@ -34,12 +34,15 @@ milestones already have code backing them and which ones are still open.
 
 ### Phase 2 — Geometry & Interaction (early prototype)
 
-* **Sketching:** The `SketchTool` projects screen positions onto the ground
-  plane with lightweight axis snapping and commits the resulting polyline to
-  the geometry kernel. 【F:src/Tools/SketchTool.cpp†L4-L55】
+* **Line authoring:** The `LineTool` runs as a state machine, projecting screen
+  positions onto the ground plane with inference-aware snapping and committing
+  continuous polylines to the geometry kernel. 【F:src/Tools/LineTool.cpp†L1-L137】
+* **Manipulation prototypes:** Move/Rotate/Scale operate on selected geometry
+  using axis-aware inference, with transient previews rendered in the viewport.
+  【F:src/Tools/MoveTool.cpp†L1-L142】【F:src/Tools/RotateTool.cpp†L1-L144】【F:src/Tools/ScaleTool.cpp†L1-L163】
 * **Extrusion:** The `ExtrudeTool` turns the most recent curve into a simple
   prismatic solid, demonstrating the start of Push/Pull style workflows.
-  【F:src/Tools/ExtrudeTool.cpp†L5-L13】
+  【F:src/Tools/ExtrudeTool.cpp†L1-L13】
 * **Viewport interaction:** Orbit, pan, and zoom gestures are active, with
   cursor world-position projection feeding the status bar updates.
   【F:src/GLViewport.cpp†L200-L287】

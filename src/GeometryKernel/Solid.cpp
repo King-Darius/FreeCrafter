@@ -2,6 +2,7 @@
 #include "Curve.h"
 #include "HalfEdgeMesh.h"
 #include "MeshUtils.h"
+#include "TransformUtils.h"
 #include <algorithm>
 
 namespace {
@@ -79,4 +80,27 @@ std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& base
 
 std::unique_ptr<Solid> Solid::createFromCurve(const Curve& curve, float height) {
     return createFromProfile(curve.getBoundaryLoop(), height);
+}
+
+void Solid::applyTransform(const std::function<Vector3(const Vector3&)>& fn)
+{
+    for (auto& point : baseLoop) {
+        point = fn(point);
+    }
+    mesh.transformVertices(fn);
+}
+
+void Solid::translate(const Vector3& delta)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::translate(p, delta); });
+}
+
+void Solid::rotate(const Vector3& pivot, const Vector3& axis, float angleRadians)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::rotateAroundAxis(p, pivot, axis, angleRadians); });
+}
+
+void Solid::scale(const Vector3& pivot, const Vector3& factors)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::scaleFromPivot(p, pivot, factors); });
 }

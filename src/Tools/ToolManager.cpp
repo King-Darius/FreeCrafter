@@ -28,12 +28,19 @@ ToolManager::ToolManager(GeometryKernel* g, CameraController* c)
     : geometry(g)
     , camera(c)
 {
-    tools.push_back(std::make_unique<SelectionTool>(g, c));
-    tools.push_back(std::make_unique<SketchTool>(g, c));
+    tools.push_back(std::make_unique<SmartSelectTool>(g, c));
+    tools.push_back(std::make_unique<LineTool>(g, c));
+    tools.push_back(std::make_unique<MoveTool>(g, c));
+    tools.push_back(std::make_unique<RotateTool>(g, c));
+    tools.push_back(std::make_unique<ScaleTool>(g, c));
     tools.push_back(std::make_unique<ExtrudeTool>(g, c));
     active = tools.empty() ? nullptr : tools.front().get();
     propagateViewport();
     pushInferenceToActive();
+    if (active) {
+        Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
+        active->setModifiers(mods);
+    }
 }
 
 void ToolManager::activateTool(const char* name)
@@ -42,6 +49,10 @@ void ToolManager::activateTool(const char* name)
         if (std::strcmp(tool->getName(), name) == 0) {
             active = tool.get();
             pushInferenceToActive();
+            if (active) {
+                Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
+                active->setModifiers(mods);
+            }
             return;
         }
     }
@@ -114,7 +125,22 @@ void ToolManager::handleKeyPress(int key)
             stickyActive = true;
         }
         pushInferenceToActive();
+        if (active) {
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+        }
         return;
+    }
+
+    if (key == Qt::Key_Control || key == Qt::Key_Meta) {
+        ctrlPressed = true;
+        if (active) {
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+        }
+    } else if (key == Qt::Key_Alt) {
+        altPressed = true;
+        if (active) {
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+        }
     }
 
     switch (key) {
@@ -138,7 +164,7 @@ void ToolManager::handleKeyPress(int key)
         break;
     default:
         if (active) {
-            active->onKeyPress(key);
+            active->handleKeyPress(key);
         }
         break;
     }
@@ -152,8 +178,21 @@ void ToolManager::handleKeyRelease(int key)
         stickyInference = InferenceResult{};
         if (active) {
             pushInferenceToActive();
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
         }
         return;
+    }
+
+    if (key == Qt::Key_Control || key == Qt::Key_Meta) {
+        ctrlPressed = false;
+        if (active) {
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+        }
+    } else if (key == Qt::Key_Alt) {
+        altPressed = false;
+        if (active) {
+            active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+        }
     }
 
     switch (key) {
@@ -168,9 +207,31 @@ void ToolManager::handleKeyRelease(int key)
         break;
     default:
         if (active) {
-            active->onKeyRelease(key);
+            active->handleKeyRelease(key);
         }
         break;
+    }
+}
+
+void ToolManager::updatePointerModifiers(const Tool::ModifierState& modifiers)
+{
+    bool changed = false;
+    if (shiftPressed != modifiers.shift) {
+        shiftPressed = modifiers.shift;
+        changed = true;
+    }
+    if (ctrlPressed != modifiers.ctrl) {
+        ctrlPressed = modifiers.ctrl;
+        changed = true;
+    }
+    if (altPressed != modifiers.alt) {
+        altPressed = modifiers.alt;
+        changed = true;
+    }
+    if (changed && active) {
+        active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
+    } else if (active) {
+        active->setModifiers({ shiftPressed, ctrlPressed, altPressed });
     }
 }
 

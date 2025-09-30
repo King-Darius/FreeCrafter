@@ -43,6 +43,17 @@ public:
     const std::vector<HalfEdgeFace>& getFaces() const { return faces; }
     const std::vector<HalfEdgeTriangle>& getTriangles() const { return triangles; }
 
+    template <typename Fn>
+    void transformVertices(const Fn& fn)
+    {
+        for (auto& vertex : vertices) {
+            vertex.position = fn(vertex.position);
+        }
+        recomputeNormals();
+    }
+
+    void recomputeNormals();
+
 private:
     Vector3 computeFaceNormal(const std::vector<int>& loop) const;
 

@@ -1,6 +1,7 @@
 #include "Curve.h"
 #include "HalfEdgeMesh.h"
 #include "MeshUtils.h"
+#include "TransformUtils.h"
 #include <algorithm>
 
 namespace {
@@ -41,4 +42,27 @@ std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts) 
     }
 
     return std::unique_ptr<Curve>(new Curve(std::move(healed), std::move(mesh)));
+}
+
+void Curve::applyTransform(const std::function<Vector3(const Vector3&)>& fn)
+{
+    for (auto& point : boundaryLoop) {
+        point = fn(point);
+    }
+    mesh.transformVertices(fn);
+}
+
+void Curve::translate(const Vector3& delta)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::translate(p, delta); });
+}
+
+void Curve::rotate(const Vector3& pivot, const Vector3& axis, float angleRadians)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::rotateAroundAxis(p, pivot, axis, angleRadians); });
+}
+
+void Curve::scale(const Vector3& pivot, const Vector3& factors)
+{
+    applyTransform([&](const Vector3& p) { return GeometryTransforms::scaleFromPivot(p, pivot, factors); });
 }

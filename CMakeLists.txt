@@ -17,10 +17,16 @@ add_executable(${PROJECT_NAME}
     src/GeometryKernel/HalfEdgeMesh.cpp
     src/GeometryKernel/MeshUtils.cpp
     src/GeometryKernel/Solid.cpp
+    src/GeometryKernel/TransformUtils.cpp
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp
-    src/Tools/SelectionTool.cpp
-    src/Tools/SketchTool.cpp
+    src/Tools/Tool.cpp
+    src/Tools/ToolGeometryUtils.cpp
+    src/Tools/LineTool.cpp
+    src/Tools/SmartSelectTool.cpp
+    src/Tools/MoveTool.cpp
+    src/Tools/RotateTool.cpp
+    src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
     src/Tools/ToolManager.cpp
     src/Interaction/InferenceEngine.cpp

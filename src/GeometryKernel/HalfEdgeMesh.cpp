@@ -132,3 +132,47 @@ Vector3 HalfEdgeMesh::computeFaceNormal(const std::vector<int>& loop) const {
     }
     return normal.normalized();
 }
+
+void HalfEdgeMesh::recomputeNormals()
+{
+    for (auto& face : faces) {
+        if (face.halfEdge < 0) {
+            face.normal = Vector3();
+            continue;
+        }
+        std::vector<int> loop;
+        int start = face.halfEdge;
+        int current = start;
+        loop.clear();
+        do {
+            if (current < 0 || current >= static_cast<int>(halfEdges.size())) {
+                loop.clear();
+                break;
+            }
+            const HalfEdgeRecord& edge = halfEdges[current];
+            loop.push_back(edge.origin);
+            current = edge.next;
+        } while (current != start && current != -1);
+        if (loop.size() >= 3) {
+            face.normal = computeFaceNormal(loop);
+        } else {
+            face.normal = Vector3();
+        }
+    }
+
+    for (auto& tri : triangles) {
+        if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0) {
+            tri.normal = Vector3();
+            continue;
+        }
+        const Vector3& a = vertices[tri.v0].position;
+        const Vector3& b = vertices[tri.v1].position;
+        const Vector3& c = vertices[tri.v2].position;
+        Vector3 normal = (b - a).cross(c - a);
+        if (normal.lengthSquared() > 1e-8f) {
+            tri.normal = normal.normalized();
+        } else {
+            tri.normal = Vector3();
+        }
+    }
+}

@@ -212,6 +212,28 @@ void MainWindow::createToolbars()
     selectAction->setCheckable(true);
     toolActionGroup->addAction(selectAction);
 
+    lineAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/line.png")), tr("Line"), this, &MainWindow::activateLine);
+    lineAction->setCheckable(true);
+    toolActionGroup->addAction(lineAction);
+
+    moveAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/move.png")), tr("Move"), this, &MainWindow::activateMove);
+    moveAction->setCheckable(true);
+    toolActionGroup->addAction(moveAction);
+
+    rotateAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/rotate.png")), tr("Rotate"), this, &MainWindow::activateRotate);
+    rotateAction->setCheckable(true);
+    toolActionGroup->addAction(rotateAction);
+
+    scaleAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/scale.png")), tr("Scale"), this, &MainWindow::activateScale);
+    scaleAction->setCheckable(true);
+    toolActionGroup->addAction(scaleAction);
+
+    extrudeAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pushpull.png")), tr("Extrude"), this, &MainWindow::activateExtrude);
+    extrudeAction->setCheckable(true);
+    toolActionGroup->addAction(extrudeAction);
+
+    toolRibbon->addSeparator();
+
     panAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pan.svg")), tr("Pan"), this, &MainWindow::activatePan);
     panAction->setCheckable(true);
     toolActionGroup->addAction(panAction);
@@ -227,14 +249,6 @@ void MainWindow::createToolbars()
     gridAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Toggle Grid"), this, &MainWindow::toggleGrid);
     gridAction->setCheckable(true);
     gridAction->setChecked(true);
-
-    sketchAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/line.png")), tr("Sketch"), this, &MainWindow::activateSketch);
-    sketchAction->setCheckable(true);
-    toolActionGroup->addAction(sketchAction);
-
-    extrudeAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pushpull.png")), tr("Extrude"), this, &MainWindow::activateExtrude);
-    extrudeAction->setCheckable(true);
-    toolActionGroup->addAction(extrudeAction);
 
     addToolBar(Qt::LeftToolBarArea, toolRibbon);
 
@@ -311,7 +325,10 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("view.toggleRightDock"), actionToggleRightDock);
     hotkeys.registerAction(QStringLiteral("theme.toggle"), actionToggleTheme);
     hotkeys.registerAction(QStringLiteral("tools.select"), selectAction);
-    hotkeys.registerAction(QStringLiteral("tools.sketch"), sketchAction);
+    hotkeys.registerAction(QStringLiteral("tools.line"), lineAction);
+    hotkeys.registerAction(QStringLiteral("tools.move"), moveAction);
+    hotkeys.registerAction(QStringLiteral("tools.rotate"), rotateAction);
+    hotkeys.registerAction(QStringLiteral("tools.scale"), scaleAction);
     hotkeys.registerAction(QStringLiteral("tools.extrude"), extrudeAction);
     hotkeys.registerAction(QStringLiteral("tools.pan"), panAction);
     hotkeys.registerAction(QStringLiteral("tools.orbit"), orbitAction);
@@ -335,9 +352,12 @@ void MainWindow::registerShortcuts()
         if (actionPalette) actionPalette->setToolTip(format(actionPalette, tr("Command Palette")));
         if (actionToggleTheme) actionToggleTheme->setToolTip(format(actionToggleTheme, tr("Toggle Theme")));
         if (selectAction) selectAction->setToolTip(format(selectAction, tr("Select")));
+        if (lineAction) lineAction->setToolTip(format(lineAction, tr("Line")));
+        if (moveAction) moveAction->setToolTip(format(moveAction, tr("Move")));
+        if (rotateAction) rotateAction->setToolTip(format(rotateAction, tr("Rotate")));
+        if (scaleAction) scaleAction->setToolTip(format(scaleAction, tr("Scale")));
         if (panAction) panAction->setToolTip(format(panAction, tr("Pan")));
         if (orbitAction) orbitAction->setToolTip(format(orbitAction, tr("Orbit")));
-        if (sketchAction) sketchAction->setToolTip(format(sketchAction, tr("Sketch")));
         if (extrudeAction) extrudeAction->setToolTip(format(extrudeAction, tr("Extrude")));
         if (measureAction) measureAction->setToolTip(format(measureAction, tr("Measure")));
         if (gridAction) gridAction->setToolTip(format(gridAction, tr("Toggle Grid")));
@@ -493,12 +513,27 @@ void MainWindow::showKeyboardShortcuts()
 
 void MainWindow::activateSelect()
 {
-    setActiveTool(selectAction, QStringLiteral("SelectionTool"), tr("Select: Click to select. Delete to remove."));
+    setActiveTool(selectAction, QStringLiteral("SmartSelectTool"), tr("Select: Click to pick, drag left-to-right for window, right-to-left for crossing."));
 }
 
-void MainWindow::activateSketch()
+void MainWindow::activateLine()
 {
-    setActiveTool(sketchAction, QStringLiteral("SketchTool"), tr("Sketch: Click points on ground plane. Second click finishes."));
+    setActiveTool(lineAction, QStringLiteral("LineTool"), tr("Line: Click to place vertices. Press Enter to finish, Esc to cancel."));
+}
+
+void MainWindow::activateMove()
+{
+    setActiveTool(moveAction, QStringLiteral("MoveTool"), tr("Move: Drag to translate selection. Use arrow keys for axis locks."));
+}
+
+void MainWindow::activateRotate()
+{
+    setActiveTool(rotateAction, QStringLiteral("RotateTool"), tr("Rotate: Drag to rotate around pivot. Use snaps or axis locks."));
+}
+
+void MainWindow::activateScale()
+{
+    setActiveTool(scaleAction, QStringLiteral("ScaleTool"), tr("Scale: Drag to scale selection. Axis locks limit scaling direction."));
 }
 
 void MainWindow::activateExtrude()

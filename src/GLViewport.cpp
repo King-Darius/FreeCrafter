@@ -14,6 +14,7 @@
 #include "GeometryKernel/Curve.h"
 #include "GeometryKernel/Solid.h"
 #include "GeometryKernel/Vector3.h"
+#include "GeometryKernel/TransformUtils.h"
 #include "Interaction/InferenceEngine.h"
 
 GLViewport::GLViewport(QWidget* parent)
@@ -177,66 +178,205 @@ void GLViewport::drawGrid()
     glEnd();
 }
 
+namespace {
+
+constexpr float kGhostAlpha = 0.35f;
+
+Tool::ModifierState toModifierState(Qt::KeyboardModifiers mods)
+{
+    Tool::ModifierState state;
+    state.shift = mods.testFlag(Qt::ShiftModifier);
+    state.ctrl = mods.testFlag(Qt::ControlModifier) || mods.testFlag(Qt::MetaModifier);
+    state.alt = mods.testFlag(Qt::AltModifier);
+    return state;
+}
+
+Vector3 applyGhostTransform(const Vector3& position, const Tool::PreviewGhost& ghost)
+{
+    Vector3 result = position;
+    const float eps = 1e-6f;
+
+    if (ghost.usePivot) {
+        Vector3 relative = result - ghost.pivot;
+        if (std::fabs(ghost.scale.x - 1.0f) > eps || std::fabs(ghost.scale.y - 1.0f) > eps || std::fabs(ghost.scale.z - 1.0f) > eps) {
+            relative.x *= ghost.scale.x;
+            relative.y *= ghost.scale.y;
+            relative.z *= ghost.scale.z;
+        }
+        if (std::fabs(ghost.rotationAngle) > eps && ghost.rotationAxis.lengthSquared() > eps) {
+            Vector3 scaled = ghost.pivot + relative;
+            result = GeometryTransforms::rotateAroundAxis(scaled, ghost.pivot, ghost.rotationAxis, ghost.rotationAngle);
+        } else {
+            result = ghost.pivot + relative;
+        }
+    } else {
+        if (std::fabs(ghost.scale.x - 1.0f) > eps || std::fabs(ghost.scale.y - 1.0f) > eps || std::fabs(ghost.scale.z - 1.0f) > eps) {
+            result.x *= ghost.scale.x;
+            result.y *= ghost.scale.y;
+            result.z *= ghost.scale.z;
+        }
+    }
+
+    if (ghost.translation.lengthSquared() > eps) {
+        result += ghost.translation;
+    }
+
+    return result;
+}
+
+void drawCurve(const Curve& curve, bool selected)
+{
+    const auto& pts = curve.getBoundaryLoop();
+    if (pts.size() < 2) {
+        return;
+    }
+    glLineWidth(selected ? 3.0f : 2.0f);
+    if (selected) {
+        glColor3f(0.95f, 0.35f, 0.25f);
+    } else {
+        glColor3f(0.1f, 0.1f, 0.1f);
+    }
+    glBegin(GL_LINE_STRIP);
+    for (const auto& p : pts) {
+        glVertex3f(p.x, p.y, p.z);
+    }
+    glEnd();
+}
+
+void drawSolid(const Solid& solid, bool selected)
+{
+    const HalfEdgeMesh& mesh = solid.getMesh();
+    const auto& vertices = mesh.getVertices();
+    const auto& faces = mesh.getFaces();
+
+    if (selected) {
+        glColor3f(0.85f, 0.73f, 0.42f);
+    } else {
+        glColor3f(0.7f, 0.75f, 0.8f);
+    }
+    glBegin(GL_QUADS);
+    for (const auto& face : faces) {
+        if (face.indices.size() == 4) {
+            for (int idx : face.indices) {
+                const auto& v = vertices[(size_t)idx].position;
+                glVertex3f(v.x, v.y, v.z);
+            }
+        }
+    }
+    glEnd();
+
+    glLineWidth(selected ? 2.2f : 1.5f);
+    if (selected) {
+        glColor3f(0.35f, 0.15f, 0.05f);
+    } else {
+        glColor3f(0.1f, 0.1f, 0.1f);
+    }
+    for (const auto& face : faces) {
+        if (face.indices.size() < 2) {
+            continue;
+        }
+        glBegin(GL_LINE_LOOP);
+        for (int idx : face.indices) {
+            const auto& v = vertices[(size_t)idx].position;
+            glVertex3f(v.x, v.y, v.z);
+        }
+        glEnd();
+    }
+}
+
+void drawGhostCurve(const Curve& curve, const Tool::PreviewGhost& ghost)
+{
+    const auto& pts = curve.getBoundaryLoop();
+    if (pts.size() < 2) {
+        return;
+    }
+    glLineWidth(2.4f);
+    glColor4f(0.25f, 0.55f, 0.95f, kGhostAlpha);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_LINE_STRIP);
+    for (const auto& p : pts) {
+        Vector3 transformed = applyGhostTransform(p, ghost);
+        glVertex3f(transformed.x, transformed.y, transformed.z);
+    }
+    glEnd();
+    glDisable(GL_BLEND);
+}
+
+void drawGhostSolid(const Solid& solid, const Tool::PreviewGhost& ghost)
+{
+    const HalfEdgeMesh& mesh = solid.getMesh();
+    const auto& vertices = mesh.getVertices();
+    const auto& faces = mesh.getFaces();
+
+    glLineWidth(2.0f);
+    glColor4f(0.25f, 0.55f, 0.95f, kGhostAlpha);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    for (const auto& face : faces) {
+        if (face.indices.size() < 2) {
+            continue;
+        }
+        glBegin(GL_LINE_LOOP);
+        for (int idx : face.indices) {
+            const Vector3& original = vertices[(size_t)idx].position;
+            Vector3 transformed = applyGhostTransform(original, ghost);
+            glVertex3f(transformed.x, transformed.y, transformed.z);
+        }
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+}
+
+}
+
 void GLViewport::drawScene()
 {
+    Tool::PreviewState preview;
+    if (toolManager) {
+        if (Tool* active = toolManager->getActiveTool()) {
+            preview = active->getPreviewState();
+        }
+    }
+
     const auto& objs = geometry.getObjects();
     for (const auto& uptr : objs) {
+        ++currentDrawCalls;
         if (uptr->getType() == ObjectType::Curve) {
-            const Curve* c = static_cast<const Curve*>(uptr.get());
-            const auto& pts = c->getPoints();
-            if (pts.size() < 2) continue;
-            glColor3f(0.1f, 0.1f, 0.1f);
-            glLineWidth(2.0f);
-            ++currentDrawCalls;
-            glBegin(GL_LINE_STRIP);
-            for (const auto& p : pts) glVertex3f(p.x, p.y, p.z);
-            glEnd();
+            drawCurve(*static_cast<const Curve*>(uptr.get()), uptr->isSelected());
         } else if (uptr->getType() == ObjectType::Solid) {
-            const Solid* s = static_cast<const Solid*>(uptr.get());
-            const auto& verts = s->getVertices();
-            const auto& faces = s->getFaces();
-            glColor3f(0.7f,0.75f,0.8f);
-            glBegin(GL_QUADS);
-            ++currentDrawCalls;
-            for (const auto& f : faces) {
-                if (f.indices.size() == 4) {
-                    for (int idx : f.indices) {
-                        const auto& v = verts[(size_t)idx];
-                        glVertex3f(v.x, v.y, v.z);
-                    }
-                }
+            drawSolid(*static_cast<const Solid*>(uptr.get()), uptr->isSelected());
+        }
+    }
+
+    if (!preview.polylines.empty()) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glLineWidth(2.0f);
+        glColor4f(0.15f, 0.65f, 0.95f, 0.7f);
+        currentDrawCalls += static_cast<int>(preview.polylines.size());
+        for (const auto& poly : preview.polylines) {
+            if (poly.points.empty()) {
+                continue;
+            }
+            glBegin(poly.closed ? GL_LINE_LOOP : GL_LINE_STRIP);
+            for (const auto& p : poly.points) {
+                glVertex3f(p.x, p.y, p.z);
             }
             glEnd();
-            // draw edges
-            glColor3f(0.1f,0.1f,0.1f);
-            glLineWidth(1.5f);
-            for (const auto& face : faces) {
-                if (face.indices.size() < 2) continue;
-                ++currentDrawCalls;
-                glBegin(GL_LINE_LOOP);
-                for (int idx : face.indices) {
-                    const auto& v = verts[(size_t)idx];
-                    glVertex3f(v.x, v.y, v.z);
-                }
-                glEnd();
-            }
-            size_t ringSize = verts.size() / 2;
-            if (ringSize >= 2) {
-                ++currentDrawCalls;
-                glBegin(GL_LINE_LOOP);
-                for (size_t i=0;i<ringSize;++i) {
-                    const auto& v = verts[i];
-                    glVertex3f(v.x, v.y, v.z);
-                }
-                glEnd();
-                ++currentDrawCalls;
-                glBegin(GL_LINE_LOOP);
-                for (size_t i=0;i<ringSize;++i) {
-                    const auto& v = verts[i + ringSize];
-                    glVertex3f(v.x, v.y, v.z);
-                }
-                glEnd();
-            }
+        }
+        glDisable(GL_BLEND);
+    }
+
+    for (const auto& ghost : preview.ghosts) {
+        if (!ghost.object) {
+            continue;
+        }
+        ++currentDrawCalls;
+        if (ghost.object->getType() == ObjectType::Curve) {
+            drawGhostCurve(*static_cast<const Curve*>(ghost.object), ghost);
+        } else if (ghost.object->getType() == ObjectType::Solid) {
+            drawGhostSolid(*static_cast<const Solid*>(ghost.object), ghost);
         }
     }
 }
@@ -381,6 +521,9 @@ void GLViewport::drawInferenceOverlay(QPainter& painter, const QMatrix4x4& proje
 
 void GLViewport::mousePressEvent(QMouseEvent* e)
 {
+    if (toolManager) {
+        toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
+    }
     lastMouse = e->pos();
     if (e->buttons() & Qt::RightButton) {
         rotating = true;
@@ -393,7 +536,12 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
             const QPointF devicePos = e->position() * ratio;
             lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
             hasDeviceMouse = true;
-            t->onMouseDown(std::lround(devicePos.x()), std::lround(devicePos.y()));
+            Tool::PointerInput input;
+            input.x = std::lround(devicePos.x());
+            input.y = std::lround(devicePos.y());
+            input.modifiers = toModifierState(e->modifiers());
+            toolManager->updatePointerModifiers(input.modifiers);
+            t->handleMouseDown(input);
         }
     }
 }
@@ -418,8 +566,13 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
     }
 
     if (toolManager) {
+        Tool::PointerInput input;
+        input.x = std::lround(devicePos.x());
+        input.y = std::lround(devicePos.y());
+        input.modifiers = toModifierState(e->modifiers());
+        toolManager->updatePointerModifiers(input.modifiers);
         if (auto* t = toolManager->getActiveTool()) {
-            t->onMouseMove(std::lround(devicePos.x()), std::lround(devicePos.y()));
+            t->handleMouseMove(input);
         }
     }
 
@@ -431,6 +584,9 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
 
 void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 {
+    if (toolManager) {
+        toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
+    }
     if (rotating && !(e->buttons() & Qt::RightButton)) rotating = false;
     if (panning && !(e->buttons() & Qt::MiddleButton)) panning = false;
 
@@ -440,7 +596,12 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
             const QPointF devicePos = e->position() * ratio;
             lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
             hasDeviceMouse = true;
-            t->onMouseUp(std::lround(devicePos.x()), std::lround(devicePos.y()));
+            Tool::PointerInput input;
+            input.x = std::lround(devicePos.x());
+            input.y = std::lround(devicePos.y());
+            input.modifiers = toModifierState(e->modifiers());
+            toolManager->updatePointerModifiers(input.modifiers);
+            t->handleMouseUp(input);
         }
     }
 }
@@ -453,10 +614,24 @@ void GLViewport::wheelEvent(QWheelEvent* e)
 
 void GLViewport::keyPressEvent(QKeyEvent* e)
 {
+    bool consumed = false;
     if (toolManager) {
-        toolManager->handleKeyPress(e->key());
+        if (Tool* tool = toolManager->getActiveTool()) {
+            if (e->key() == Qt::Key_Escape) {
+                tool->cancel();
+                consumed = true;
+            } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+                tool->commit();
+                consumed = true;
+            }
+        }
+        if (!consumed) {
+            toolManager->handleKeyPress(e->key());
+        }
     }
-    QOpenGLWidget::keyPressEvent(e);
+    if (!consumed) {
+        QOpenGLWidget::keyPressEvent(e);
+    }
     update();
 }
 

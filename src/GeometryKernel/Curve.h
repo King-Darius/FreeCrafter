@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <vector>
 #include "GeometryObject.h"
@@ -12,6 +13,11 @@ public:
     HalfEdgeMesh& getMesh() override { return mesh; }
 
     const std::vector<Vector3>& getBoundaryLoop() const { return boundaryLoop; }
+
+    void applyTransform(const std::function<Vector3(const Vector3&)>& fn);
+    void translate(const Vector3& delta);
+    void rotate(const Vector3& pivot, const Vector3& axis, float angleRadians);
+    void scale(const Vector3& pivot, const Vector3& factors);
 
 private:
     Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh);

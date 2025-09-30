@@ -9,6 +9,8 @@ public:
     RotateTool(GeometryKernel* g, CameraController* c);
 
     const char* getName() const override { return "RotateTool"; }
+    MeasurementKind getMeasurementKind() const override { return MeasurementKind::Angle; }
+    OverrideResult applyMeasurementOverride(double value) override;
 
 protected:
     void onPointerDown(const PointerInput& input) override;

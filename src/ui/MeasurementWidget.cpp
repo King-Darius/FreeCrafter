@@ -39,6 +39,11 @@ QString MeasurementWidget::unitSystem() const
     return unitSelector->currentData().toString();
 }
 
+void MeasurementWidget::clear()
+{
+    input->clear();
+}
+
 void MeasurementWidget::handleReturnPressed()
 {
     emit measurementCommitted(input->text(), unitSystem());

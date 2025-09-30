@@ -9,7 +9,7 @@ A fully expanded, stepwise roadmap to Popular CAD/Archviz parity and beyond. Eac
 The following tracked milestones correspond to major roadmap items A–H:
 
 - [ ] [A. Rendering](docs/milestones/rendering.md)
-- [ ] [B. Tools](docs/milestones/tools.md)
+- ➖ [B. Tools](docs/milestones/tools.md)
 - [ ] [C. DSM](docs/milestones/dsm.md)
 - [ ] [D. Plugins](docs/milestones/plugins.md)
 - [ ] [E. File I/O](docs/milestones/file-io.md)
@@ -47,31 +47,31 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ### 2.1 Half‑edge core
 
-- [ ] Vertex/Edge/Face; manifold checks; face triangulation; normals
-- [ ] Healing: orphan edge purge; tiny edge collapse; duplicate vert weld
+- [x] Vertex/Edge/Face; manifold checks; face triangulation; normals
+- [x] Healing: orphan edge purge; tiny edge collapse; duplicate vert weld on curve/solid builds
 
 ### 2.2 Inference engine
 
-- [ ] Snap database (kd‑trees for verts, midpoints, face centers)
-- [ ] Inference types: endpoint, midpoint, intersection, on‑edge, on‑face, axis (RGB), parallel, perpendicular
-- [ ] Locking: Shift (sticky), Arrow keys (R/G/B)
-- [ ] Visuals: colored glyphs + dashed guides; hover latency < 12ms
+- [x] Snap database (kd‑trees for verts, midpoints, face centers)
+- [x] Inference types: endpoint, midpoint, intersection, on‑edge, on‑face, axis (RGB), parallel, perpendicular
+- [x] Locking: Shift (sticky), Arrow keys (R/G/B)
+- [x] Visuals: colored glyphs + dashed guides; hover latency < 12ms
 
 ### 2.3 Interaction layer
 
-- [ ] Tools run as state machines; cancel (Esc), commit (Enter), modifier keys
-- [ ] VCB: dynamic prompts and typed overrides (e.g., 12'6", 8')
+- [x] Tools run as state machines; cancel (Esc), commit (Enter), modifier keys
+- [x] VCB: dynamic prompts and typed overrides (e.g., 12'6", 8') — measurement entry widget drives active tool updates
 
 ### 2.4 Core tools
 
-- [ ] Line (continuous), Smart Select (click/drag, window/crossing), Move/Stretch (axis‑aware), Rotate, Scale
-- [ ] Ghost previews; hover/selection highlighting; inference overlays
+- [x] Line (continuous), Smart Select (click/drag, window/crossing), Move/Stretch (axis‑aware), Rotate, Scale
+- [x] Ghost previews; hover/selection highlighting; inference overlays
 
 ---
 
 ## Phase 3 — Navigation & View
 
-- [ ] Mouse mapping: MMB=Orbit, Shift+MMB=Pan, Wheel=Zoom; O/H/Z tool keys; plus Zoom Extents/Selection
+- [ ] Mouse mapping: MMB=Orbit, Shift+MMB=Pan, Wheel=Zoom; O/H/Z tool keys; plus Zoom Extents/Selection (current build supports orbit/pan/zoom via mouse buttons but lacks remapping + view hotkeys)
 - [ ] Standard views; perspective/parallel; FOV dialog; axis gizmo
 - [ ] Styles: Wireframe/Shaded/Shaded+Edges/HiddenLine/Monochrome; hidden geometry
 - [ ] Sections: multiple planes; active cut; fills; per‑scene state

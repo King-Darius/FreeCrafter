@@ -54,6 +54,19 @@ public:
         std::vector<PreviewGhost> ghosts;
     };
 
+    enum class MeasurementKind {
+        None,
+        Distance,
+        Angle,
+        Scale
+    };
+
+    enum class OverrideResult {
+        Ignored,
+        PreviewUpdated,
+        Commit
+    };
+
     Tool(GeometryKernel* g, CameraController* c)
         : geometry(g)
         , camera(c)
@@ -90,6 +103,8 @@ public:
     PreviewState getPreviewState() const { return buildPreview(); }
 
     virtual const char* getName() const = 0;
+    virtual MeasurementKind getMeasurementKind() const { return MeasurementKind::None; }
+    virtual OverrideResult applyMeasurementOverride(double) { return OverrideResult::Ignored; }
 
 protected:
     virtual void onPointerDown(const PointerInput&) {}

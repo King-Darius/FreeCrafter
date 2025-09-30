@@ -7,13 +7,9 @@ OrbitTool::OrbitTool(GeometryKernel* g, CameraController* c)
 {
 }
 
-void OrbitTool::onPointerMove(const PointerInput& input)
+void OrbitTool::onDragUpdate(const PointerInput& input, float dx, float dy)
 {
-    if (!hasActiveDrag() || !camera)
-        return;
-    float dx = 0.0f;
-    float dy = 0.0f;
-    if (!updateDragDelta(input, dx, dy))
+    if (!camera)
         return;
     if (std::fabs(dx) < 1e-3f && std::fabs(dy) < 1e-3f)
         return;

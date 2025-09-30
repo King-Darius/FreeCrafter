@@ -144,20 +144,34 @@ public:
 
 protected:
     void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput& input) override;
     void onPointerUp(const PointerInput& input) override;
     void onCancel() override;
 
-    bool updateDragDelta(const PointerInput& input, float& dx, float& dy);
-    bool hasActiveDrag() const { return dragging; }
-    float getPixelScale() const { return pixelScale; }
+    bool hasActiveDrag() const { return dragState.isActive(); }
+    float getPixelScale() const { return dragState.getPixelScale(); }
 
     virtual void onDragStart(const PointerInput&) {}
+    virtual void onDragUpdate(const PointerInput&, float, float) {}
     virtual void onDragEnd(const PointerInput&) {}
     virtual void onDragCanceled() {}
 
 private:
-    bool dragging = false;
-    int lastX = 0;
-    int lastY = 0;
-    float pixelScale = 1.0f;
+    class DragState {
+    public:
+        void begin(const PointerInput& input);
+        bool update(const PointerInput& input, float& dx, float& dy);
+        bool finish(const PointerInput& input);
+        bool cancel();
+        bool isActive() const { return dragging; }
+        float getPixelScale() const { return pixelScale; }
+
+    private:
+        bool dragging = false;
+        int lastX = 0;
+        int lastY = 0;
+        float pixelScale = 1.0f;
+    };
+
+    DragState dragState;
 };

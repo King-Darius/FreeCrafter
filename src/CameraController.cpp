@@ -26,12 +26,59 @@ void CameraController::rotateCamera(float dx, float dy) {
 }
 
 void CameraController::panCamera(float dx, float dy) {
-    // pan relative to camera
     float radYaw = yaw * (float)M_PI / 180.0f;
-    float rightX = cos(radYaw), rightZ = -sin(radYaw);
-    float upX = 0.0f, upZ = 0.0f; // ground plane
-    const float panSpeed = 0.02f * distance;
+    float radPitch = pitch * (float)M_PI / 180.0f;
+
+    float cosPitch = std::cos(radPitch);
+    float sinPitch = std::sin(radPitch);
+    float sinYaw = std::sin(radYaw);
+    float cosYaw = std::cos(radYaw);
+
+    // View direction from camera toward the target
+    float dirX = -sinYaw * cosPitch;
+    float dirY = -sinPitch;
+    float dirZ = -cosYaw * cosPitch;
+
+    float dirLen = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (dirLen > 1e-5f) {
+        dirX /= dirLen;
+        dirY /= dirLen;
+        dirZ /= dirLen;
+    }
+
+    // Right vector (perpendicular to world up)
+    float rightX = dirZ;
+    float rightY = 0.0f;
+    float rightZ = -dirX;
+    float rightLen = std::sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+    if (rightLen > 1e-5f) {
+        rightX /= rightLen;
+        rightY /= rightLen;
+        rightZ /= rightLen;
+    } else {
+        rightX = 1.0f;
+        rightY = 0.0f;
+        rightZ = 0.0f;
+    }
+
+    // True camera up vector derived from view and right axes
+    float upX = rightY * dirZ - rightZ * dirY;
+    float upY = rightZ * dirX - rightX * dirZ;
+    float upZ = rightX * dirY - rightY * dirX;
+    float upLen = std::sqrt(upX * upX + upY * upY + upZ * upZ);
+    if (upLen > 1e-5f) {
+        upX /= upLen;
+        upY /= upLen;
+        upZ /= upLen;
+    } else {
+        upX = 0.0f;
+        upY = 1.0f;
+        upZ = 0.0f;
+    }
+
+    const float panSpeed = 0.0025f * distance;
     targetX -= (rightX * dx + upX * dy) * panSpeed;
+    targetY -= (rightY * dx + upY * dy) * panSpeed;
     targetZ -= (rightZ * dx + upZ * dy) * panSpeed;
 }
 

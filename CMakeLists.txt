@@ -23,11 +23,12 @@ add_executable(${PROJECT_NAME}
     src/Tools/SketchTool.cpp
     src/Tools/ExtrudeTool.cpp
     src/Tools/ToolManager.cpp
+    src/Interaction/InferenceEngine.cpp
     src/ui/MeasurementWidget.cpp
     resources.qrc
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools src/ui)
+target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui)
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 # Installation
 install(TARGETS ${PROJECT_NAME}

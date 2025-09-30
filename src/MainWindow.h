@@ -145,12 +145,16 @@ private:
     QAction* renderWireframeAction = nullptr;
     QAction* renderShadedAction = nullptr;
     QAction* renderShadedEdgesAction = nullptr;
+    QAction* renderHiddenLineAction = nullptr;
+    QAction* renderMonochromeAction = nullptr;
+    QAction* actionViewHiddenGeometry = nullptr;
 
     QActionGroup* toolActionGroup = nullptr;
 
     HotkeyManager hotkeys;
     bool darkTheme = true;
     Renderer::RenderStyle renderStyleChoice = Renderer::RenderStyle::ShadedWithEdges;
+    bool showHiddenGeometry = false;
     QString currentViewPresetId = QStringLiteral("iso");
     ViewPresetManager viewPresetManager;
 };

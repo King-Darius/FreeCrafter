@@ -204,6 +204,15 @@ Vector3 RotateTool::determineAxis() const
     return Vector3(0.0f, 1.0f, 0.0f);
 }
 
+Tool::OverrideResult RotateTool::applyMeasurementOverride(double value)
+{
+    if (!dragging || selection.empty()) {
+        return Tool::OverrideResult::Ignored;
+    }
+    currentAngle = static_cast<float>(value);
+    return Tool::OverrideResult::Commit;
+}
+
 void RotateTool::applyRotation(float angleRadians)
 {
     if (!geometry)

@@ -53,6 +53,7 @@ public:
     }
 
     void recomputeNormals();
+    void heal(float weldTolerance = 1e-5f, float minEdgeLength = 1e-5f);
 
 private:
     Vector3 computeFaceNormal(const std::vector<int>& loop) const;

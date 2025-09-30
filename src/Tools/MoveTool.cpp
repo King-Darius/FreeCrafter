@@ -167,6 +167,29 @@ Vector3 MoveTool::applyAxisConstraint(const Vector3& delta) const
     return delta;
 }
 
+Tool::OverrideResult MoveTool::applyMeasurementOverride(double value)
+{
+    if (!dragging || selection.empty()) {
+        return Tool::OverrideResult::Ignored;
+    }
+
+    Vector3 direction = translation;
+    if (direction.lengthSquared() <= 1e-8f) {
+        const auto& snap = getInferenceResult();
+        if (snap.direction.lengthSquared() > 1e-8f) {
+            direction = snap.direction;
+        }
+    }
+
+    if (direction.lengthSquared() <= 1e-8f) {
+        return Tool::OverrideResult::Ignored;
+    }
+
+    direction = direction.normalized();
+    translation = direction * static_cast<float>(value);
+    return Tool::OverrideResult::Commit;
+}
+
 std::vector<GeometryObject*> MoveTool::gatherSelection() const
 {
     std::vector<GeometryObject*> result;

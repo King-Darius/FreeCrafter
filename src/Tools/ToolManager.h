@@ -33,6 +33,9 @@ public:
     void handleKeyRelease(int key);
     void updatePointerModifiers(const Tool::ModifierState& modifiers);
 
+    Tool::MeasurementKind getMeasurementKind() const;
+    bool applyMeasurementOverride(double value);
+
 private:
     void propagateViewport();
     void pushInferenceToActive();

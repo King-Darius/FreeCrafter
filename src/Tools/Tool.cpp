@@ -87,20 +87,24 @@ void Tool::updateModifiers(const ModifierState& nextModifiers)
 
 void PointerDragTool::onPointerDown(const PointerInput& input)
 {
-    dragging = true;
-    lastX = input.x;
-    lastY = input.y;
-    pixelScale = std::max(input.devicePixelRatio, 1.0f);
+    dragState.begin(input);
     setState(State::Active);
     onDragStart(input);
 }
 
+void PointerDragTool::onPointerMove(const PointerInput& input)
+{
+    float dx = 0.0f;
+    float dy = 0.0f;
+    if (!dragState.update(input, dx, dy)) {
+        return;
+    }
+    onDragUpdate(input, dx, dy);
+}
+
 void PointerDragTool::onPointerUp(const PointerInput& input)
 {
-    lastX = input.x;
-    lastY = input.y;
-    if (dragging) {
-        dragging = false;
+    if (dragState.finish(input)) {
         onDragEnd(input);
     }
     setState(State::Idle);
@@ -108,14 +112,21 @@ void PointerDragTool::onPointerUp(const PointerInput& input)
 
 void PointerDragTool::onCancel()
 {
-    if (dragging) {
-        dragging = false;
+    if (dragState.cancel()) {
         onDragCanceled();
     }
     setState(State::Idle);
 }
 
-bool PointerDragTool::updateDragDelta(const PointerInput& input, float& dx, float& dy)
+void PointerDragTool::DragState::begin(const PointerInput& input)
+{
+    dragging = true;
+    lastX = input.x;
+    lastY = input.y;
+    pixelScale = std::max(input.devicePixelRatio, 1.0f);
+}
+
+bool PointerDragTool::DragState::update(const PointerInput& input, float& dx, float& dy)
 {
     if (!dragging) {
         lastX = input.x;
@@ -129,5 +140,21 @@ bool PointerDragTool::updateDragDelta(const PointerInput& input, float& dx, floa
     lastX = input.x;
     lastY = input.y;
     return true;
+}
+
+bool PointerDragTool::DragState::finish(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    bool wasDragging = dragging;
+    dragging = false;
+    return wasDragging;
+}
+
+bool PointerDragTool::DragState::cancel()
+{
+    bool wasDragging = dragging;
+    dragging = false;
+    return wasDragging;
 }
 

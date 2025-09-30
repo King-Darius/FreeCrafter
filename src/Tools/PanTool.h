@@ -10,5 +10,5 @@ public:
     bool isNavigationTool() const override { return true; }
 
 protected:
-    void onPointerMove(const PointerInput& input) override;
+    void onDragUpdate(const PointerInput& input, float dx, float dy) override;
 };

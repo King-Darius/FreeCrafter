@@ -1,10 +1,42 @@
 #include "CameraController.h"
+
+#include <algorithm>
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace {
+
+constexpr float kMinDistance = 0.5f;
+constexpr float kMaxDistance = 5000.0f;
+constexpr float kMinFov = 15.0f;
+constexpr float kMaxFov = 120.0f;
+constexpr float kMinOrthoHeight = 0.1f;
+constexpr float kMaxOrthoHeight = 10000.0f;
+
+float clampFov(float value)
+{
+    if (value < kMinFov)
+        return kMinFov;
+    if (value > kMaxFov)
+        return kMaxFov;
+    return value;
+}
+
+}
+
 CameraController::CameraController()
-    : yaw(45.0f), pitch(-30.0f), distance(20.0f), targetX(0.0f), targetY(0.0f), targetZ(0.0f) {}
+    : yaw(45.0f)
+    , pitch(-30.0f)
+    , distance(20.0f)
+    , targetX(0.0f)
+    , targetY(0.0f)
+    , targetZ(0.0f)
+    , projectionMode(ProjectionMode::Perspective)
+    , fieldOfView(60.0f)
+    , orthoHeight(orthoHeightFromPerspectiveDistance())
+{}
 
 void CameraController::getCameraPosition(float& x, float& y, float& z) const {
     float radYaw = yaw * (float)M_PI / 180.0f;
@@ -19,8 +51,7 @@ void CameraController::rotateCamera(float dx, float dy) {
     const float rotateSpeed = 0.3f;
     yaw += dx * rotateSpeed;
     pitch += dy * rotateSpeed;
-    if (yaw < 0) yaw += 360.0f;
-    if (yaw >= 360.0f) yaw -= 360.0f;
+    normalizeYaw();
     if (pitch > 89.0f) pitch = 89.0f;
     if (pitch < -89.0f) pitch = -89.0f;
 }
@@ -76,7 +107,12 @@ void CameraController::panCamera(float dx, float dy) {
         upZ = 0.0f;
     }
 
-    const float panSpeed = 0.0025f * distance;
+    float reference = projectionMode == ProjectionMode::Parallel ? orthoHeight : distance;
+    if (reference <= 0.0f)
+        reference = distance;
+    if (reference <= 0.0f)
+        reference = 1.0f;
+    const float panSpeed = 0.0025f * reference;
     targetX -= (rightX * dx + upX * dy) * panSpeed;
     targetY -= (rightY * dx + upY * dy) * panSpeed;
     targetZ -= (rightZ * dx + upZ * dy) * panSpeed;
@@ -85,14 +121,96 @@ void CameraController::panCamera(float dx, float dy) {
 void CameraController::zoomCamera(float delta) {
     const float zoomSpeed = 1.1f;
     float factor = std::pow(zoomSpeed, -delta);
-    distance *= factor;
-    if (distance < 1.0f) distance = 1.0f;
-    if (distance > 2000.0f) distance = 2000.0f;
+    if (projectionMode == ProjectionMode::Parallel) {
+        orthoHeight *= factor;
+        if (orthoHeight < kMinOrthoHeight) orthoHeight = kMinOrthoHeight;
+        if (orthoHeight > kMaxOrthoHeight) orthoHeight = kMaxOrthoHeight;
+        distance *= factor;
+        if (distance < kMinDistance) distance = kMinDistance;
+        if (distance > kMaxDistance) distance = kMaxDistance;
+    } else {
+        distance *= factor;
+        if (distance < kMinDistance) distance = kMinDistance;
+        if (distance > kMaxDistance) distance = kMaxDistance;
+        orthoHeight = orthoHeightFromPerspectiveDistance();
+    }
 }
 
 void CameraController::setTarget(float tx, float ty, float tz) { targetX = tx; targetY = ty; targetZ = tz; }
-void CameraController::setDistance(float dist) { distance = dist; }
+void CameraController::setDistance(float dist) {
+    distance = std::clamp(dist, kMinDistance, kMaxDistance);
+    if (projectionMode == ProjectionMode::Perspective)
+        orthoHeight = orthoHeightFromPerspectiveDistance();
+}
+void CameraController::setYaw(float newYaw) {
+    yaw = newYaw;
+    normalizeYaw();
+}
+void CameraController::setPitch(float newPitch) {
+    pitch = newPitch;
+    clampPitch();
+}
+void CameraController::setYawPitch(float newYaw, float newPitch) {
+    yaw = newYaw;
+    pitch = newPitch;
+    normalizeYaw();
+    clampPitch();
+}
 float CameraController::getYaw() const { return yaw; }
 float CameraController::getPitch() const { return pitch; }
 float CameraController::getDistance() const { return distance; }
 void CameraController::getTarget(float& tx, float& ty, float& tz) const { tx = targetX; ty = targetY; tz = targetZ; }
+float CameraController::getFieldOfView() const { return fieldOfView; }
+void CameraController::setFieldOfView(float degrees) {
+    fieldOfView = clampFov(degrees);
+    if (projectionMode == ProjectionMode::Perspective)
+        orthoHeight = orthoHeightFromPerspectiveDistance();
+}
+float CameraController::getOrthoHeight() const { return orthoHeight; }
+void CameraController::setOrthoHeight(float height) {
+    orthoHeight = std::clamp(height, kMinOrthoHeight, kMaxOrthoHeight);
+    if (projectionMode == ProjectionMode::Parallel)
+        distance = std::clamp(perspectiveDistanceFromOrthoHeight(), kMinDistance, kMaxDistance);
+}
+CameraController::ProjectionMode CameraController::getProjectionMode() const { return projectionMode; }
+void CameraController::setProjectionMode(ProjectionMode mode) {
+    if (projectionMode == mode)
+        return;
+    if (mode == ProjectionMode::Parallel) {
+        orthoHeight = orthoHeightFromPerspectiveDistance();
+    } else {
+        distance = std::clamp(perspectiveDistanceFromOrthoHeight(), kMinDistance, kMaxDistance);
+    }
+    projectionMode = mode;
+}
+void CameraController::toggleProjectionMode() {
+    setProjectionMode(projectionMode == ProjectionMode::Perspective ? ProjectionMode::Parallel : ProjectionMode::Perspective);
+}
+
+void CameraController::normalizeYaw() {
+    while (yaw < 0.0f)
+        yaw += 360.0f;
+    while (yaw >= 360.0f)
+        yaw -= 360.0f;
+}
+
+void CameraController::clampPitch() {
+    if (pitch > 90.0f)
+        pitch = 90.0f;
+    if (pitch < -90.0f)
+        pitch = -90.0f;
+}
+
+float CameraController::perspectiveDistanceFromOrthoHeight() const {
+    float radians = fieldOfView * static_cast<float>(M_PI) / 180.0f;
+    float denom = std::tan(radians * 0.5f);
+    if (denom <= 1e-5f)
+        denom = 1e-5f;
+    return orthoHeight * 0.5f / denom;
+}
+
+float CameraController::orthoHeightFromPerspectiveDistance() const {
+    float radians = fieldOfView * static_cast<float>(M_PI) / 180.0f;
+    float scale = std::tan(radians * 0.5f);
+    return std::clamp(distance * 2.0f * scale, kMinOrthoHeight, kMaxOrthoHeight);
+}

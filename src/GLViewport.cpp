@@ -5,11 +5,13 @@
 #include <QMatrix4x4>
 #include <QVector4D>
 #include <QByteArray>
+#include <QFont>
 #include <QtMath>
 #include <limits>
 
 #include <algorithm>
 #include <cmath>
+#include <array>
 
 #include "Tools/ToolManager.h"
 #include "NavigationPreferences.h"
@@ -90,28 +92,67 @@ void GLViewport::setRenderStyle(Renderer::RenderStyle style)
     update();
 }
 
+void GLViewport::setProjectionMode(CameraController::ProjectionMode mode)
+{
+    if (camera.getProjectionMode() == mode)
+        return;
+    camera.setProjectionMode(mode);
+    update();
+}
+
+void GLViewport::toggleProjectionMode()
+{
+    camera.toggleProjectionMode();
+    update();
+}
+
+void GLViewport::setFieldOfView(float degrees)
+{
+    camera.setFieldOfView(degrees);
+    update();
+}
+
+void GLViewport::setOrthoHeight(float height)
+{
+    camera.setOrthoHeight(height);
+    update();
+}
+
+bool GLViewport::applyViewPreset(ViewPresetManager::StandardView view)
+{
+    if (!viewPresets.applyPreset(view, camera))
+        return false;
+    activePresetId = viewPresets.idFor(view);
+    update();
+    return true;
+}
+
+bool GLViewport::applyViewPreset(const QString& id)
+{
+    if (!viewPresets.applyPreset(id, camera))
+        return false;
+    if (auto mapped = viewPresets.viewForId(id))
+        activePresetId = viewPresets.idFor(*mapped);
+    else
+        activePresetId = id;
+    update();
+    return true;
+}
+
+QString GLViewport::currentViewPresetLabel() const
+{
+    return viewPresets.labelForId(activePresetId);
+}
+
 void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const float fov = 60.0f;
-    float aspect = width() > 0 ? float(width())/float(height()>0?height():1) : 1.0f;
-    float znear = 0.1f, zfar = 1000.0f;
+    float aspect = width() > 0 ? float(width()) / float(height() > 0 ? height() : 1) : 1.0f;
+    QMatrix4x4 projectionMatrix = buildProjectionMatrix(aspect);
 
-    QMatrix4x4 projectionMatrix;
-    projectionMatrix.perspective(fov, aspect, znear, zfar);
-
-    float cx, cy, cz;
-    camera.getCameraPosition(cx, cy, cz);
-    float tx, ty, tz;
-    camera.getTarget(tx, ty, tz);
-
-    QVector3D eye(cx, cy, cz);
-    QVector3D center(tx, ty, tz);
-
-    QMatrix4x4 viewMatrix;
-    viewMatrix.lookAt(eye, center, QVector3D(0.0f, 1.0f, 0.0f));
+    QMatrix4x4 viewMatrix = buildViewMatrix();
 
     if (toolManager) {
         ToolInferenceUpdateRequest request;
@@ -149,6 +190,7 @@ void GLViewport::paintGL()
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     drawInferenceOverlay(painter, projectionMatrix, viewMatrix);
+    drawAxisGizmo(painter, viewMatrix);
     painter.setPen(QColor(231, 234, 240));
     painter.setBrush(QColor(11, 13, 16, 220));
     QRect hudRect(12, 12, 200, 60);
@@ -414,6 +456,153 @@ void GLViewport::drawScene()
     }
 }
 
+QMatrix4x4 GLViewport::buildProjectionMatrix(float aspect) const
+{
+    QMatrix4x4 projection;
+    const float znear = 0.1f;
+    const float zfar = 5000.0f;
+    if (aspect <= 0.0f)
+        aspect = 1.0f;
+    if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
+        float orthoHeight = camera.getOrthoHeight();
+        if (orthoHeight <= 0.0f)
+            orthoHeight = 1.0f;
+        float halfHeight = orthoHeight * 0.5f;
+        float halfWidth = halfHeight * aspect;
+        projection.ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, znear, zfar);
+    } else {
+        float fov = camera.getFieldOfView();
+        if (fov < 1.0f)
+            fov = 1.0f;
+        projection.perspective(fov, aspect, znear, zfar);
+    }
+    return projection;
+}
+
+QMatrix4x4 GLViewport::buildViewMatrix() const
+{
+    float cx, cy, cz;
+    camera.getCameraPosition(cx, cy, cz);
+    float tx, ty, tz;
+    camera.getTarget(tx, ty, tz);
+
+    QMatrix4x4 viewMatrix;
+    viewMatrix.lookAt(QVector3D(cx, cy, cz), QVector3D(tx, ty, tz), QVector3D(0.0f, 1.0f, 0.0f));
+    return viewMatrix;
+}
+
+void GLViewport::drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const
+{
+    if (width() <= 0 || height() <= 0)
+        return;
+
+    Q_UNUSED(viewMatrix);
+
+    float cx, cy, cz;
+    camera.getCameraPosition(cx, cy, cz);
+    float tx, ty, tz;
+    camera.getTarget(tx, ty, tz);
+
+    QVector3D forward(tx - cx, ty - cy, tz - cz);
+    if (forward.lengthSquared() < 1e-6f)
+        forward = QVector3D(0.0f, 0.0f, -1.0f);
+    forward.normalize();
+
+    QVector3D upVector(0.0f, 1.0f, 0.0f);
+    QVector3D right = QVector3D::crossProduct(forward, upVector);
+    if (right.lengthSquared() < 1e-6f) {
+        upVector = QVector3D(0.0f, 0.0f, 1.0f);
+        right = QVector3D::crossProduct(forward, upVector);
+    }
+    if (right.lengthSquared() < 1e-6f)
+        right = QVector3D(1.0f, 0.0f, 0.0f);
+    right.normalize();
+    QVector3D up = QVector3D::crossProduct(right, forward).normalized();
+
+    struct AxisInfo {
+        QVector3D dir;
+        QColor color;
+        QString label;
+    };
+
+    const std::array<AxisInfo, 3> axes = { {
+        { QVector3D(1.0f, 0.0f, 0.0f), QColor(215, 63, 63), tr("X") },
+        { QVector3D(0.0f, 1.0f, 0.0f), QColor(63, 176, 92), tr("Y") },
+        { QVector3D(0.0f, 0.0f, 1.0f), QColor(69, 112, 214), tr("Z") },
+    } };
+
+    int frontAxis = 0;
+    float bestFront = -1.0f;
+    int upAxis = 0;
+    float bestUp = -1.0f;
+
+    for (int i = 0; i < axes.size(); ++i) {
+        float dotForward = QVector3D::dotProduct(axes[i].dir, forward);
+        float absForward = std::fabs(dotForward);
+        if (absForward > bestFront) {
+            bestFront = absForward;
+            frontAxis = i;
+        }
+
+        float dotUp = QVector3D::dotProduct(axes[i].dir, up);
+        float absUp = std::fabs(dotUp);
+        if (absUp > bestUp) {
+            bestUp = absUp;
+            upAxis = i;
+        }
+    }
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    const float margin = 16.0f;
+    const float radius = 34.0f;
+    QPointF center(width() - margin - radius, margin + radius);
+    QRectF background(center.x() - radius, center.y() - radius, radius * 2.0f, radius * 2.0f);
+
+    painter.setPen(QPen(QColor(24, 26, 32, 200), 1.0f));
+    painter.setBrush(QColor(12, 14, 18, 180));
+    painter.drawEllipse(background);
+
+    for (int i = 0; i < axes.size(); ++i) {
+        const AxisInfo& axis = axes[i];
+        float x = QVector3D::dotProduct(axis.dir, right);
+        float y = QVector3D::dotProduct(axis.dir, up);
+        float z = QVector3D::dotProduct(axis.dir, forward);
+
+        QPointF direction2D(x, -y);
+        float length = radius - 10.0f;
+        QPointF endPoint = center + direction2D * length;
+        QPointF textPoint = center + direction2D * (radius - 2.0f);
+
+        QColor color = axis.color;
+        bool highlight = (i == frontAxis || i == upAxis);
+        if (highlight)
+            color = color.lighter(130);
+        int alpha = z >= 0.0f ? 255 : 160;
+        if (!highlight)
+            alpha = std::min(alpha, 210);
+        else
+            alpha = 255;
+        color.setAlpha(alpha);
+
+        QPen pen(color, highlight ? 3.0f : 2.0f, Qt::SolidLine, Qt::RoundCap);
+        painter.setPen(pen);
+        painter.drawLine(center, endPoint);
+
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(QRectF(endPoint.x() - 3.5f, endPoint.y() - 3.5f, 7.0f, 7.0f));
+
+        painter.setPen(QPen(Qt::white, 1.0f));
+        painter.setFont(QFont(painter.font().family(), 8, QFont::DemiBold));
+        QRectF textRect(textPoint.x() - 10.0f, textPoint.y() - 10.0f, 20.0f, 20.0f);
+        painter.drawText(textRect, Qt::AlignCenter, axis.label);
+    }
+
+    painter.restore();
+}
+
 bool GLViewport::computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const
 {
     if (width() <= 0 || height() <= 0) {
@@ -426,17 +615,9 @@ bool GLViewport::computePickRay(const QPoint& devicePos, QVector3D& origin, QVec
     float nx = ((static_cast<float>(devicePos.x()) + 0.5f) / pixelWidth) * 2.0f - 1.0f;
     float ny = 1.0f - ((static_cast<float>(devicePos.y()) + 0.5f) / pixelHeight) * 2.0f;
 
-    QMatrix4x4 projection;
-    const float aspect = width() > 0 ? static_cast<float>(width()) / static_cast<float>(height() > 0 ? height() : 1) : 1.0f;
-    projection.perspective(60.0f, aspect, 0.1f, 1000.0f);
-
-    float cx, cy, cz;
-    camera.getCameraPosition(cx, cy, cz);
-    float tx, ty, tz;
-    camera.getTarget(tx, ty, tz);
-
-    QMatrix4x4 view;
-    view.lookAt(QVector3D(cx, cy, cz), QVector3D(tx, ty, tz), QVector3D(0.0f, 1.0f, 0.0f));
+    const float aspect = pixelWidth / pixelHeight;
+    QMatrix4x4 projection = buildProjectionMatrix(aspect);
+    QMatrix4x4 view = buildViewMatrix();
 
     bool invertible = false;
     QMatrix4x4 inv = (projection * view).inverted(&invertible);
@@ -847,45 +1028,13 @@ bool GLViewport::projectCursorToGround(const QPointF& pos, QVector3D& world) con
     if (width() <= 0 || height() <= 0)
         return false;
 
-    const float fov = 60.0f;
-    const float aspect = width() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
-    const float znear = 0.1f;
-    const float zfar = 1000.0f;
+    const float ratio = devicePixelRatioF();
+    QPoint devicePos(std::lround(pos.x() * ratio), std::lround(pos.y() * ratio));
 
-    QMatrix4x4 projection;
-    projection.perspective(fov, aspect, znear, zfar);
-
-    float cx, cy, cz;
-    camera.getCameraPosition(cx, cy, cz);
-    float tx, ty, tz;
-    camera.getTarget(tx, ty, tz);
-
-    QMatrix4x4 view;
-    view.lookAt(QVector3D(cx, cy, cz), QVector3D(tx, ty, tz), QVector3D(0.0f, 1.0f, 0.0f));
-
-    bool invertible = false;
-    const QMatrix4x4 inv = (projection * view).inverted(&invertible);
-    if (!invertible)
+    QVector3D origin;
+    QVector3D direction;
+    if (!computePickRay(devicePos, origin, direction))
         return false;
-
-    const float nx = (2.0f * pos.x()) / static_cast<float>(width()) - 1.0f;
-    const float ny = 1.0f - (2.0f * pos.y()) / static_cast<float>(height());
-
-    const QVector4D nearPoint(nx, ny, -1.0f, 1.0f);
-    const QVector4D farPoint(nx, ny, 1.0f, 1.0f);
-
-    QVector4D worldNear = inv * nearPoint;
-    QVector4D worldFar = inv * farPoint;
-    if (qFuzzyIsNull(worldNear.w()) || qFuzzyIsNull(worldFar.w()))
-        return false;
-    worldNear /= worldNear.w();
-    worldFar /= worldFar.w();
-
-    QVector3D origin = worldNear.toVector3D();
-    QVector3D direction = (worldFar - worldNear).toVector3D();
-    if (qFuzzyIsNull(direction.lengthSquared()))
-        return false;
-    direction.normalize();
 
     if (qFuzzyIsNull(direction.y()))
         return false;

@@ -6,7 +6,6 @@
 #include <cmath>
 
 namespace {
-constexpr float kFovDegrees = 60.0f;
 constexpr float kEpsilon = 1e-6f;
 
 Vector3 computeForward(const CameraController& camera)
@@ -48,33 +47,30 @@ bool computeRay(const CameraController& camera, int pixelX, int pixelY, int view
     float nx = (2.0f * static_cast<float>(pixelX) / static_cast<float>(viewportWidth)) - 1.0f;
     float ny = 1.0f - (2.0f * static_cast<float>(pixelY) / static_cast<float>(viewportHeight));
 
-    const float fovRadians = kFovDegrees * static_cast<float>(M_PI) / 180.0f;
-    const float tanHalfFov = std::tan(fovRadians * 0.5f);
     const float aspect = static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
 
-    direction = (forward + right * (nx * tanHalfFov * aspect) + up * (ny * tanHalfFov));
-    if (direction.lengthSquared() < kEpsilon)
-        return false;
-    direction = direction.normalized();
+    if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
+        float orthoHeight = camera.getOrthoHeight();
+        if (orthoHeight < kEpsilon)
+            orthoHeight = 1.0f;
+        float halfHeight = orthoHeight * 0.5f;
+        float halfWidth = halfHeight * aspect;
+
+        Vector3 offset = right * (nx * halfWidth) + up * (ny * halfHeight);
+        origin = origin + offset;
+        direction = forward;
+        if (direction.lengthSquared() < kEpsilon)
+            return false;
+        direction = direction.normalized();
+    } else {
+        const float fovRadians = camera.getFieldOfView() * static_cast<float>(M_PI) / 180.0f;
+        const float tanHalfFov = std::tan(fovRadians * 0.5f);
+        direction = (forward + right * (nx * tanHalfFov * aspect) + up * (ny * tanHalfFov));
+        if (direction.lengthSquared() < kEpsilon)
+            return false;
+        direction = direction.normalized();
+    }
     return true;
-}
-
-float computeNewDistance(CameraController& camera, float delta)
-{
-    const float zoomSpeed = 1.1f;
-    float factor = std::pow(zoomSpeed, -delta);
-    float distance = camera.getDistance();
-    distance = std::clamp(distance * factor, 1.0f, 2000.0f);
-    camera.setDistance(distance);
-    return distance;
-}
-
-Vector3 offsetFromAngles(float distance, float yawDegrees, float pitchDegrees)
-{
-    const float yawRadians = yawDegrees * static_cast<float>(M_PI) / 180.0f;
-    const float pitchRadians = pitchDegrees * static_cast<float>(M_PI) / 180.0f;
-    return Vector3(std::sin(yawRadians) * std::cos(pitchRadians) * distance, std::sin(pitchRadians) * distance,
-                   std::cos(yawRadians) * std::cos(pitchRadians) * distance);
 }
 
 } // namespace
@@ -117,16 +113,34 @@ bool zoomAboutCursor(CameraController& camera, float delta, int pixelX, int pixe
     if (focusToCamera.lengthSquared() < kEpsilon)
         focusToCamera = Vector3(0.0f, 0.0f, 1.0f);
 
-    float previousDistance = camera.getDistance();
-    float newDistance = computeNewDistance(camera, delta);
-    if (std::fabs(previousDistance) < kEpsilon)
-        previousDistance = 1.0f;
-    float scale = newDistance / previousDistance;
-    Vector3 newCameraPos = focus + focusToCamera * scale;
+    float scale = 1.0f;
+    if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
+        float previousHeight = std::max(camera.getOrthoHeight(), 1e-3f);
+        const float zoomSpeed = 1.1f;
+        float factor = std::pow(zoomSpeed, -delta);
+        float newHeight = std::clamp(previousHeight * factor, 0.1f, 10000.0f);
+        if (std::fabs(newHeight - previousHeight) < kEpsilon)
+            return false;
+        camera.setOrthoHeight(newHeight);
+        scale = newHeight / previousHeight;
+    } else {
+        float previousDistance = std::max(camera.getDistance(), 1e-3f);
+        const float zoomSpeed = 1.1f;
+        float factor = std::pow(zoomSpeed, -delta);
+        float newDistance = std::clamp(previousDistance * factor, 0.5f, 5000.0f);
+        if (std::fabs(newDistance - previousDistance) < kEpsilon)
+            return false;
+        camera.setDistance(newDistance);
+        scale = newDistance / previousDistance;
+    }
 
-    Vector3 offset = offsetFromAngles(newDistance, camera.getYaw(), camera.getPitch());
-    Vector3 newTarget = newCameraPos - offset;
+    Vector3 newCameraPos = focus + focusToCamera * scale;
+    Vector3 currentTarget(tx, ty, tz);
+    Vector3 focusToTarget = currentTarget - focus;
+    Vector3 newTarget = focus + focusToTarget * scale;
     camera.setTarget(newTarget.x, newTarget.y, newTarget.z);
+    Vector3 cameraToTarget = newCameraPos - newTarget;
+    camera.setDistance(cameraToTarget.length());
     return true;
 }
 
@@ -141,19 +155,31 @@ bool frameBounds(CameraController& camera, const Vector3& minBounds, const Vecto
     if (radius < 1e-3f)
         radius = std::max(largestComponent, 0.5f);
 
-    const float fovRadians = kFovDegrees * static_cast<float>(M_PI) / 180.0f;
-    const float halfFov = fovRadians * 0.5f;
     float aspect = (viewportWidth > 0 && viewportHeight > 0) ? static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight)
                                                             : 1.0f;
-    float horizontalHalfFov = std::atan(std::tan(halfFov) * aspect);
-
-    float minDistanceVertical = radius / std::max(std::tan(halfFov), 1e-3f);
-    float minDistanceHorizontal = radius / std::max(std::tan(horizontalHalfFov), 1e-3f);
-    float distance = std::max({ minDistanceVertical, minDistanceHorizontal, radius + 0.5f, 1.0f });
-    distance *= 1.2f;
 
     camera.setTarget(center.x, center.y, center.z);
-    camera.setDistance(distance);
+
+    if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
+        float requiredSize = radius * 2.0f;
+        float height = std::max(requiredSize, std::max(requiredSize, requiredSize / std::max(aspect, 1e-3f)));
+        height = std::max(height, 0.5f);
+        height *= 1.2f;
+        camera.setOrthoHeight(height);
+        float minDistance = radius + 0.5f;
+        camera.setDistance(std::max(camera.getDistance(), minDistance));
+    } else {
+        const float fovRadians = camera.getFieldOfView() * static_cast<float>(M_PI) / 180.0f;
+        const float halfFov = fovRadians * 0.5f;
+        float horizontalHalfFov = std::atan(std::tan(halfFov) * aspect);
+
+        float minDistanceVertical = radius / std::max(std::tan(halfFov), 1e-3f);
+        float minDistanceHorizontal = radius / std::max(std::tan(horizontalHalfFov), 1e-3f);
+        float distance = std::max({ minDistanceVertical, minDistanceHorizontal, radius + 0.5f, 1.0f });
+        distance *= 1.2f;
+
+        camera.setDistance(distance);
+    }
     return true;
 }
 

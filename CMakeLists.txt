@@ -15,6 +15,7 @@ add_library(freecrafter_lib
     src/CameraNavigation.cpp
     src/HotkeyManager.cpp
     src/NavigationPreferences.cpp
+    src/Navigation/ViewPresetManager.cpp
     src/GeometryKernel/Curve.cpp
     src/GeometryKernel/HalfEdgeMesh.cpp
     src/GeometryKernel/MeshUtils.cpp
@@ -36,6 +37,7 @@ add_library(freecrafter_lib
     src/Tools/ToolManager.cpp
     src/Interaction/InferenceEngine.cpp
     src/ui/MeasurementWidget.cpp
+    src/ui/ViewSettingsDialog.cpp
     resources.qrc
 )
 

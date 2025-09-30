@@ -37,6 +37,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* e) override;
     void wheelEvent(QWheelEvent* e) override;
     void keyPressEvent(QKeyEvent* e) override;
+    void keyReleaseEvent(QKeyEvent* e) override;
     void leaveEvent(QEvent* event) override;
 
 private:
@@ -44,12 +45,17 @@ private:
     void drawGrid();
     void drawScene();
     bool projectCursorToGround(const QPointF& pos, QVector3D& world) const;
+    bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
+    bool projectWorldToScreen(const QVector3D& world, const QMatrix4x4& projection, const QMatrix4x4& view, QPointF& out) const;
+    void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
 
     GeometryKernel geometry;
     CameraController camera;
     ToolManager* toolManager = nullptr;
 
     QPoint lastMouse;
+    QPoint lastDeviceMouse;
+    bool hasDeviceMouse = false;
     bool rotating = false;
     bool panning = false;
 

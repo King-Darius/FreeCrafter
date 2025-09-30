@@ -10,6 +10,7 @@
 #include "RotateTool.h"
 #include "ScaleTool.h"
 #include "ExtrudeTool.h"
+#include "SectionTool.h"
 #include "OrbitTool.h"
 #include "PanTool.h"
 #include "ZoomTool.h"
@@ -25,7 +26,7 @@ struct ToolInferenceUpdateRequest {
 
 class ToolManager {
 public:
-    ToolManager(GeometryKernel* g, CameraController* c);
+    ToolManager(Scene::Document* document, CameraController* c);
     Tool* getActiveTool() const { return active; }
     void activateTool(const char* name, bool temporary = false);
     void restorePreviousTool();
@@ -58,6 +59,7 @@ private:
     int viewportHeight = 1;
     GeometryKernel* geometry = nullptr;
     CameraController* camera = nullptr;
+    Scene::Document* document = nullptr;
     Interaction::InferenceEngine inferenceEngine;
     Interaction::InferenceResult currentInference;
     Interaction::InferenceResult stickyInference;

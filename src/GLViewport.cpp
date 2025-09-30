@@ -181,7 +181,11 @@ void GLViewport::paintGL()
     renderer.beginFrame(projectionMatrix, viewMatrix, renderStyle);
     drawGrid();
     drawAxes();
-    drawScene();
+    drawSceneGeometry();
+    currentDrawCalls += renderer.flush();
+
+    renderer.beginFrame(projectionMatrix, viewMatrix, renderStyle);
+    drawSceneOverlays();
     currentDrawCalls += renderer.flush();
 
     qint64 nanos = frameTimer.nsecsElapsed();
@@ -488,16 +492,25 @@ void drawGhostSolid(Renderer& renderer, const Solid& solid, const Tool::PreviewG
 
 }
 
-void GLViewport::drawScene()
+void GLViewport::drawSceneGeometry()
 {
-    Tool::PreviewState preview;
-    if (toolManager) {
-        if (Tool* active = toolManager->getActiveTool()) {
-            preview = active->getPreviewState();
+    std::vector<QVector4D> clipPlanes;
+    const auto& planes = document.sectionPlanes();
+    clipPlanes.reserve(planes.size());
+    for (const auto& plane : planes) {
+        if (!plane.isActive()) {
+            continue;
         }
+        const Vector3& normal = plane.getNormal();
+        QVector3D qNormal(normal.x, normal.y, normal.z);
+        if (qNormal.lengthSquared() <= 1e-6f) {
+            continue;
+        }
+        clipPlanes.emplace_back(normal.x, normal.y, normal.z, plane.getOffset());
     }
+    renderer.setClipPlanes(clipPlanes);
 
-    const auto& objs = geometry.getObjects();
+    const auto& objs = document.geometry().getObjects();
     for (const auto& uptr : objs) {
         if (!uptr->isVisible()) {
             continue;
@@ -521,6 +534,129 @@ void GLViewport::drawScene()
                       renderStyle);
         }
     }
+}
+
+void GLViewport::drawSceneOverlays()
+{
+    renderer.setClipPlanes(std::vector<QVector4D>{});
+
+    const Scene::SceneSettings& settings = document.settings();
+    if (settings.sectionPlanesVisible()) {
+        const auto& planes = document.sectionPlanes();
+        for (const auto& plane : planes) {
+            if (!plane.isVisible()) {
+                continue;
+            }
+
+            const auto& transform = plane.getTransform();
+            QMatrix4x4 basis(transform.data());
+            QVector3D origin = basis.column(3).toVector3D();
+            QVector3D xAxis = basis.column(0).toVector3D();
+            QVector3D yAxis = basis.column(1).toVector3D();
+            QVector3D normalVec = QVector3D(plane.getNormal().x, plane.getNormal().y, plane.getNormal().z);
+            if (xAxis.lengthSquared() < 1e-6f) {
+                xAxis = QVector3D(1.0f, 0.0f, 0.0f);
+            }
+            if (yAxis.lengthSquared() < 1e-6f) {
+                yAxis = QVector3D(0.0f, 0.0f, 1.0f);
+            }
+            if (normalVec.lengthSquared() < 1e-6f) {
+                normalVec = QVector3D::crossProduct(xAxis, yAxis);
+            }
+            xAxis.normalize();
+            yAxis.normalize();
+            normalVec.normalize();
+
+            const SectionFillStyle& style = plane.fillStyle();
+            float extent = std::max(0.25f, style.extent);
+            QVector3D right = xAxis * extent;
+            QVector3D up = yAxis * extent;
+
+            std::array<QVector3D, 4> corners = {
+                origin + right + up,
+                origin - right + up,
+                origin - right - up,
+                origin + right - up
+            };
+
+            if (settings.sectionFillsVisible() && style.fillEnabled) {
+                QVector4D fillColor(style.red, style.green, style.blue, style.alpha);
+                renderer.addTriangle(corners[0], corners[1], corners[2], normalVec, fillColor);
+                renderer.addTriangle(corners[0], corners[2], corners[3], normalVec, fillColor);
+            }
+
+            QVector4D outlineColor(style.red * 0.8f, style.green * 0.8f, style.blue * 0.8f, 0.95f);
+            std::vector<QVector3D> outline = { corners[0], corners[1], corners[2], corners[3] };
+            renderer.addLineStrip(outline,
+                                  outlineColor,
+                                  1.6f,
+                                  true,
+                                  false,
+                                  true,
+                                  Renderer::LineCategory::Generic,
+                                  false,
+                                  8.0f);
+
+            QVector4D handleColor(0.35f, 0.47f, 0.9f, 0.9f);
+            std::vector<QVector3D> axisSegments = {
+                origin - right,
+                origin + right,
+                origin - up,
+                origin + up
+            };
+            renderer.addLineSegments(axisSegments,
+                                     handleColor,
+                                     1.8f,
+                                     false,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
+
+            QVector4D arrowColor(0.96f, 0.42f, 0.18f, 1.0f);
+            float arrowLength = extent * 1.35f;
+            QVector3D arrowEnd = origin + normalVec * arrowLength;
+            renderer.addLineSegments({ origin, arrowEnd },
+                                     arrowColor,
+                                     2.2f,
+                                     false,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
+
+            QVector3D arrowSide = QVector3D::crossProduct(normalVec, xAxis);
+            if (arrowSide.lengthSquared() < 1e-6f) {
+                arrowSide = QVector3D::crossProduct(normalVec, yAxis);
+            }
+            if (arrowSide.lengthSquared() > 1e-6f) {
+                arrowSide.normalize();
+                float headSize = extent * 0.35f;
+                QVector3D headBase = arrowEnd - normalVec * (headSize * 0.75f);
+                std::vector<QVector3D> headSegments = {
+                    arrowEnd,
+                    headBase + arrowSide * headSize,
+                    arrowEnd,
+                    headBase - arrowSide * headSize
+                };
+                renderer.addLineSegments(headSegments,
+                                         arrowColor,
+                                         2.0f,
+                                         false,
+                                         true,
+                                         Renderer::LineCategory::Generic,
+                                         false,
+                                         8.0f);
+            }
+        }
+    }
+
+    Tool::PreviewState preview;
+    if (toolManager) {
+        if (Tool* active = toolManager->getActiveTool()) {
+            preview = active->getPreviewState();
+        }
+    }
 
     if (!preview.polylines.empty()) {
         QVector4D color(0.15f, 0.65f, 0.95f, 0.7f);
@@ -533,7 +669,15 @@ void GLViewport::drawScene()
             for (const auto& p : poly.points) {
                 positions.push_back(QVector3D(p.x, p.y, p.z));
             }
-            renderer.addLineStrip(positions, color, 2.0f, poly.closed, true, true);
+            renderer.addLineStrip(positions,
+                                  color,
+                                  2.0f,
+                                  poly.closed,
+                                  false,
+                                  true,
+                                  Renderer::LineCategory::Generic,
+                                  false,
+                                  8.0f);
         }
     }
 
@@ -829,7 +973,7 @@ void GLViewport::drawInferenceOverlay(QPainter& painter, const QMatrix4x4& proje
 bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const
 {
     bool hasBounds = false;
-    const auto& objects = geometry.getObjects();
+    const auto& objects = document.geometry().getObjects();
     for (const auto& object : objects) {
         if (!object) {
             continue;

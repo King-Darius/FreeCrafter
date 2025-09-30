@@ -33,6 +33,7 @@ void GLViewport::initializeGL()
     initializeOpenGLFunctions();
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
+    renderer.initialize(this);
 }
 
 void GLViewport::resizeGL(int w, int h)
@@ -57,51 +58,37 @@ void GLViewport::setToolManager(ToolManager* manager)
     }
 }
 
+void GLViewport::setRenderStyle(Renderer::RenderStyle style)
+{
+    if (renderStyle == style) {
+        return;
+    }
+    renderStyle = style;
+    update();
+}
+
 void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // very small fixed function style camera (compat profile)
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
     const float fov = 60.0f;
     float aspect = width() > 0 ? float(width())/float(height()>0?height():1) : 1.0f;
     float znear = 0.1f, zfar = 1000.0f;
-    float top = znear * tanf(fov * float(M_PI)/360.0f);
-    float right = top * aspect;
-    glFrustum(-right, right, -top, top, znear, zfar);
 
     QMatrix4x4 projectionMatrix;
     projectionMatrix.perspective(fov, aspect, znear, zfar);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
 
     float cx, cy, cz;
     camera.getCameraPosition(cx, cy, cz);
     float tx, ty, tz;
     camera.getTarget(tx, ty, tz);
 
-    // Simple lookAt
-    QVector3D eye(cx, cy, cz), center(tx, ty, tz), up(0,1,0);
-    QVector3D f = (center-eye); f.normalize();
-    QVector3D s = QVector3D::crossProduct(f, up); s.normalize();
-    QVector3D u = QVector3D::crossProduct(s, f);
+    QVector3D eye(cx, cy, cz);
+    QVector3D center(tx, ty, tz);
 
     QMatrix4x4 viewMatrix;
     viewMatrix.lookAt(eye, center, QVector3D(0.0f, 1.0f, 0.0f));
-
-    float M[16] = {
-        s.x(),  u.x(),  -f.x(),  0,
-        s.y(),  u.y(),  -f.y(),  0,
-        s.z(),  u.z(),  -f.z(),  0,
-        -QVector3D::dotProduct(s, eye),
-        -QVector3D::dotProduct(u, eye),
-        QVector3D::dotProduct(f, eye),
-        1
-    };
-    glMultMatrixf(M);
 
     if (toolManager) {
         ToolInferenceUpdateRequest request;
@@ -118,9 +105,11 @@ void GLViewport::paintGL()
         toolManager->updateInference(request);
     }
 
+    renderer.beginFrame(projectionMatrix, viewMatrix, renderStyle);
     drawGrid();
     drawAxes();
     drawScene();
+    currentDrawCalls += renderer.flush();
 
     qint64 nanos = frameTimer.nsecsElapsed();
     frameTimer.restart();
@@ -152,35 +141,59 @@ void GLViewport::paintGL()
 
 void GLViewport::drawAxes()
 {
-    ++currentDrawCalls;
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    glColor3f(1,0,0); glVertex3f(0,0,0); glVertex3f(1,0,0); // X
-    glColor3f(0,1,0); glVertex3f(0,0,0); glVertex3f(0,1,0); // Y
-    glColor3f(0,0,1); glVertex3f(0,0,0); glVertex3f(0,0,1); // Z
-    glEnd();
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(1, 0, 0) }, QVector4D(1.0f, 0.0f, 0.0f, 1.0f), 2.0f, true, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 1, 0) }, QVector4D(0.0f, 1.0f, 0.0f, 1.0f), 2.0f, true, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 0, 1) }, QVector4D(0.0f, 0.0f, 1.0f, 1.0f), 2.0f, true, false);
 }
 
 void GLViewport::drawGrid()
 {
-    ++currentDrawCalls;
-    glLineWidth(1.0f);
-    glColor3f(0.85f,0.85f,0.85f);
     const int N = 20;
     const float S = 1.0f;
-    glBegin(GL_LINES);
-    for (int i=-N;i<=N;++i) {
-        glVertex3f(i*S, 0, -N*S);
-        glVertex3f(i*S, 0,  N*S);
-        glVertex3f(-N*S, 0, i*S);
-        glVertex3f( N*S, 0, i*S);
+    std::vector<QVector3D> segments;
+    segments.reserve(static_cast<size_t>((N * 2 + 1) * 4));
+    for (int i = -N; i <= N; ++i) {
+        segments.emplace_back(i * S, 0.0f, -N * S);
+        segments.emplace_back(i * S, 0.0f, N * S);
+        segments.emplace_back(-N * S, 0.0f, i * S);
+        segments.emplace_back(N * S, 0.0f, i * S);
     }
-    glEnd();
+    renderer.addLineSegments(segments, QVector4D(0.85f, 0.85f, 0.85f, 1.0f), 1.0f, true, false);
 }
 
 namespace {
 
 constexpr float kGhostAlpha = 0.35f;
+
+QVector3D toQt(const Vector3& v)
+{
+    return QVector3D(v.x, v.y, v.z);
+}
+
+std::vector<int> collectFaceLoop(const HalfEdgeMesh& mesh, size_t faceIndex)
+{
+    std::vector<int> indices;
+    const auto& faces = mesh.getFaces();
+    if (faceIndex >= faces.size()) {
+        return indices;
+    }
+    int start = faces[faceIndex].halfEdge;
+    if (start < 0) {
+        return indices;
+    }
+    const auto& halfEdges = mesh.getHalfEdges();
+    int current = start;
+    do {
+        if (current < 0 || current >= static_cast<int>(halfEdges.size())) {
+            indices.clear();
+            break;
+        }
+        const HalfEdgeRecord& edge = halfEdges[current];
+        indices.push_back(edge.origin);
+        current = edge.next;
+    } while (current != start && current != -1);
+    return indices;
+}
 
 Tool::ModifierState toModifierState(Qt::KeyboardModifiers mods)
 {
@@ -224,108 +237,111 @@ Vector3 applyGhostTransform(const Vector3& position, const Tool::PreviewGhost& g
     return result;
 }
 
-void drawCurve(const Curve& curve, bool selected)
+void drawCurve(Renderer& renderer, const Curve& curve, bool selected)
 {
     const auto& pts = curve.getBoundaryLoop();
     if (pts.size() < 2) {
         return;
     }
-    glLineWidth(selected ? 3.0f : 2.0f);
-    if (selected) {
-        glColor3f(0.95f, 0.35f, 0.25f);
-    } else {
-        glColor3f(0.1f, 0.1f, 0.1f);
-    }
-    glBegin(GL_LINE_STRIP);
+    std::vector<QVector3D> positions;
+    positions.reserve(pts.size());
     for (const auto& p : pts) {
-        glVertex3f(p.x, p.y, p.z);
+        positions.push_back(toQt(p));
     }
-    glEnd();
+    QVector4D color = selected ? QVector4D(0.95f, 0.35f, 0.25f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
+    renderer.addLineStrip(positions, color, selected ? 3.0f : 2.0f, false, true, false);
 }
 
-void drawSolid(const Solid& solid, bool selected)
+void drawSolid(Renderer& renderer, const Solid& solid, bool selected)
 {
     const HalfEdgeMesh& mesh = solid.getMesh();
     const auto& vertices = mesh.getVertices();
-    const auto& faces = mesh.getFaces();
+    const auto& triangles = mesh.getTriangles();
 
-    if (selected) {
-        glColor3f(0.85f, 0.73f, 0.42f);
-    } else {
-        glColor3f(0.7f, 0.75f, 0.8f);
-    }
-    glBegin(GL_QUADS);
-    for (const auto& face : faces) {
-        if (face.indices.size() == 4) {
-            for (int idx : face.indices) {
-                const auto& v = vertices[(size_t)idx].position;
-                glVertex3f(v.x, v.y, v.z);
-            }
-        }
-    }
-    glEnd();
-
-    glLineWidth(selected ? 2.2f : 1.5f);
-    if (selected) {
-        glColor3f(0.35f, 0.15f, 0.05f);
-    } else {
-        glColor3f(0.1f, 0.1f, 0.1f);
-    }
-    for (const auto& face : faces) {
-        if (face.indices.size() < 2) {
+    QVector4D fillColor = selected ? QVector4D(0.85f, 0.73f, 0.42f, 1.0f) : QVector4D(0.7f, 0.75f, 0.8f, 1.0f);
+    for (const auto& tri : triangles) {
+        if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0) {
             continue;
         }
-        glBegin(GL_LINE_LOOP);
-        for (int idx : face.indices) {
-            const auto& v = vertices[(size_t)idx].position;
-            glVertex3f(v.x, v.y, v.z);
+        if (tri.v0 >= static_cast<int>(vertices.size()) ||
+            tri.v1 >= static_cast<int>(vertices.size()) ||
+            tri.v2 >= static_cast<int>(vertices.size())) {
+            continue;
         }
-        glEnd();
+        QVector3D normal = toQt(tri.normal);
+        renderer.addTriangle(
+            toQt(vertices[(size_t)tri.v0].position),
+            toQt(vertices[(size_t)tri.v1].position),
+            toQt(vertices[(size_t)tri.v2].position),
+            normal,
+            fillColor);
+    }
+
+    QVector4D edgeColor = selected ? QVector4D(0.35f, 0.15f, 0.05f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
+    const auto& faces = mesh.getFaces();
+    for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
+        auto loop = collectFaceLoop(mesh, faceIndex);
+        if (loop.size() < 2) {
+            continue;
+        }
+        std::vector<QVector3D> positions;
+        positions.reserve(loop.size());
+        for (int idx : loop) {
+            if (idx < 0 || idx >= static_cast<int>(vertices.size())) {
+                positions.clear();
+                break;
+            }
+            positions.push_back(toQt(vertices[(size_t)idx].position));
+        }
+        if (positions.size() < 2) {
+            continue;
+        }
+        renderer.addLineStrip(positions, edgeColor, selected ? 2.2f : 1.5f, true, true, false, Renderer::LineCategory::Edge);
     }
 }
 
-void drawGhostCurve(const Curve& curve, const Tool::PreviewGhost& ghost)
+void drawGhostCurve(Renderer& renderer, const Curve& curve, const Tool::PreviewGhost& ghost)
 {
     const auto& pts = curve.getBoundaryLoop();
     if (pts.size() < 2) {
         return;
     }
-    glLineWidth(2.4f);
-    glColor4f(0.25f, 0.55f, 0.95f, kGhostAlpha);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBegin(GL_LINE_STRIP);
+    std::vector<QVector3D> positions;
+    positions.reserve(pts.size());
     for (const auto& p : pts) {
         Vector3 transformed = applyGhostTransform(p, ghost);
-        glVertex3f(transformed.x, transformed.y, transformed.z);
+        positions.push_back(toQt(transformed));
     }
-    glEnd();
-    glDisable(GL_BLEND);
+    renderer.addLineStrip(positions, QVector4D(0.25f, 0.55f, 0.95f, kGhostAlpha), 2.4f, false, true, true);
 }
 
-void drawGhostSolid(const Solid& solid, const Tool::PreviewGhost& ghost)
+void drawGhostSolid(Renderer& renderer, const Solid& solid, const Tool::PreviewGhost& ghost)
 {
     const HalfEdgeMesh& mesh = solid.getMesh();
     const auto& vertices = mesh.getVertices();
     const auto& faces = mesh.getFaces();
 
-    glLineWidth(2.0f);
-    glColor4f(0.25f, 0.55f, 0.95f, kGhostAlpha);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    for (const auto& face : faces) {
-        if (face.indices.size() < 2) {
+    for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
+        auto loop = collectFaceLoop(mesh, faceIndex);
+        if (loop.size() < 2) {
             continue;
         }
-        glBegin(GL_LINE_LOOP);
-        for (int idx : face.indices) {
-            const Vector3& original = vertices[(size_t)idx].position;
-            Vector3 transformed = applyGhostTransform(original, ghost);
-            glVertex3f(transformed.x, transformed.y, transformed.z);
+        std::vector<QVector3D> positions;
+        positions.reserve(loop.size());
+        bool valid = true;
+        for (int idx : loop) {
+            if (idx < 0 || idx >= static_cast<int>(vertices.size())) {
+                valid = false;
+                break;
+            }
+            Vector3 transformed = applyGhostTransform(vertices[(size_t)idx].position, ghost);
+            positions.push_back(toQt(transformed));
         }
-        glEnd();
+        if (!valid || positions.size() < 2) {
+            continue;
+        }
+        renderer.addLineStrip(positions, QVector4D(0.25f, 0.55f, 0.95f, kGhostAlpha), 2.0f, true, true, true);
     }
-    glDisable(GL_BLEND);
 }
 
 }
@@ -341,42 +357,36 @@ void GLViewport::drawScene()
 
     const auto& objs = geometry.getObjects();
     for (const auto& uptr : objs) {
-        ++currentDrawCalls;
         if (uptr->getType() == ObjectType::Curve) {
-            drawCurve(*static_cast<const Curve*>(uptr.get()), uptr->isSelected());
+            drawCurve(renderer, *static_cast<const Curve*>(uptr.get()), uptr->isSelected());
         } else if (uptr->getType() == ObjectType::Solid) {
-            drawSolid(*static_cast<const Solid*>(uptr.get()), uptr->isSelected());
+            drawSolid(renderer, *static_cast<const Solid*>(uptr.get()), uptr->isSelected());
         }
     }
 
     if (!preview.polylines.empty()) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glLineWidth(2.0f);
-        glColor4f(0.15f, 0.65f, 0.95f, 0.7f);
-        currentDrawCalls += static_cast<int>(preview.polylines.size());
+        QVector4D color(0.15f, 0.65f, 0.95f, 0.7f);
         for (const auto& poly : preview.polylines) {
-            if (poly.points.empty()) {
+            if (poly.points.size() < 2) {
                 continue;
             }
-            glBegin(poly.closed ? GL_LINE_LOOP : GL_LINE_STRIP);
+            std::vector<QVector3D> positions;
+            positions.reserve(poly.points.size());
             for (const auto& p : poly.points) {
-                glVertex3f(p.x, p.y, p.z);
+                positions.push_back(QVector3D(p.x, p.y, p.z));
             }
-            glEnd();
+            renderer.addLineStrip(positions, color, 2.0f, poly.closed, true, true);
         }
-        glDisable(GL_BLEND);
     }
 
     for (const auto& ghost : preview.ghosts) {
         if (!ghost.object) {
             continue;
         }
-        ++currentDrawCalls;
         if (ghost.object->getType() == ObjectType::Curve) {
-            drawGhostCurve(*static_cast<const Curve*>(ghost.object), ghost);
+            drawGhostCurve(renderer, *static_cast<const Curve*>(ghost.object), ghost);
         } else if (ghost.object->getType() == ObjectType::Solid) {
-            drawGhostSolid(*static_cast<const Solid*>(ghost.object), ghost);
+            drawGhostSolid(renderer, *static_cast<const Solid*>(ghost.object), ghost);
         }
     }
 }

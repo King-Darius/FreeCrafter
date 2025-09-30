@@ -2,45 +2,8 @@
 
 #include <cmath>
 
+#include "CameraNavigation.h"
 #include "ToolGeometryUtils.h"
-
-namespace {
-
-bool pointerToGround(CameraController* cam, int x, int y, int viewportW, int viewportH, Vector3& out)
-{
-    if (viewportW <= 0 || viewportH <= 0)
-        return false;
-
-    float cx, cy, cz;
-    cam->getCameraPosition(cx, cy, cz);
-    float yaw = cam->getYaw();
-    float pitch = cam->getPitch();
-    float ry = yaw * static_cast<float>(M_PI) / 180.0f;
-    float rp = pitch * static_cast<float>(M_PI) / 180.0f;
-    Vector3 forward(-sinf(ry) * cosf(rp), -sinf(rp), -cosf(ry) * cosf(rp));
-    forward = forward.normalized();
-    Vector3 up(0.0f, 1.0f, 0.0f);
-    Vector3 right = forward.cross(up).normalized();
-    up = right.cross(forward).normalized();
-
-    const float fov = 60.0f;
-    float aspect = static_cast<float>(viewportW) / static_cast<float>(viewportH);
-    float nx = (2.0f * static_cast<float>(x) / static_cast<float>(viewportW)) - 1.0f;
-    float ny = 1.0f - (2.0f * static_cast<float>(y) / static_cast<float>(viewportH));
-    float tanHalf = tanf((fov * static_cast<float>(M_PI) / 180.0f) / 2.0f);
-    Vector3 dir = (forward + right * (nx * tanHalf * aspect) + up * (ny * tanHalf)).normalized();
-
-    Vector3 origin(cx, cy, cz);
-    if (std::fabs(dir.y) < 1e-6f)
-        return false;
-    float t = -origin.y / dir.y;
-    if (t < 0.0f)
-        return false;
-    out = origin + dir * t;
-    return true;
-}
-
-} // namespace
 
 MoveTool::MoveTool(GeometryKernel* g, CameraController* c)
     : Tool(g, c)
@@ -153,7 +116,22 @@ bool MoveTool::pointerToWorld(const PointerInput& input, Vector3& out) const
     }
     if (!camera)
         return false;
-    return pointerToGround(camera, input.x, input.y, viewportWidth, viewportHeight, out);
+    if (viewportWidth <= 0 || viewportHeight <= 0)
+        return false;
+
+    Vector3 origin;
+    Vector3 direction;
+    if (!CameraNavigation::computeRay(*camera, input.x, input.y, viewportWidth, viewportHeight, origin, direction))
+        return false;
+    if (std::fabs(direction.y) < 1e-6f)
+        return false;
+
+    float t = -origin.y / direction.y;
+    if (t < 0.0f)
+        return false;
+
+    out = origin + direction * t;
+    return true;
 }
 
 Vector3 MoveTool::applyAxisConstraint(const Vector3& delta) const

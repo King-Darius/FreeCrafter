@@ -22,6 +22,10 @@ Vector3 computeForward(const CameraController& camera)
     return forward / forward.length();
 }
 
+} // namespace
+
+namespace CameraNavigation {
+
 bool computeRay(const CameraController& camera, int pixelX, int pixelY, int viewportWidth, int viewportHeight,
                 Vector3& origin, Vector3& direction)
 {
@@ -72,10 +76,6 @@ bool computeRay(const CameraController& camera, int pixelX, int pixelY, int view
     }
     return true;
 }
-
-} // namespace
-
-namespace CameraNavigation {
 
 bool zoomAboutCursor(CameraController& camera, float delta, int pixelX, int pixelY, int viewportWidth, int viewportHeight,
                      bool zoomToCursor)

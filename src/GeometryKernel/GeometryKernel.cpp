@@ -3,7 +3,10 @@
 #include <fstream>
 
 GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
-    auto obj = std::make_unique<Curve>(points);
+    auto obj = Curve::createFromPoints(points);
+    if (!obj) {
+        return nullptr;
+    }
     GeometryObject* raw = obj.get();
     objects.push_back(std::move(obj));
     return raw;
@@ -11,9 +14,11 @@ GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
 
 GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float height) {
     if (!curveObj || curveObj->getType() != ObjectType::Curve) return nullptr;
-    const auto& pts = static_cast<Curve*>(curveObj)->getPoints();
-    if (pts.empty()) return nullptr;
-    auto obj = std::make_unique<Solid>(pts, height);
+    auto* curve = static_cast<Curve*>(curveObj);
+    auto obj = Solid::createFromCurve(*curve, height);
+    if (!obj) {
+        return nullptr;
+    }
     GeometryObject* raw = obj.get();
     objects.push_back(std::move(obj));
     return raw;

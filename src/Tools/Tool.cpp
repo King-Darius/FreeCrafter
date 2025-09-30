@@ -1,5 +1,7 @@
 #include "Tool.h"
 
+#include <algorithm>
+
 void Tool::handleMouseDown(const PointerInput& input)
 {
     updateModifiers(input.modifiers);
@@ -81,5 +83,51 @@ void Tool::updateModifiers(const ModifierState& nextModifiers)
         modifiers = nextModifiers;
         onModifiersChanged(modifiers);
     }
+}
+
+void PointerDragTool::onPointerDown(const PointerInput& input)
+{
+    dragging = true;
+    lastX = input.x;
+    lastY = input.y;
+    pixelScale = std::max(input.devicePixelRatio, 1.0f);
+    setState(State::Active);
+    onDragStart(input);
+}
+
+void PointerDragTool::onPointerUp(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (dragging) {
+        dragging = false;
+        onDragEnd(input);
+    }
+    setState(State::Idle);
+}
+
+void PointerDragTool::onCancel()
+{
+    if (dragging) {
+        dragging = false;
+        onDragCanceled();
+    }
+    setState(State::Idle);
+}
+
+bool PointerDragTool::updateDragDelta(const PointerInput& input, float& dx, float& dy)
+{
+    if (!dragging) {
+        lastX = input.x;
+        lastY = input.y;
+        return false;
+    }
+
+    float scale = std::max(pixelScale, 1.0f);
+    dx = (input.x - lastX) / scale;
+    dy = (input.y - lastY) / scale;
+    lastX = input.x;
+    lastY = input.y;
+    return true;
 }
 

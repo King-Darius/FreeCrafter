@@ -137,3 +137,27 @@ private:
     ModifierState modifiers;
     State state = State::Idle;
 };
+
+class PointerDragTool : public Tool {
+public:
+    using Tool::Tool;
+
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerUp(const PointerInput& input) override;
+    void onCancel() override;
+
+    bool updateDragDelta(const PointerInput& input, float& dx, float& dy);
+    bool hasActiveDrag() const { return dragging; }
+    float getPixelScale() const { return pixelScale; }
+
+    virtual void onDragStart(const PointerInput&) {}
+    virtual void onDragEnd(const PointerInput&) {}
+    virtual void onDragCanceled() {}
+
+private:
+    bool dragging = false;
+    int lastX = 0;
+    int lastY = 0;
+    float pixelScale = 1.0f;
+};

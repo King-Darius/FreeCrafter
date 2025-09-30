@@ -49,6 +49,7 @@ private slots:
     void activateRotate();
     void activateScale();
     void activateExtrude();
+    void activateSection();
     void activatePan();
     void activateOrbit();
     void activateZoom();
@@ -135,6 +136,7 @@ private:
     QAction* rotateAction = nullptr;
     QAction* scaleAction = nullptr;
     QAction* extrudeAction = nullptr;
+    QAction* sectionAction = nullptr;
     QAction* panAction = nullptr;
     QAction* orbitAction = nullptr;
     QAction* zoomAction = nullptr;

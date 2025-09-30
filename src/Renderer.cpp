@@ -4,6 +4,7 @@
 #include <QOpenGLShader>
 #include <QtMath>
 #include <utility>
+#include <algorithm>
 
 namespace {
 const char* kLineVertexShader = R"(\
@@ -11,10 +12,19 @@ const char* kLineVertexShader = R"(\
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec4 a_color;
 uniform mat4 u_mvp;
+uniform int u_clipPlaneCount;
+uniform vec4 u_clipPlanes[4];
 out vec4 v_color;
 void main() {
     v_color = a_color;
     gl_Position = u_mvp * vec4(a_position, 1.0);
+    for (int i = 0; i < 4; ++i) {
+        if (i < u_clipPlaneCount) {
+            gl_ClipDistance[i] = dot(vec4(a_position, 1.0), u_clipPlanes[i]);
+        } else {
+            gl_ClipDistance[i] = 1.0;
+        }
+    }
 }
 )";
 
@@ -44,6 +54,8 @@ layout(location = 2) in vec4 a_color;
 uniform mat4 u_mvp;
 uniform mat3 u_normalMatrix;
 uniform vec3 u_lightDir;
+uniform int u_clipPlaneCount;
+uniform vec4 u_clipPlanes[4];
 out vec3 v_normal;
 out vec4 v_color;
 out float v_lighting;
@@ -54,6 +66,13 @@ void main() {
     float diffuse = max(dot(normal, normalize(u_lightDir)), 0.0);
     v_lighting = diffuse;
     gl_Position = u_mvp * vec4(a_position, 1.0);
+    for (int i = 0; i < 4; ++i) {
+        if (i < u_clipPlaneCount) {
+            gl_ClipDistance[i] = dot(vec4(a_position, 1.0), u_clipPlanes[i]);
+        } else {
+            gl_ClipDistance[i] = 1.0;
+        }
+    }
 }
 )";
 
@@ -116,6 +135,15 @@ void Renderer::beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, 
         lightDir = transformed.normalized();
     } else {
         lightDir = QVector3D(0.0f, 1.0f, 0.0f);
+    }
+    clipPlaneCount = 0;
+}
+
+void Renderer::setClipPlanes(const std::vector<QVector4D>& planes)
+{
+    clipPlaneCount = std::min<int>(planes.size(), static_cast<int>(clipPlanes.size()));
+    for (int i = 0; i < clipPlaneCount; ++i) {
+        clipPlanes[static_cast<size_t>(i)] = planes[static_cast<size_t>(i)];
     }
 }
 
@@ -235,12 +263,26 @@ void Renderer::ensureLineState(const LineBatch& batch)
 
     lineProgram.bind();
     lineProgram.setUniformValue("u_mvp", mvp);
+    lineProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+    if (clipPlaneCount > 0) {
+        lineProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+    }
     lineProgram.setUniformValue("u_stippleEnabled", batch.config.stippled ? 1.0f : 0.0f);
     lineProgram.setUniformValue("u_stippleScale", batch.config.stippleScale);
     lineProgram.enableAttributeArray(0);
     lineProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(LineVertex, position), 3, sizeof(LineVertex));
     lineProgram.enableAttributeArray(1);
     lineProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(LineVertex, color), 4, sizeof(LineVertex));
+
+    if (functions) {
+        for (int i = 0; i < 4; ++i) {
+            if (i < clipPlaneCount) {
+                functions->glEnable(GL_CLIP_DISTANCE0 + i);
+            } else {
+                functions->glDisable(GL_CLIP_DISTANCE0 + i);
+            }
+        }
+    }
 
     if (batch.config.depthTest) {
         functions->glEnable(GL_DEPTH_TEST);
@@ -267,6 +309,10 @@ void Renderer::ensureTriangleState()
     triangleProgram.setUniformValue("u_mvp", mvp);
     triangleProgram.setUniformValue("u_normalMatrix", normalMatrix);
     triangleProgram.setUniformValue("u_lightDir", lightDir);
+    triangleProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+    if (clipPlaneCount > 0) {
+        triangleProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+    }
     int styleMode = 0;
     if (currentStyle == RenderStyle::Monochrome) {
         styleMode = 1;
@@ -282,6 +328,13 @@ void Renderer::ensureTriangleState()
     functions->glDisable(GL_BLEND);
     functions->glEnable(GL_DEPTH_TEST);
     functions->glLineWidth(1.0f);
+    for (int i = 0; i < 4; ++i) {
+        if (i < clipPlaneCount) {
+            functions->glEnable(GL_CLIP_DISTANCE0 + i);
+        } else {
+            functions->glDisable(GL_CLIP_DISTANCE0 + i);
+        }
+    }
 }
 
 int Renderer::flush()
@@ -324,6 +377,12 @@ int Renderer::flush()
     functions->glDisable(GL_BLEND);
     functions->glEnable(GL_DEPTH_TEST);
     functions->glLineWidth(1.0f);
+
+    if (functions) {
+        for (int i = 0; i < 4; ++i) {
+            functions->glDisable(GL_CLIP_DISTANCE0 + i);
+        }
+    }
 
     return draws;
 }

@@ -24,19 +24,22 @@ Vector3 normalizeOrZero(const Vector3& value)
 }
 }
 
-ToolManager::ToolManager(GeometryKernel* g, CameraController* c)
-    : geometry(g)
+ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
+    : geometry(doc ? &doc->geometry() : nullptr)
     , camera(c)
+    , document(doc)
 {
-    tools.push_back(std::make_unique<SmartSelectTool>(g, c));
-    tools.push_back(std::make_unique<LineTool>(g, c));
-    tools.push_back(std::make_unique<MoveTool>(g, c));
-    tools.push_back(std::make_unique<RotateTool>(g, c));
-    tools.push_back(std::make_unique<ScaleTool>(g, c));
-    tools.push_back(std::make_unique<ExtrudeTool>(g, c));
-    tools.push_back(std::make_unique<OrbitTool>(g, c));
-    tools.push_back(std::make_unique<PanTool>(g, c));
-    tools.push_back(std::make_unique<ZoomTool>(g, c));
+    GeometryKernel* gPtr = geometry;
+    tools.push_back(std::make_unique<SmartSelectTool>(gPtr, c));
+    tools.push_back(std::make_unique<LineTool>(gPtr, c));
+    tools.push_back(std::make_unique<MoveTool>(gPtr, c));
+    tools.push_back(std::make_unique<RotateTool>(gPtr, c));
+    tools.push_back(std::make_unique<ScaleTool>(gPtr, c));
+    tools.push_back(std::make_unique<ExtrudeTool>(gPtr, c));
+    tools.push_back(std::make_unique<SectionTool>(geometry, c, document));
+    tools.push_back(std::make_unique<OrbitTool>(gPtr, c));
+    tools.push_back(std::make_unique<PanTool>(gPtr, c));
+    tools.push_back(std::make_unique<ZoomTool>(gPtr, c));
     active = tools.empty() ? nullptr : tools.front().get();
     if (active && !active->isNavigationTool()) {
         lastModelingTool = active;

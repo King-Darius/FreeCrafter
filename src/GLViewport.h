@@ -9,6 +9,7 @@
 #include <QString>
 #include <QMatrix4x4>
 
+#include "Scene/Document.h"
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
@@ -35,7 +36,8 @@ public:
     void setShowHiddenGeometry(bool show);
     bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
     ToolManager* getToolManager() const { return toolManager; }
-    GeometryKernel* getGeometry() { return &geometry; }
+    GeometryKernel* getGeometry() { return &document.geometry(); }
+    Scene::Document* getDocument() { return &document; }
     CameraController* getCamera() { return &camera; }
     CameraController::ProjectionMode projectionMode() const { return camera.getProjectionMode(); }
     void setProjectionMode(CameraController::ProjectionMode mode);
@@ -73,7 +75,8 @@ protected:
 private:
     void drawAxes();
     void drawGrid();
-    void drawScene();
+    void drawSceneGeometry();
+    void drawSceneOverlays();
     void drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const;
     QMatrix4x4 buildProjectionMatrix(float aspect) const;
     QMatrix4x4 buildViewMatrix() const;
@@ -84,7 +87,7 @@ private:
     bool computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const;
     bool applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds);
 
-    GeometryKernel geometry;
+    Scene::Document document;
     CameraController camera;
     ToolManager* toolManager = nullptr;
     NavigationPreferences* navigationPrefs = nullptr;

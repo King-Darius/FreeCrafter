@@ -529,16 +529,110 @@ void GLViewport::drawInferenceOverlay(QPainter& painter, const QMatrix4x4& proje
     }
 }
 
+bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const
+{
+    bool hasBounds = false;
+    const auto& objects = geometry.getObjects();
+    for (const auto& object : objects) {
+        if (!object) {
+            continue;
+        }
+        if (selectedOnly && !object->isSelected()) {
+            continue;
+        }
+        const HalfEdgeMesh& mesh = object->getMesh();
+        const auto& vertices = mesh.getVertices();
+        for (const auto& vertex : vertices) {
+            const Vector3& p = vertex.position;
+            if (!hasBounds) {
+                outMin = p;
+                outMax = p;
+                hasBounds = true;
+            } else {
+                outMin.x = std::min(outMin.x, p.x);
+                outMin.y = std::min(outMin.y, p.y);
+                outMin.z = std::min(outMin.z, p.z);
+                outMax.x = std::max(outMax.x, p.x);
+                outMax.y = std::max(outMax.y, p.y);
+                outMax.z = std::max(outMax.z, p.z);
+            }
+        }
+    }
+    return hasBounds;
+}
+
+bool GLViewport::applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds)
+{
+    Vector3 center = (minBounds + maxBounds) * 0.5f;
+    Vector3 extents = (maxBounds - minBounds) * 0.5f;
+
+    float radius = extents.length();
+    float largestComponent = std::max({ std::fabs(extents.x), std::fabs(extents.y), std::fabs(extents.z) });
+    radius = std::max(radius, largestComponent);
+    if (radius < 1e-3f) {
+        radius = std::max(largestComponent, 0.5f);
+    }
+
+    const float fovRadians = qDegreesToRadians(60.0f);
+    const float halfFov = fovRadians * 0.5f;
+    float aspect = (width() > 0 && height() > 0) ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
+    float horizontalHalfFov = std::atan(std::tan(halfFov) * aspect);
+
+    float minDistanceVertical = radius / std::max(std::tan(halfFov), 1e-3f);
+    float minDistanceHorizontal = radius / std::max(std::tan(horizontalHalfFov), 1e-3f);
+    float distance = std::max({ minDistanceVertical, minDistanceHorizontal, radius + 0.5f, 1.0f });
+    distance *= 1.2f;
+
+    camera.setTarget(center.x, center.y, center.z);
+    camera.setDistance(distance);
+    update();
+    return true;
+}
+
+void GLViewport::zoomInStep()
+{
+    camera.zoomCamera(1.0f);
+    update();
+}
+
+void GLViewport::zoomOutStep()
+{
+    camera.zoomCamera(-1.0f);
+    update();
+}
+
+bool GLViewport::zoomExtents()
+{
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (!computeBounds(false, minBounds, maxBounds)) {
+        return false;
+    }
+    return applyZoomToBounds(minBounds, maxBounds);
+}
+
+bool GLViewport::zoomSelection()
+{
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (!computeBounds(true, minBounds, maxBounds)) {
+        return false;
+    }
+    return applyZoomToBounds(minBounds, maxBounds);
+}
+
 void GLViewport::mousePressEvent(QMouseEvent* e)
 {
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
     lastMouse = e->pos();
-    if (e->buttons() & Qt::RightButton) {
-        rotating = true;
-    } else if (e->buttons() & Qt::MiddleButton) {
-        panning = true;
+    if (e->button() == Qt::MiddleButton) {
+        navigationButton = Qt::MiddleButton;
+        navigationMode = e->modifiers().testFlag(Qt::ShiftModifier) ? NavigationDragMode::Pan : NavigationDragMode::Orbit;
+    } else if (e->button() == Qt::RightButton) {
+        navigationButton = Qt::RightButton;
+        navigationMode = NavigationDragMode::Orbit;
     }
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
@@ -566,13 +660,27 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
     lastDeviceMouse = QPoint(std::lround(devicePos.x()), std::lround(devicePos.y()));
     hasDeviceMouse = true;
 
-    if (rotating) {
-        camera.rotateCamera(delta.x(), delta.y());
-        update(); return;
+    const bool middleHeld = e->buttons().testFlag(Qt::MiddleButton);
+    const bool rightHeld = e->buttons().testFlag(Qt::RightButton);
+    if (navigationButton == Qt::MiddleButton && !middleHeld) {
+        navigationMode = NavigationDragMode::None;
+        navigationButton = Qt::NoButton;
+    } else if (navigationButton == Qt::RightButton && !rightHeld) {
+        navigationMode = NavigationDragMode::None;
+        navigationButton = Qt::NoButton;
     }
-    if (panning) {
-        camera.panCamera(delta.x(), delta.y());
-        update(); return;
+
+    if (navigationMode != NavigationDragMode::None) {
+        if (navigationButton == Qt::MiddleButton) {
+            navigationMode = e->modifiers().testFlag(Qt::ShiftModifier) ? NavigationDragMode::Pan : NavigationDragMode::Orbit;
+        }
+        if (navigationMode == NavigationDragMode::Orbit) {
+            camera.rotateCamera(delta.x(), delta.y());
+        } else if (navigationMode == NavigationDragMode::Pan) {
+            camera.panCamera(delta.x(), delta.y());
+        }
+        update();
+        return;
     }
 
     if (toolManager) {
@@ -597,8 +705,10 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
-    if (rotating && !(e->buttons() & Qt::RightButton)) rotating = false;
-    if (panning && !(e->buttons() & Qt::MiddleButton)) panning = false;
+    if (navigationButton == e->button()) {
+        navigationMode = NavigationDragMode::None;
+        navigationButton = Qt::NoButton;
+    }
 
     if (toolManager && e->button() == Qt::LeftButton) {
         if (auto* t = toolManager->getActiveTool()) {
@@ -658,6 +768,8 @@ void GLViewport::leaveEvent(QEvent* event)
 {
     QOpenGLWidget::leaveEvent(event);
     hasDeviceMouse = false;
+    navigationMode = NavigationDragMode::None;
+    navigationButton = Qt::NoButton;
     if (toolManager) {
         toolManager->clearInference();
     }

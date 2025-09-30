@@ -2,7 +2,7 @@
 #include "../GeometryKernel/GeometryKernel.h"
 #include "../GeometryKernel/Curve.h"
 
-void ExtrudeTool::onMouseDown(int,int){
+void ExtrudeTool::onPointerDown(const PointerInput&){
     // extrude the most recently added curve by unit height
     GeometryObject* obj = nullptr;
     const auto& objs = geometry->getObjects();

@@ -18,6 +18,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QWidgetAction>
 #include <QVBoxLayout>
 #include <QFileInfo>
 #include <cmath>
@@ -30,6 +31,30 @@ constexpr int kToolbarHeight = 48;
 constexpr int kRibbonWidth = 56;
 constexpr int kStatusHeight = 28;
 const char* kSettingsGroup = "MainWindow";
+
+QString renderStyleToSetting(Renderer::RenderStyle style)
+{
+    switch (style) {
+    case Renderer::RenderStyle::Wireframe:
+        return QStringLiteral("wireframe");
+    case Renderer::RenderStyle::Shaded:
+        return QStringLiteral("shaded");
+    case Renderer::RenderStyle::ShadedWithEdges:
+    default:
+        return QStringLiteral("shadedEdges");
+    }
+}
+
+Renderer::RenderStyle renderStyleFromSetting(const QString& value)
+{
+    if (value == QLatin1String("wireframe")) {
+        return Renderer::RenderStyle::Wireframe;
+    }
+    if (value == QLatin1String("shaded")) {
+        return Renderer::RenderStyle::Shaded;
+    }
+    return Renderer::RenderStyle::ShadedWithEdges;
+}
 }
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
@@ -64,11 +89,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     connect(viewport, &GLViewport::cursorPositionChanged, this, &MainWindow::updateCursor);
     connect(viewport, &GLViewport::frameStatsUpdated, this, &MainWindow::updateFrameStats);
 
-    // Load persisted theme choice before applying styles
+    // Load persisted theme and render style before applying styles
     {
         QSettings settings("FreeCrafter", "FreeCrafter");
         darkTheme = settings.value(QStringLiteral("%1/darkTheme").arg(kSettingsGroup), true).toBool();
+        renderStyleChoice = renderStyleFromSetting(settings.value(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), QStringLiteral("shadedEdges")).toString());
     }
+
+    viewport->setRenderStyle(renderStyleChoice);
 
     createMenus();
     createToolbars();
@@ -150,6 +178,30 @@ void MainWindow::createMenus()
     actionToggleRightDock = viewMenu->addAction(tr("Toggle Right Panel"), this, &MainWindow::toggleRightDock);
     actionToggleTheme = viewMenu->addAction(tr("Toggle Theme"), this, &MainWindow::toggleTheme);
 
+    renderStyleGroup = new QActionGroup(this);
+    renderStyleGroup->setExclusive(true);
+    QMenu* renderStyleMenu = viewMenu->addMenu(tr("Render Style"));
+    renderWireframeAction = renderStyleMenu->addAction(tr("Wireframe"));
+    renderWireframeAction->setCheckable(true);
+    renderWireframeAction->setStatusTip(tr("Display geometry as wireframe"));
+    renderStyleGroup->addAction(renderWireframeAction);
+    renderShadedAction = renderStyleMenu->addAction(tr("Shaded"));
+    renderShadedAction->setCheckable(true);
+    renderShadedAction->setStatusTip(tr("Display solid shading without edge overlays"));
+    renderStyleGroup->addAction(renderShadedAction);
+    renderShadedEdgesAction = renderStyleMenu->addAction(tr("Shaded + Edges"));
+    renderShadedEdgesAction->setCheckable(true);
+    renderShadedEdgesAction->setStatusTip(tr("Display shading with edge overlays"));
+    renderStyleGroup->addAction(renderShadedEdgesAction);
+
+    connect(renderWireframeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Wireframe); });
+    connect(renderShadedAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Shaded); });
+    connect(renderShadedEdgesAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::ShadedWithEdges); });
+
+    renderWireframeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Wireframe);
+    renderShadedAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Shaded);
+    renderShadedEdgesAction->setChecked(renderStyleChoice == Renderer::RenderStyle::ShadedWithEdges);
+
     QMenu* insertMenu = menuBar()->addMenu(tr("Insert"));
     insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
     insertMenu->addAction(tr("Guides"), this, [this]() { statusBar()->showMessage(tr("Insert Guides not implemented"), 2000); });
@@ -197,6 +249,19 @@ void MainWindow::createToolbars()
     primaryToolbar->addSeparator();
     primaryToolbar->addAction(actionToggleTheme);
     actionSettings = primaryToolbar->addAction(QIcon(QStringLiteral(":/icons/settings.svg")), tr("Settings"), this, &MainWindow::showPreferences);
+
+    primaryToolbar->addSeparator();
+    renderStyleButton = new QToolButton(primaryToolbar);
+    renderStyleButton->setPopupMode(QToolButton::InstantPopup);
+    renderStyleButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    renderStyleButton->setMenu(new QMenu(renderStyleButton));
+    renderStyleButton->menu()->addAction(renderWireframeAction);
+    renderStyleButton->menu()->addAction(renderShadedAction);
+    renderStyleButton->menu()->addAction(renderShadedEdgesAction);
+    renderStyleButton->setToolTip(tr("Select render style"));
+    auto* renderWidgetAction = new QWidgetAction(primaryToolbar);
+    renderWidgetAction->setDefaultWidget(renderStyleButton);
+    primaryToolbar->addAction(renderWidgetAction);
 
     toolRibbon = new QToolBar(tr("Tools"), this);
     toolRibbon->setOrientation(Qt::Vertical);
@@ -254,6 +319,8 @@ void MainWindow::createToolbars()
 
     selectAction->setChecked(true);
     activateSelect();
+
+    setRenderStyle(renderStyleChoice);
 }
 
 void MainWindow::createDockPanels()
@@ -419,6 +486,44 @@ void MainWindow::updateThemeActionIcon()
         return;
     const QString iconPath = darkTheme ? QStringLiteral(":/icons/theme_light.svg") : QStringLiteral(":/icons/theme_dark.svg");
     actionToggleTheme->setIcon(QIcon(iconPath));
+}
+
+void MainWindow::setRenderStyle(Renderer::RenderStyle style)
+{
+    bool changed = (renderStyleChoice != style);
+    renderStyleChoice = style;
+    if (viewport) {
+        viewport->setRenderStyle(style);
+    }
+    if (renderWireframeAction) {
+        renderWireframeAction->setChecked(style == Renderer::RenderStyle::Wireframe);
+    }
+    if (renderShadedAction) {
+        renderShadedAction->setChecked(style == Renderer::RenderStyle::Shaded);
+    }
+    if (renderShadedEdgesAction) {
+        renderShadedEdgesAction->setChecked(style == Renderer::RenderStyle::ShadedWithEdges);
+    }
+    if (renderStyleButton) {
+        QString label;
+        switch (style) {
+        case Renderer::RenderStyle::Wireframe:
+            label = tr("Style: Wireframe");
+            break;
+        case Renderer::RenderStyle::Shaded:
+            label = tr("Style: Shaded");
+            break;
+        case Renderer::RenderStyle::ShadedWithEdges:
+        default:
+            label = tr("Style: Shaded+Edges");
+            break;
+        }
+        renderStyleButton->setText(label);
+    }
+    if (changed) {
+        QSettings settings("FreeCrafter", "FreeCrafter");
+        settings.setValue(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), renderStyleToSetting(style));
+    }
 }
 
 void MainWindow::newFile()

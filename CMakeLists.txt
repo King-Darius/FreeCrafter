@@ -7,10 +7,10 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets Svg)
 
-add_executable(${PROJECT_NAME}
-    src/main.cpp
+add_library(freecrafter_lib
     src/MainWindow.cpp
     src/GLViewport.cpp
+    src/Renderer.cpp
     src/CameraController.cpp
     src/HotkeyManager.cpp
     src/GeometryKernel/Curve.cpp
@@ -34,12 +34,24 @@ add_executable(${PROJECT_NAME}
     resources.qrc
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui)
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui)
+target_link_libraries(freecrafter_lib PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+
+add_executable(${PROJECT_NAME}
+    src/main.cpp
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE freecrafter_lib)
 # Installation
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .)
+
+# Tests
+enable_testing()
+add_executable(test_render tests/test_render.cpp)
+target_link_libraries(test_render PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME render_regression COMMAND test_render)
 
 # Include Windows redistributable if present
 

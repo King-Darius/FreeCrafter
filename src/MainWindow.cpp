@@ -37,6 +37,8 @@
 #include "NavigationConfig.h"
 #include "ui/MeasurementWidget.h"
 #include "ui/ViewSettingsDialog.h"
+#include "ui/EnvironmentPanel.h"
+#include "SunModel.h"
 
 namespace {
 constexpr int kToolbarHeight = 48;
@@ -482,10 +484,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         storedViewPreset = settings.value(QStringLiteral("%1/viewPreset").arg(kSettingsGroup), storedViewPreset).toString();
         storedFov = settings.value(QStringLiteral("%1/viewFov").arg(kSettingsGroup), storedFov).toFloat();
         storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
+        sunSettings.load(settings, QStringLiteral("Environment"));
     }
 
     viewport->setRenderStyle(renderStyleChoice);
     viewport->setShowHiddenGeometry(showHiddenGeometry);
+    viewport->setSunSettings(sunSettings);
     viewport->setFieldOfView(storedFov);
     if (storedProjection.compare(QLatin1String("parallel"), Qt::CaseInsensitive) == 0)
         viewport->setProjectionMode(CameraController::ProjectionMode::Parallel);
@@ -863,6 +867,11 @@ void MainWindow::createDockPanels()
     rightTabs = new QTabWidget(rightDock);
     rightTabs->setDocumentMode(true);
 
+    environmentPanel = new EnvironmentPanel(rightTabs);
+    environmentPanel->setSettings(sunSettings);
+    connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
+    rightTabs->addTab(environmentPanel, tr("Sun & Shadows"));
+
     auto makePlaceholder = [](const QString& title) {
         QWidget* page = new QWidget;
         auto* layout = new QVBoxLayout(page);
@@ -1007,6 +1016,7 @@ void MainWindow::persistWindowState()
     settings.setValue("state", saveState());
     settings.setValue("darkTheme", darkTheme);
     settings.endGroup();
+    sunSettings.save(settings, QStringLiteral("Environment"));
     persistViewSettings();
 }
 
@@ -1164,6 +1174,49 @@ void MainWindow::syncViewSettingsUI()
         actionViewHiddenGeometry->setChecked(viewport->isHiddenGeometryVisible());
     }
     updateViewPresetButtonLabel();
+}
+
+void MainWindow::handleSunSettingsChanged(const SunSettings& settings)
+{
+    SunSettings previous = sunSettings;
+    sunSettings = settings;
+    if (viewport)
+        viewport->setSunSettings(sunSettings);
+    QSettings settingsStore("FreeCrafter", "FreeCrafter");
+    sunSettings.save(settingsStore, QStringLiteral("Environment"));
+    updateShadowStatus(previous, sunSettings);
+}
+
+void MainWindow::updateShadowStatus(const SunSettings& previous, const SunSettings& current)
+{
+    if (!statusBar())
+        return;
+    bool changed = previous.shadowsEnabled != current.shadowsEnabled
+        || previous.date != current.date
+        || previous.time != current.time
+        || !qFuzzyCompare(previous.latitude, current.latitude)
+        || !qFuzzyCompare(previous.longitude, current.longitude)
+        || previous.timezoneMinutes != current.timezoneMinutes
+        || previous.daylightSaving != current.daylightSaving;
+    if (!changed)
+        return;
+    if (!current.shadowsEnabled) {
+        statusBar()->showMessage(tr("Shadows disabled"), 2000);
+        return;
+    }
+    SunModel::Result result = SunModel::computeSunDirection(current.date,
+                                                            current.time,
+                                                            current.latitude,
+                                                            current.longitude,
+                                                            current.effectiveTimezoneMinutes());
+    if (result.valid) {
+        statusBar()->showMessage(tr("Shadows enabled — Sun altitude %1°, azimuth %2°")
+                                     .arg(result.altitudeDegrees, 0, 'f', 1)
+                                     .arg(result.azimuthDegrees, 0, 'f', 1),
+                                 4000);
+    } else {
+        statusBar()->showMessage(tr("Shadows enabled — sun below horizon"), 4000);
+    }
 }
 
 void MainWindow::newFile()

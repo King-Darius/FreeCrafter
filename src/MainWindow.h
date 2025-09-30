@@ -40,7 +40,10 @@ private slots:
     void showGitPopover();
     void showKeyboardShortcuts();
     void activateSelect();
-    void activateSketch();
+    void activateLine();
+    void activateMove();
+    void activateRotate();
+    void activateScale();
     void activateExtrude();
     void activatePan();
     void activateOrbit();
@@ -100,7 +103,10 @@ private:
     QAction* actionShortcuts = nullptr;
 
     QAction* selectAction = nullptr;
-    QAction* sketchAction = nullptr;
+    QAction* lineAction = nullptr;
+    QAction* moveAction = nullptr;
+    QAction* rotateAction = nullptr;
+    QAction* scaleAction = nullptr;
     QAction* extrudeAction = nullptr;
     QAction* panAction = nullptr;
     QAction* orbitAction = nullptr;

@@ -4,8 +4,11 @@
 #include <vector>
 
 #include "Tool.h"
-#include "SelectionTool.h"
-#include "SketchTool.h"
+#include "LineTool.h"
+#include "SmartSelectTool.h"
+#include "MoveTool.h"
+#include "RotateTool.h"
+#include "ScaleTool.h"
 #include "ExtrudeTool.h"
 
 #include "../Interaction/InferenceEngine.h"
@@ -28,6 +31,7 @@ public:
     const Interaction::InferenceResult& getCurrentInference() const { return currentInference; }
     void handleKeyPress(int key);
     void handleKeyRelease(int key);
+    void updatePointerModifiers(const Tool::ModifierState& modifiers);
 
 private:
     void propagateViewport();
@@ -46,6 +50,8 @@ private:
     Interaction::InferenceResult currentInference;
     Interaction::InferenceResult stickyInference;
     bool shiftPressed = false;
+    bool ctrlPressed = false;
+    bool altPressed = false;
     bool stickyActive = false;
     bool axisLocked = false;
     Vector3 axisDirection;

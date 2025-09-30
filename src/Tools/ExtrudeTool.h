@@ -5,7 +5,8 @@ class ExtrudeTool : public Tool {
 public:
     ExtrudeTool(GeometryKernel* g, CameraController* c) : Tool(g,c) {}
     const char* getName() const override { return "ExtrudeTool"; }
-    void onMouseDown(int x,int y) override;
-    void onMouseMove(int,int) override {}
-    void onMouseUp(int,int) override {}
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput&) override {}
+    void onPointerUp(const PointerInput&) override {}
 };

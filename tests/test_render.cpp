@@ -108,24 +108,63 @@ int main(int argc, char** argv)
         return 3;
     }
 
+    viewport.setRenderStyle(Renderer::RenderStyle::HiddenLine);
+    CaptureMetrics hiddenLine = captureMetrics(viewport, app);
+    if (!hiddenLine.valid || hiddenLine.nonBackground <= 0) {
+        return 4;
+    }
+
+    viewport.setRenderStyle(Renderer::RenderStyle::Monochrome);
+    CaptureMetrics monochrome = captureMetrics(viewport, app);
+    if (!monochrome.valid || monochrome.nonBackground <= 0) {
+        return 5;
+    }
+
     const double wireCoverage = static_cast<double>(wire.nonBackground) / wire.totalPixels;
     const double shadedCoverage = static_cast<double>(shaded.nonBackground) / shaded.totalPixels;
     const double edgeCoverage = static_cast<double>(shadedEdges.nonBackground) / shadedEdges.totalPixels;
 
     if (shadedCoverage <= wireCoverage * 3.0) {
-        return 4;
-    }
-    if (edgeCoverage < shadedCoverage) {
-        return 5;
-    }
-    if ((shadedEdges.nonBackground - shaded.nonBackground) < 150) {
         return 6;
     }
-    if (shaded.nonBackgroundIntensity >= 0.85) {
+    if (edgeCoverage < shadedCoverage) {
         return 7;
     }
-    if (wire.nonBackgroundIntensity >= 0.5) {
+    if ((shadedEdges.nonBackground - shaded.nonBackground) < 150) {
         return 8;
+    }
+    if (shaded.nonBackgroundIntensity >= 0.85) {
+        return 9;
+    }
+    if (wire.nonBackgroundIntensity >= 0.5) {
+        return 10;
+    }
+    if (hiddenLine.nonBackground <= wire.nonBackground) {
+        return 11;
+    }
+    if (std::fabs(monochrome.nonBackgroundIntensity - shaded.nonBackgroundIntensity) < 0.01) {
+        return 12;
+    }
+
+    std::vector<Vector3> hiddenLoop{
+        {-0.8f, 0.0f, -0.8f},
+        {0.8f, 0.0f, -0.8f},
+        {0.8f, 0.0f, 0.8f},
+        {-0.8f, 0.0f, 0.8f},
+        {-0.8f, 0.0f, -0.8f}
+    };
+    GeometryObject* hiddenCurve = geometry->addCurve(hiddenLoop);
+    if (hiddenCurve) {
+        hiddenCurve->setHidden(true);
+    }
+
+    viewport.setRenderStyle(Renderer::RenderStyle::ShadedWithEdges);
+    viewport.setShowHiddenGeometry(false);
+    CaptureMetrics hiddenOff = captureMetrics(viewport, app);
+    viewport.setShowHiddenGeometry(true);
+    CaptureMetrics hiddenOn = captureMetrics(viewport, app);
+    if (!hiddenOn.valid || hiddenOn.nonBackground <= hiddenOff.nonBackground + 25) {
+        return 13;
     }
 
     return 0;

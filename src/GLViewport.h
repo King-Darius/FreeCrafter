@@ -13,6 +13,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
+#include "SunSettings.h"
 #include "Navigation/ViewPresetManager.h"
 #include "NavigationConfig.h"
 
@@ -35,6 +36,8 @@ public:
     Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
     void setShowHiddenGeometry(bool show);
     bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
+    void setSunSettings(const SunSettings& settings);
+    const SunSettings& sunSettings() const { return environmentSettings; }
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &document.geometry(); }
     Scene::Document* getDocument() { return &document; }
@@ -108,6 +111,7 @@ private:
     Renderer renderer;
     Renderer::RenderStyle renderStyle = Renderer::RenderStyle::ShadedWithEdges;
     bool showHiddenGeometry = false;
+    SunSettings environmentSettings;
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");
 };

@@ -21,6 +21,7 @@
 #include "GeometryKernel/Vector3.h"
 #include "GeometryKernel/TransformUtils.h"
 #include "Interaction/InferenceEngine.h"
+#include "SunModel.h"
 
 GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
@@ -101,6 +102,12 @@ void GLViewport::setShowHiddenGeometry(bool show)
     update();
 }
 
+void GLViewport::setSunSettings(const SunSettings& settings)
+{
+    environmentSettings = settings;
+    update();
+}
+
 void GLViewport::setProjectionMode(CameraController::ProjectionMode mode)
 {
     if (camera.getProjectionMode() == mode)
@@ -162,6 +169,33 @@ void GLViewport::paintGL()
     QMatrix4x4 projectionMatrix = buildProjectionMatrix(aspect);
 
     QMatrix4x4 viewMatrix = buildViewMatrix();
+
+    SunModel::Result sunResult = SunModel::computeSunDirection(environmentSettings.date,
+                                                      environmentSettings.time,
+                                                      environmentSettings.latitude,
+                                                      environmentSettings.longitude,
+                                                      environmentSettings.effectiveTimezoneMinutes());
+    Renderer::LightingOptions lightingOptions;
+    lightingOptions.sunDirection = sunResult.valid ? sunResult.direction : QVector3D(0.3f, 0.8f, 0.6f);
+    lightingOptions.sunValid = sunResult.valid;
+    lightingOptions.shadowsEnabled = environmentSettings.shadowsEnabled && sunResult.valid;
+    lightingOptions.shadowBias = environmentSettings.shadowBias;
+    lightingOptions.shadowStrength = environmentSettings.shadowStrength;
+    switch (environmentSettings.shadowQuality) {
+    case SunSettings::ShadowQuality::Low:
+        lightingOptions.shadowMapResolution = 512;
+        lightingOptions.shadowSampleRadius = 0;
+        break;
+    case SunSettings::ShadowQuality::Medium:
+        lightingOptions.shadowMapResolution = 1024;
+        lightingOptions.shadowSampleRadius = 1;
+        break;
+    case SunSettings::ShadowQuality::High:
+        lightingOptions.shadowMapResolution = 2048;
+        lightingOptions.shadowSampleRadius = 2;
+        break;
+    }
+    renderer.setLightingOptions(lightingOptions);
 
     if (toolManager) {
         ToolInferenceUpdateRequest request;

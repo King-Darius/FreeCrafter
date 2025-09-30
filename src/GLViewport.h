@@ -9,6 +9,7 @@
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
+#include "Renderer.h"
 
 class ToolManager;
 
@@ -19,6 +20,8 @@ public:
     explicit GLViewport(QWidget* parent = nullptr);
 
     void setToolManager(ToolManager* manager);
+    void setRenderStyle(Renderer::RenderStyle style);
+    Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &geometry; }
     CameraController* getCamera() { return &camera; }
@@ -65,4 +68,6 @@ private:
     double smoothedFrameMs = 0.0;
     int lastDrawCalls = 0;
     mutable int currentDrawCalls = 0;
+    Renderer renderer;
+    Renderer::RenderStyle renderStyle = Renderer::RenderStyle::ShadedWithEdges;
 };

@@ -15,6 +15,7 @@ class QActionGroup;
 class MeasurementWidget;
 
 #include "HotkeyManager.h"
+#include "Renderer.h"
 #include "Tools/ToolManager.h"
 
 class MainWindow : public QMainWindow {
@@ -64,6 +65,7 @@ private:
     void persistWindowState();
     void setActiveTool(QAction* action, const QString& toolId, const QString& hint);
     void updateThemeActionIcon();
+    void setRenderStyle(Renderer::RenderStyle style);
 
     void closeEvent(QCloseEvent* event) override;
 
@@ -80,6 +82,7 @@ private:
     QPointer<QDockWidget> rightDock;
     QPointer<QTabWidget> rightTabs;
     QPointer<QTabBar> documentTabs;
+    QPointer<QToolButton> renderStyleButton;
 
     QAction* actionNew = nullptr;
     QAction* actionOpen = nullptr;
@@ -113,8 +116,14 @@ private:
     QAction* measureAction = nullptr;
     QAction* gridAction = nullptr;
 
+    QActionGroup* renderStyleGroup = nullptr;
+    QAction* renderWireframeAction = nullptr;
+    QAction* renderShadedAction = nullptr;
+    QAction* renderShadedEdgesAction = nullptr;
+
     QActionGroup* toolActionGroup = nullptr;
 
     HotkeyManager hotkeys;
     bool darkTheme = true;
+    Renderer::RenderStyle renderStyleChoice = Renderer::RenderStyle::ShadedWithEdges;
 };

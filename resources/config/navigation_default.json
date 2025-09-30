@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "defaultScheme": "sketchup",
+  "schemes": [
+    {
+      "id": "sketchup",
+      "label": "SketchUp",
+      "description": "Middle button orbits, Shift+middle pans, and zoom focuses on the cursor.",
+      "wheelTool": "ZoomTool",
+      "zoomToCursor": true,
+      "invertWheel": false,
+      "wheelStep": 1.0,
+      "dragBindings": [
+        { "button": "Middle", "tool": "OrbitTool", "temporary": true },
+        { "button": "Middle", "modifiers": ["Shift"], "tool": "PanTool", "temporary": true }
+      ]
+    },
+    {
+      "id": "dsm",
+      "label": "DesignSpark",
+      "description": "Right button orbits, middle button pans, zoom follows the cursor similar to DesignSpark Mechanical.",
+      "wheelTool": "ZoomTool",
+      "zoomToCursor": true,
+      "invertWheel": false,
+      "wheelStep": 1.0,
+      "dragBindings": [
+        { "button": "Right", "tool": "OrbitTool", "temporary": true },
+        { "button": "Middle", "tool": "PanTool", "temporary": true }
+      ]
+    }
+  ]
+}

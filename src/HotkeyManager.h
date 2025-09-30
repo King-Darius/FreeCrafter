@@ -41,4 +41,8 @@ private:
     void applyShortcut(const QString& id);
     void ensureConfigPath();
     void loadDefaults();
+    bool readShortcuts(const QJsonObject& obj, QHash<QString, QKeySequence>& target) const;
+    bool readShortcuts(const QJsonObject& obj);
+    void writeShortcuts(QJsonObject& obj, const QHash<QString, QKeySequence>& source) const;
+    void writeShortcuts(QJsonObject& obj) const;
 };

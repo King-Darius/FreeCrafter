@@ -235,6 +235,29 @@ void ToolManager::updatePointerModifiers(const Tool::ModifierState& modifiers)
     }
 }
 
+Tool::MeasurementKind ToolManager::getMeasurementKind() const
+{
+    if (!active) {
+        return Tool::MeasurementKind::None;
+    }
+    return active->getMeasurementKind();
+}
+
+bool ToolManager::applyMeasurementOverride(double value)
+{
+    if (!active) {
+        return false;
+    }
+    Tool::OverrideResult result = active->applyMeasurementOverride(value);
+    if (result == Tool::OverrideResult::Ignored) {
+        return false;
+    }
+    if (result == Tool::OverrideResult::Commit) {
+        active->commit();
+    }
+    return true;
+}
+
 void ToolManager::propagateViewport()
 {
     for (auto& tool : tools) {

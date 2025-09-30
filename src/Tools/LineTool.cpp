@@ -213,3 +213,45 @@ void LineTool::resetChain()
     previewValid = false;
 }
 
+Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
+{
+    if (points.empty()) {
+        const auto& snap = getInferenceResult();
+        if (!snap.isValid()) {
+            return Tool::OverrideResult::Ignored;
+        }
+        setState(State::Active);
+        points.push_back(snap.position);
+    }
+
+    if (points.empty()) {
+        return Tool::OverrideResult::Ignored;
+    }
+
+    Vector3 origin = points.back();
+    Vector3 direction;
+    if (previewValid) {
+        direction = previewPoint - origin;
+    }
+    if (direction.lengthSquared() <= 1e-8f) {
+        const auto& snap = getInferenceResult();
+        if (snap.direction.lengthSquared() > 1e-8f) {
+            direction = snap.direction;
+        }
+    }
+    if (direction.lengthSquared() <= 1e-8f) {
+        return Tool::OverrideResult::Ignored;
+    }
+
+    direction = direction.normalized();
+    Vector3 target = origin + direction * static_cast<float>(value);
+    if (points.size() == 1) {
+        points.push_back(target);
+    } else {
+        points.back() = target;
+    }
+    previewPoint = target;
+    previewValid = true;
+    return Tool::OverrideResult::Commit;
+}
+

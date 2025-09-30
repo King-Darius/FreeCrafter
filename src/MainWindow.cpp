@@ -7,10 +7,12 @@
 #include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QObject>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTabBar>
@@ -18,12 +20,12 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
-#include <QWidgetAction>
 #include <QVBoxLayout>
-#include <QFileInfo>
+#include <QWidgetAction>
 #include <cmath>
 
 #include "GLViewport.h"
+#include "Tools/ToolManager.h"
 #include "ui/MeasurementWidget.h"
 
 namespace {
@@ -54,6 +56,265 @@ Renderer::RenderStyle renderStyleFromSetting(const QString& value)
         return Renderer::RenderStyle::Shaded;
     }
     return Renderer::RenderStyle::ShadedWithEdges;
+}
+
+struct MeasurementParseResult {
+    bool ok = false;
+    double value = 0.0;
+    QString display;
+    QString error;
+};
+
+QString removeWhitespace(QString text)
+{
+    text.remove(QChar(' '));
+    text.remove(QChar('\t'));
+    text.remove(QChar('\n'));
+    text.remove(QChar('\r'));
+    return text;
+}
+
+MeasurementParseResult parseImperialDistance(const QString& raw)
+{
+    MeasurementParseResult result;
+    QString sanitized = removeWhitespace(raw.trimmed());
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("empty measurement");
+        return result;
+    }
+
+    bool negative = false;
+    if (sanitized.startsWith(QLatin1Char('+')) || sanitized.startsWith(QLatin1Char('-'))) {
+        negative = sanitized.startsWith(QLatin1Char('-'));
+        sanitized = sanitized.mid(1);
+    }
+
+    sanitized.replace(QStringLiteral("ft"), QStringLiteral("'"), Qt::CaseInsensitive);
+    sanitized.replace(QStringLiteral("in"), QStringLiteral("\""), Qt::CaseInsensitive);
+
+    double feet = 0.0;
+    double inches = 0.0;
+    int footIndex = sanitized.indexOf(QLatin1Char('\''));
+    if (footIndex >= 0) {
+        QString footPart = sanitized.left(footIndex);
+        if (!footPart.isEmpty()) {
+            bool ok = false;
+            feet = footPart.toDouble(&ok);
+            if (!ok) {
+                result.error = QObject::tr("invalid feet value");
+                return result;
+            }
+        }
+        sanitized = sanitized.mid(footIndex + 1);
+    }
+
+    int inchIndex = sanitized.indexOf(QLatin1Char('"'));
+    if (inchIndex >= 0) {
+        QString inchPart = sanitized.left(inchIndex);
+        if (!inchPart.isEmpty()) {
+            bool ok = false;
+            inches = inchPart.toDouble(&ok);
+            if (!ok) {
+                result.error = QObject::tr("invalid inches value");
+                return result;
+            }
+        }
+        sanitized = sanitized.mid(inchIndex + 1);
+    } else if (!sanitized.isEmpty()) {
+        bool ok = false;
+        if (footIndex >= 0) {
+            inches = sanitized.toDouble(&ok);
+        } else {
+            feet = sanitized.toDouble(&ok);
+        }
+        if (!ok) {
+            result.error = QObject::tr("invalid measurement");
+            return result;
+        }
+        sanitized.clear();
+    }
+
+    if (!sanitized.isEmpty()) {
+        result.error = QObject::tr("unexpected trailing characters");
+        return result;
+    }
+
+    double totalMeters = (feet * 12.0 + inches) * 0.0254;
+    if (negative)
+        totalMeters = -totalMeters;
+
+    result.ok = true;
+    result.value = totalMeters;
+    result.display = raw.trimmed();
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1 m").arg(totalMeters, 0, 'f', 3);
+    }
+    return result;
+}
+
+MeasurementParseResult parseMetricDistance(const QString& raw)
+{
+    MeasurementParseResult result;
+    QString sanitized = removeWhitespace(raw.trimmed());
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("empty measurement");
+        return result;
+    }
+
+    QString lower = sanitized.toLower();
+    double multiplier = 1.0;
+    if (lower.endsWith(QStringLiteral("mm"))) {
+        multiplier = 0.001;
+        sanitized.chop(2);
+    } else if (lower.endsWith(QStringLiteral("cm"))) {
+        multiplier = 0.01;
+        sanitized.chop(2);
+    } else if (lower.endsWith(QStringLiteral("km"))) {
+        multiplier = 1000.0;
+        sanitized.chop(2);
+    } else if (lower.endsWith(QStringLiteral("m"))) {
+        multiplier = 1.0;
+        sanitized.chop(1);
+    }
+
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("invalid measurement");
+        return result;
+    }
+
+    bool ok = false;
+    double magnitude = sanitized.toDouble(&ok);
+    if (!ok) {
+        result.error = QObject::tr("invalid measurement");
+        return result;
+    }
+
+    result.ok = true;
+    result.value = magnitude * multiplier;
+    result.display = raw.trimmed();
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1 m").arg(result.value, 0, 'f', 3);
+    }
+    return result;
+}
+
+MeasurementParseResult parseDistanceMeasurement(const QString& raw, const QString& unitSystem)
+{
+    if (unitSystem == QLatin1String("imperial")) {
+        return parseImperialDistance(raw);
+    }
+    return parseMetricDistance(raw);
+}
+
+MeasurementParseResult parseAngleMeasurement(const QString& raw)
+{
+    MeasurementParseResult result;
+    QString sanitized = removeWhitespace(raw.trimmed());
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("empty angle");
+        return result;
+    }
+
+    QString lower = sanitized.toLower();
+    double multiplier = M_PI / 180.0;
+    if (lower.endsWith(QStringLiteral("rad"))) {
+        multiplier = 1.0;
+        sanitized.chop(3);
+    } else if (lower.endsWith(QStringLiteral("deg"))) {
+        sanitized.chop(3);
+    } else if (sanitized.endsWith(QChar(0x00B0))) {
+        sanitized.chop(1);
+    }
+
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("invalid angle");
+        return result;
+    }
+
+    bool ok = false;
+    double magnitude = sanitized.toDouble(&ok);
+    if (!ok) {
+        result.error = QObject::tr("invalid angle");
+        return result;
+    }
+
+    result.ok = true;
+    result.value = magnitude * multiplier;
+    result.display = raw.trimmed();
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1°").arg(magnitude, 0, 'f', 2);
+    }
+    return result;
+}
+
+MeasurementParseResult parseScaleMeasurement(const QString& raw)
+{
+    MeasurementParseResult result;
+    QString sanitized = removeWhitespace(raw.trimmed());
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("empty scale");
+        return result;
+    }
+
+    bool percent = sanitized.endsWith(QLatin1Char('%'));
+    if (percent) {
+        sanitized.chop(1);
+    }
+
+    bool ok = false;
+    double magnitude = sanitized.toDouble(&ok);
+    if (!ok) {
+        result.error = QObject::tr("invalid scale");
+        return result;
+    }
+
+    if (percent) {
+        magnitude /= 100.0;
+    }
+
+    if (magnitude <= 0.0) {
+        result.error = QObject::tr("scale must be positive");
+        return result;
+    }
+
+    result.ok = true;
+    result.value = magnitude;
+    result.display = raw.trimmed();
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1x").arg(magnitude, 0, 'f', 2);
+    }
+    return result;
+}
+
+MeasurementParseResult parseMeasurementValue(const QString& raw, const QString& unitSystem, Tool::MeasurementKind kind)
+{
+    switch (kind) {
+    case Tool::MeasurementKind::Distance:
+        return parseDistanceMeasurement(raw, unitSystem);
+    case Tool::MeasurementKind::Angle:
+        return parseAngleMeasurement(raw);
+    case Tool::MeasurementKind::Scale:
+        return parseScaleMeasurement(raw);
+    default:
+        break;
+    }
+    MeasurementParseResult result;
+    result.error = QObject::tr("unsupported measurement");
+    return result;
+}
+
+QString measurementHintForKind(Tool::MeasurementKind kind)
+{
+    switch (kind) {
+    case Tool::MeasurementKind::Distance:
+        return QObject::tr("Length (e.g. 12'6\" or 3.5m)");
+    case Tool::MeasurementKind::Angle:
+        return QObject::tr("Angle (e.g. 45° or 0.79rad)");
+    case Tool::MeasurementKind::Scale:
+        return QObject::tr("Scale (e.g. 2 or 150%)");
+    default:
+        return QObject::tr("Measurements");
+    }
 }
 }
 
@@ -473,11 +734,16 @@ void MainWindow::setActiveTool(QAction* action, const QString& toolId, const QSt
         return;
     if (!toolManager)
         return;
-    if (!toolId.isEmpty())
+    Tool::MeasurementKind kind = Tool::MeasurementKind::None;
+    if (!toolId.isEmpty()) {
         toolManager->activateTool(toolId.toUtf8().constData());
+        kind = toolManager->getMeasurementKind();
+    }
     action->setChecked(true);
     if (hintLabel)
         hintLabel->setText(hint);
+    if (measurementWidget)
+        measurementWidget->setHint(measurementHintForKind(kind));
 }
 
 void MainWindow::updateThemeActionIcon()
@@ -687,5 +953,44 @@ void MainWindow::updateFrameStats(double fps, double frameMs, int drawCalls)
 
 void MainWindow::handleMeasurementCommit(const QString& value, const QString& unitSystem)
 {
-    statusBar()->showMessage(tr("Measurement override %1 (%2) not wired yet").arg(value, unitSystem), 2000);
+    if (!toolManager)
+        return;
+
+    Tool::MeasurementKind kind = toolManager->getMeasurementKind();
+    if (kind == Tool::MeasurementKind::None) {
+        statusBar()->showMessage(tr("Active tool does not accept measurement overrides"), 2000);
+        return;
+    }
+
+    MeasurementParseResult parsed = parseMeasurementValue(value, unitSystem, kind);
+    if (!parsed.ok) {
+        statusBar()->showMessage(tr("Invalid measurement: %1").arg(parsed.error), 3000);
+        return;
+    }
+
+    if (!toolManager->applyMeasurementOverride(parsed.value)) {
+        statusBar()->showMessage(tr("Measurement override is not applicable right now"), 3000);
+        return;
+    }
+
+    if (measurementWidget)
+        measurementWidget->clear();
+
+    QString display = parsed.display.isEmpty() ? value.trimmed() : parsed.display;
+    if (display.isEmpty()) {
+        switch (kind) {
+        case Tool::MeasurementKind::Distance:
+            display = tr("%1 m").arg(parsed.value, 0, 'f', 3);
+            break;
+        case Tool::MeasurementKind::Angle:
+            display = tr("%1 rad").arg(parsed.value, 0, 'f', 3);
+            break;
+        case Tool::MeasurementKind::Scale:
+            display = tr("%1x").arg(parsed.value, 0, 'f', 2);
+            break;
+        default:
+            break;
+        }
+    }
+    statusBar()->showMessage(tr("Applied %1 override").arg(display), 2000);
 }

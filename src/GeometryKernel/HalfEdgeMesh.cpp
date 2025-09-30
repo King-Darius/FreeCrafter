@@ -176,3 +176,128 @@ void HalfEdgeMesh::recomputeNormals()
         }
     }
 }
+
+void HalfEdgeMesh::heal(float weldTolerance, float minEdgeLength)
+{
+    if (vertices.empty() || faces.empty()) {
+        return;
+    }
+
+    float weldSq = weldTolerance * weldTolerance;
+    float minEdgeSq = minEdgeLength * minEdgeLength;
+
+    std::vector<HalfEdgeVertex> uniqueVertices;
+    uniqueVertices.reserve(vertices.size());
+    std::vector<int> remap(vertices.size(), -1);
+
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+        const Vector3& position = vertices[i].position;
+        bool merged = false;
+        for (std::size_t j = 0; j < uniqueVertices.size(); ++j) {
+            Vector3 delta = uniqueVertices[j].position - position;
+            if (delta.lengthSquared() <= weldSq) {
+                remap[i] = static_cast<int>(j);
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) {
+            remap[i] = static_cast<int>(uniqueVertices.size());
+            HalfEdgeVertex v;
+            v.position = position;
+            uniqueVertices.push_back(v);
+        }
+    }
+
+    auto nearlyEqualByIndex = [&](int a, int b) {
+        const Vector3& pa = uniqueVertices[a].position;
+        const Vector3& pb = uniqueVertices[b].position;
+        Vector3 diff = pa - pb;
+        return diff.lengthSquared() <= minEdgeSq;
+    };
+
+    std::vector<std::vector<int>> rebuiltFaces;
+    rebuiltFaces.reserve(faces.size());
+
+    for (const auto& face : faces) {
+        if (face.halfEdge < 0) {
+            continue;
+        }
+        std::vector<int> loop;
+        int start = face.halfEdge;
+        int current = start;
+        std::size_t guard = 0;
+        while (current != -1) {
+            if (guard++ > halfEdges.size()) {
+                loop.clear();
+                break;
+            }
+            if (current < 0 || current >= static_cast<int>(halfEdges.size())) {
+                loop.clear();
+                break;
+            }
+            const HalfEdgeRecord& edge = halfEdges[current];
+            if (edge.origin < 0 || edge.origin >= static_cast<int>(remap.size())) {
+                loop.clear();
+                break;
+            }
+            int mapped = remap[edge.origin];
+            if (mapped < 0) {
+                loop.clear();
+                break;
+            }
+            loop.push_back(mapped);
+            current = edge.next;
+            if (current == start) {
+                break;
+            }
+        }
+
+        if (loop.size() < 3) {
+            continue;
+        }
+
+        std::vector<int> collapsed;
+        collapsed.reserve(loop.size());
+        for (int idx : loop) {
+            if (collapsed.empty() || !nearlyEqualByIndex(collapsed.back(), idx)) {
+                collapsed.push_back(idx);
+            }
+        }
+        if (collapsed.size() > 1 && nearlyEqualByIndex(collapsed.front(), collapsed.back())) {
+            collapsed.pop_back();
+        }
+        if (collapsed.size() < 3) {
+            continue;
+        }
+
+        Vector3 normal(0.0f, 0.0f, 0.0f);
+        for (std::size_t i = 0; i < collapsed.size(); ++i) {
+            const Vector3& currentPos = uniqueVertices[collapsed[i]].position;
+            const Vector3& nextPos = uniqueVertices[collapsed[(i + 1) % collapsed.size()]].position;
+            normal.x += (currentPos.y - nextPos.y) * (currentPos.z + nextPos.z);
+            normal.y += (currentPos.z - nextPos.z) * (currentPos.x + nextPos.x);
+            normal.z += (currentPos.x - nextPos.x) * (currentPos.y + nextPos.y);
+        }
+        if (normal.lengthSquared() <= 1e-10f) {
+            continue;
+        }
+
+        rebuiltFaces.emplace_back(std::move(collapsed));
+    }
+
+    vertices = uniqueVertices;
+    for (auto& vertex : vertices) {
+        vertex.halfEdge = -1;
+    }
+    halfEdges.clear();
+    faces.clear();
+    triangles.clear();
+    directedEdgeMap.clear();
+
+    for (const auto& loop : rebuiltFaces) {
+        addFace(loop);
+    }
+
+    recomputeNormals();
+}

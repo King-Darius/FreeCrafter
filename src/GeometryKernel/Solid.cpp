@@ -71,6 +71,8 @@ std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& base
         }
     }
 
+    mesh.heal(kDefaultTolerance, kDefaultTolerance);
+
     if (!mesh.isManifold()) {
         return nullptr;
     }

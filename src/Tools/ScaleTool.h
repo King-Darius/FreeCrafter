@@ -9,6 +9,8 @@ public:
     ScaleTool(GeometryKernel* g, CameraController* c);
 
     const char* getName() const override { return "ScaleTool"; }
+    MeasurementKind getMeasurementKind() const override { return MeasurementKind::Scale; }
+    OverrideResult applyMeasurementOverride(double value) override;
 
 protected:
     void onPointerDown(const PointerInput& input) override;

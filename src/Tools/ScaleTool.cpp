@@ -239,3 +239,28 @@ Vector3 ScaleTool::determineAxis() const
     return Vector3();
 }
 
+Tool::OverrideResult ScaleTool::applyMeasurementOverride(double value)
+{
+    if (!dragging || selection.empty()) {
+        return Tool::OverrideResult::Ignored;
+    }
+    if (value <= 0.0) {
+        return Tool::OverrideResult::Ignored;
+    }
+
+    float factor = static_cast<float>(value);
+    if (axisScaling) {
+        Vector3 axisNorm = axis.lengthSquared() > 1e-6f ? axis.normalized() : Vector3(1.0f, 0.0f, 0.0f);
+        Vector3 absAxis(std::fabs(axisNorm.x), std::fabs(axisNorm.y), std::fabs(axisNorm.z));
+        int majorAxis = 0;
+        if (absAxis.y > absAxis.x && absAxis.y >= absAxis.z)
+            majorAxis = 1;
+        else if (absAxis.z > absAxis.x && absAxis.z >= absAxis.y)
+            majorAxis = 2;
+        scaleFactors = makeAxisFactors(majorAxis, factor);
+    } else {
+        scaleFactors = Vector3(factor, factor, factor);
+    }
+    return Tool::OverrideResult::Commit;
+}
+

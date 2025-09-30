@@ -119,10 +119,6 @@ run:
 
 The `<version>` placeholder should match the release version number you're
 downloading (for example, `FreeCrafter-0.1.0.dmg`).
-=======
-- `FreeCrafter-<version>.exe` for Windows
-- `FreeCrafter-<version>.dmg` for macOS
-- `FreeCrafter-<version>.AppImage` for Linux
 
 After configuring and building locally, the project can be staged for distribution.
 

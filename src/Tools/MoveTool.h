@@ -9,6 +9,8 @@ public:
     MoveTool(GeometryKernel* g, CameraController* c);
 
     const char* getName() const override { return "MoveTool"; }
+    MeasurementKind getMeasurementKind() const override { return MeasurementKind::Distance; }
+    OverrideResult applyMeasurementOverride(double value) override;
 
 protected:
     void onPointerDown(const PointerInput& input) override;

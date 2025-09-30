@@ -37,6 +37,8 @@ std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts) 
         return nullptr;
     }
 
+    mesh.heal(kDefaultTolerance, kDefaultTolerance);
+
     if (!mesh.isManifold()) {
         return nullptr;
     }

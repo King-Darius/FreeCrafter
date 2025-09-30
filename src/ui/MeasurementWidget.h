@@ -14,6 +14,7 @@ public:
     QString text() const;
     void setHint(const QString& hint);
     QString unitSystem() const;
+    void clear();
 
 signals:
     void measurementCommitted(const QString& value, const QString& unitSystem);

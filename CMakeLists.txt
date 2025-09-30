@@ -14,6 +14,8 @@ add_executable(${PROJECT_NAME}
     src/CameraController.cpp
     src/HotkeyManager.cpp
     src/GeometryKernel/Curve.cpp
+    src/GeometryKernel/HalfEdgeMesh.cpp
+    src/GeometryKernel/MeshUtils.cpp
     src/GeometryKernel/Solid.cpp
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp

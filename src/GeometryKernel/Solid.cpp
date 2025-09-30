@@ -1,24 +1,82 @@
 #include "Solid.h"
+#include "Curve.h"
+#include "HalfEdgeMesh.h"
+#include "MeshUtils.h"
+#include <algorithm>
 
-Solid::Solid(const std::vector<Vector3>& baseProfile, float height) {
-    std::vector<Vector3> profile = baseProfile;
-    if (profile.empty()) return;
-    Vector3 first = profile.front();
-    Vector3 last = profile.back();
-    if (first.x != last.x || first.z != last.z) profile.push_back(first);
-    size_t N = profile.size();
-    if (N < 2) return;
+namespace {
+constexpr float kDefaultTolerance = 1e-4f;
 
-    vertices.reserve(N * 2);
-    for (size_t i = 0; i < N; ++i) vertices.emplace_back(profile[i].x, 0.0f, profile[i].z);
-    for (size_t i = 0; i < N; ++i) vertices.emplace_back(profile[i].x, height, profile[i].z);
+std::vector<Vector3> prepareProfile(const std::vector<Vector3>& baseProfile) {
+    auto welded = MeshUtils::weldSequential(baseProfile, kDefaultTolerance);
+    auto healed = MeshUtils::collapseTinyEdges(welded, kDefaultTolerance);
+    return healed;
+}
+}
 
-    faces.clear(); faces.reserve(N + 2);
-    // sides as quads
-    for (size_t i = 0; i < N - 1; ++i) {
-        Face f; int b0=(int)i, b1=(int)(i+1), t0=(int)(i+N), t1=(int)(i+1+N);
-        f.indices = { b0, b1, t1, t0 };
-        faces.push_back(f);
+Solid::Solid(std::vector<Vector3> base, float h, HalfEdgeMesh meshData)
+    : baseLoop(std::move(base)), height(h), mesh(std::move(meshData)) {}
+
+std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& baseProfile, float height) {
+    if (height <= kDefaultTolerance) {
+        return nullptr;
     }
-    // (optional) caps not rendered as quads here; keep for wireframe or future triangulation
+
+    auto profile = prepareProfile(baseProfile);
+    if (profile.size() < 3) {
+        return nullptr;
+    }
+
+    Vector3 normal = MeshUtils::computePolygonNormal(profile);
+    if (normal.length() <= 1e-6f) {
+        return nullptr;
+    }
+    if (normal.y < 0.0f) {
+        std::reverse(profile.begin(), profile.end());
+    }
+
+    HalfEdgeMesh mesh;
+    std::vector<int> bottomIndices;
+    std::vector<int> topIndices;
+    bottomIndices.reserve(profile.size());
+    topIndices.reserve(profile.size());
+    for (const auto& p : profile) {
+        bottomIndices.push_back(mesh.addVertex(Vector3(p.x, 0.0f, p.z)));
+    }
+    for (const auto& p : profile) {
+        topIndices.push_back(mesh.addVertex(Vector3(p.x, height, p.z)));
+    }
+
+    std::vector<int> bottomLoop = bottomIndices;
+    std::reverse(bottomLoop.begin(), bottomLoop.end());
+    if (mesh.addFace(bottomLoop) < 0) {
+        return nullptr;
+    }
+
+    if (mesh.addFace(topIndices) < 0) {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < profile.size(); ++i) {
+        size_t next = (i + 1) % profile.size();
+        std::vector<int> quad = {
+            bottomIndices[i],
+            bottomIndices[next],
+            topIndices[next],
+            topIndices[i]
+        };
+        if (mesh.addFace(quad) < 0) {
+            return nullptr;
+        }
+    }
+
+    if (!mesh.isManifold()) {
+        return nullptr;
+    }
+
+    return std::unique_ptr<Solid>(new Solid(std::move(profile), height, std::move(mesh)));
+}
+
+std::unique_ptr<Solid> Solid::createFromCurve(const Curve& curve, float height) {
+    return createFromProfile(curve.getBoundaryLoop(), height);
 }

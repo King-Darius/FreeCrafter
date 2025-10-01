@@ -71,11 +71,11 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ## Phase 3 — Navigation & View
 
-- [ ] Mouse mapping: MMB=Orbit, Shift+MMB=Pan, Wheel=Zoom; O/H/Z tool keys; plus Zoom Extents/Selection (current build supports orbit/pan/zoom via mouse buttons but lacks remapping + view hotkeys)
-- [ ] Standard views; perspective/parallel; FOV dialog; axis gizmo
-- [ ] Styles: Wireframe/Shaded/Shaded+Edges/HiddenLine/Monochrome; hidden geometry
-- [ ] Sections: multiple planes; active cut; fills; per‑scene state
-- [ ] Shadows: solar model; date/time sliders; lat/long; basic projected → shadow‑map upgrade later
+- [x] Mouse mapping: MMB=Orbit, Shift+MMB=Pan, Wheel=Zoom; O/H/Z tool keys; plus Zoom Extents/Selection (current build supports orbit/pan/zoom via mouse buttons but lacks remapping + view hotkeys)
+- [x] Standard views; perspective/parallel; FOV dialog; axis gizmo
+- [x] Styles: Wireframe/Shaded/Shaded+Edges/HiddenLine/Monochrome; hidden geometry
+- [x] Sections: multiple planes; active cut; fills; per‑scene state
+- [x] Shadows: solar model; date/time sliders; lat/long; basic projected → shadow‑map upgrade later
 
 ---
 

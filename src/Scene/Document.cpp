@@ -24,6 +24,11 @@ void Document::reset()
     geometryKernel.clear();
     planes.clear();
     sceneSettings.reset();
+    annotations.clear();
+    dimensions.clear();
+    guides.clear();
+    angleMeasurements.clear();
+    axes.clear();
 }
 
 bool Document::saveToFile(const std::string& filename) const
@@ -100,6 +105,36 @@ bool Document::loadFromFile(const std::string& filename)
         }
     }
     return true;
+}
+
+TextAnnotation& Document::addTextAnnotation(const TextAnnotation& annotation)
+{
+    annotations.push_back(annotation);
+    return annotations.back();
+}
+
+LinearDimension& Document::addLinearDimension(const LinearDimension& dimension)
+{
+    dimensions.push_back(dimension);
+    return dimensions.back();
+}
+
+GuideLine& Document::addGuideLine(const GuideLine& guide)
+{
+    guides.push_back(guide);
+    return guides.back();
+}
+
+AngleGuide& Document::addAngleGuide(const AngleGuide& guide)
+{
+    angleMeasurements.push_back(guide);
+    return angleMeasurements.back();
+}
+
+AxesGuide& Document::addAxesGuide(const AxesGuide& guide)
+{
+    axes.push_back(guide);
+    return axes.back();
 }
 
 } // namespace Scene

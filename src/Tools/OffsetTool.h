@@ -4,11 +4,11 @@
 
 #include <vector>
 
-class ExtrudeTool : public Tool {
+class OffsetTool : public Tool {
 public:
-    ExtrudeTool(GeometryKernel* geometry, CameraController* camera);
+    OffsetTool(GeometryKernel* geometry, CameraController* camera);
 
-    const char* getName() const override { return "ExtrudeTool"; }
+    const char* getName() const override { return "OffsetTool"; }
     MeasurementKind getMeasurementKind() const override { return MeasurementKind::Distance; }
     OverrideResult applyMeasurementOverride(double value) override;
 
@@ -23,15 +23,22 @@ protected:
 
 private:
     bool resolvePoint(const PointerInput& input, Vector3& out) const;
+    Curve* pickSelectedCurve() const;
     Curve* pickCurveAtPoint(const Vector3& point) const;
-    void setHoverCurve(Curve* curve);
-    void updatePreview();
+    void prepareSource(Curve* curve);
+    void updatePreview(float offsetValue);
+    void updatePreviewFromPoint(const Vector3& point);
     void reset();
+    float computeAverageRadius(const std::vector<Vector3>& loop) const;
 
-    Curve* hoverCurve = nullptr;
-    Curve* activeCurve = nullptr;
+    Curve* sourceCurve = nullptr;
     std::vector<Vector3> baseLoop;
     std::vector<Vector3> previewLoop;
-    float previewHeight = 1.0f;
+    Vector3 centroid;
+    float baseRadius = 0.0f;
+    float pendingOffset = 1.0f;
     bool previewValid = false;
+    bool hasFirstPoint = false;
+    Vector3 hoverPoint;
+    bool hoverValid = false;
 };

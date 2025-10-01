@@ -4,13 +4,12 @@
 
 #include <vector>
 
-class ExtrudeTool : public Tool {
+class ArcTool : public Tool {
 public:
-    ExtrudeTool(GeometryKernel* geometry, CameraController* camera);
+    ArcTool(GeometryKernel* geometry, CameraController* camera);
 
-    const char* getName() const override { return "ExtrudeTool"; }
+    const char* getName() const override { return "ArcTool"; }
     MeasurementKind getMeasurementKind() const override { return MeasurementKind::Distance; }
-    OverrideResult applyMeasurementOverride(double value) override;
 
 protected:
     void onPointerDown(const PointerInput& input) override;
@@ -23,15 +22,13 @@ protected:
 
 private:
     bool resolvePoint(const PointerInput& input, Vector3& out) const;
-    Curve* pickCurveAtPoint(const Vector3& point) const;
-    void setHoverCurve(Curve* curve);
-    void updatePreview();
+    void updatePreview(const Vector3& candidate, bool valid);
     void reset();
 
-    Curve* hoverCurve = nullptr;
-    Curve* activeCurve = nullptr;
-    std::vector<Vector3> baseLoop;
-    std::vector<Vector3> previewLoop;
-    float previewHeight = 1.0f;
+    std::vector<Vector3> anchors;
+    std::vector<Vector3> previewCurve;
+    Vector3 hoverPoint{ 0.0f, 0.0f, 0.0f };
+    bool hoverValid = false;
     bool previewValid = false;
 };
+

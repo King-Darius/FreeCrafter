@@ -32,7 +32,7 @@ milestones already have code backing them and which ones are still open.
   axes, curve/solid previews, and a HUD showing FPS, frame time, and draw calls
   — matching the roadmap's frame budget HUD milestone. 【F:src/GLViewport.cpp†L57-L199】
 
-### Phase 2 — Geometry & Interaction (early prototype)
+### Phase 2 — Geometry & Interaction (implemented)
 
 * **Line authoring:** The `LineTool` runs as a state machine, projecting screen
   positions onto the ground plane with inference-aware snapping and committing
@@ -49,10 +49,8 @@ milestones already have code backing them and which ones are still open.
 
 ### Upcoming Gaps
 
-* Phases 2–4 still need the full inference engine, tool state machines, and the
-  richer toolset outlined in the roadmap. The current implementations are
-  prototypes that should be expanded with snapping databases, typed overrides,
-  and additional drawing/modify tools.
+* Phases 3–4 still need the expanded drawing and modification tools outlined in
+  the roadmap (arcs, follow-me, push/pull pre-pick, etc.).
 * Later phases (object management, advanced modeling, file I/O, performance,
   polish, QA) remain untouched in code and should be treated as open backlog
   items despite the UI placeholders.

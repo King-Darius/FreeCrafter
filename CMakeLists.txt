@@ -31,11 +31,24 @@ add_library(freecrafter_lib
     src/Tools/Tool.cpp
     src/Tools/ToolGeometryUtils.cpp
     src/Tools/LineTool.cpp
+    src/Tools/ArcTool.cpp
+    src/Tools/CircleTool.cpp
+    src/Tools/PolygonTool.cpp
+    src/Tools/RotatedRectangleTool.cpp
+    src/Tools/FreehandTool.cpp
     src/Tools/SmartSelectTool.cpp
     src/Tools/MoveTool.cpp
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
+    src/Tools/OffsetTool.cpp
+    src/Tools/FollowMeTool.cpp
+    src/Tools/PaintBucketTool.cpp
+    src/Tools/TextTool.cpp
+    src/Tools/DimensionTool.cpp
+    src/Tools/TapeMeasureTool.cpp
+    src/Tools/ProtractorTool.cpp
+    src/Tools/AxesTool.cpp
     src/Tools/SectionTool.cpp
     src/Tools/OrbitTool.cpp
     src/Tools/PanTool.cpp
@@ -66,6 +79,10 @@ enable_testing()
 add_executable(test_render tests/test_render.cpp)
 target_link_libraries(test_render PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME render_regression COMMAND test_render)
+
+add_executable(test_tools tests/test_tools.cpp)
+target_link_libraries(test_tools PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME tool_suite COMMAND test_tools)
 
 # Include Windows redistributable if present
 

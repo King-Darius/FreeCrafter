@@ -32,27 +32,25 @@ milestones already have code backing them and which ones are still open.
   axes, curve/solid previews, and a HUD showing FPS, frame time, and draw calls
   — matching the roadmap's frame budget HUD milestone. 【F:src/GLViewport.cpp†L57-L199】
 
-### Phase 2 — Geometry & Interaction (early prototype)
+### Phase 2 — Geometry & Interaction (implemented)
 
-* **Line authoring:** The `LineTool` runs as a state machine, projecting screen
-  positions onto the ground plane with inference-aware snapping and committing
-  continuous polylines to the geometry kernel. 【F:src/Tools/LineTool.cpp†L1-L137】
-* **Manipulation prototypes:** Move/Rotate/Scale operate on selected geometry
-  using axis-aware inference, with transient previews rendered in the viewport.
-  【F:src/Tools/MoveTool.cpp†L1-L142】【F:src/Tools/RotateTool.cpp†L1-L144】【F:src/Tools/ScaleTool.cpp†L1-L163】
-* **Extrusion:** The `ExtrudeTool` turns the most recent curve into a simple
-  prismatic solid, demonstrating the start of Push/Pull style workflows.
-  【F:src/Tools/ExtrudeTool.cpp†L1-L13】
-* **Viewport interaction:** Orbit, pan, and zoom gestures are active, with
-  cursor world-position projection feeding the status bar updates.
-  【F:src/GLViewport.cpp†L200-L287】
+* **Tool state machine:** Shared tooling flows from `Tool::handle*` helpers that
+  arm, activate, and return to idle while wiring Enter/Esc through
+  `GLViewport` to call `Tool::commit()`/`Tool::cancel()`. 【F:src/Tools/Tool.cpp†L5-L159】【F:src/GLViewport.cpp†L1247-L1275】
+* **Core toolset:** The required select, line, move, rotate, and scale tools are
+  implemented with selection gathering, inference-aware point resolution, drag
+  previews, and measurement overrides. 【F:src/Tools/SmartSelectTool.cpp†L65-L240】【F:src/Tools/LineTool.cpp†L55-L199】【F:src/Tools/MoveTool.cpp†L13-L194】【F:src/Tools/RotateTool.cpp†L55-L216】【F:src/Tools/ScaleTool.cpp†L40-L233】
+* **Inference & axis locking:** Geometry snaps enumerate endpoints, midpoints,
+  intersections, and face cues, with `ToolManager` applying sticky locks and
+  X/Y/Z axis constraints for manipulation tools. 【F:src/Interaction/InferenceEngine.cpp†L450-L519】【F:src/Tools/ToolManager.cpp†L182-L466】
+* **Visual feedback:** Selection renders with distinct colors while the
+  inference overlay shows hover glyphs, dashed direction guides, and axis lock
+  anchors to confirm the active snap. 【F:src/GLViewport.cpp†L352-L420】【F:src/GLViewport.cpp†L935-L1004】
 
 ### Upcoming Gaps
 
-* Phases 2–4 still need the full inference engine, tool state machines, and the
-  richer toolset outlined in the roadmap. The current implementations are
-  prototypes that should be expanded with snapping databases, typed overrides,
-  and additional drawing/modify tools.
+* Phases 3–4 still need the expanded drawing and modification tools outlined in
+  the roadmap (arcs, follow-me, push/pull pre-pick, etc.).
 * Later phases (object management, advanced modeling, file I/O, performance,
   polish, QA) remain untouched in code and should be treated as open backlog
   items despite the UI placeholders.

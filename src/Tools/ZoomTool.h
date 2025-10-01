@@ -2,7 +2,7 @@
 
 #include "Tool.h"
 
-class ZoomTool : public Tool {
+class ZoomTool : public PointerDragTool {
 public:
     ZoomTool(GeometryKernel* g, CameraController* c);
 
@@ -14,15 +14,12 @@ public:
 
 protected:
     void onPointerDown(const PointerInput& input) override;
-    void onPointerMove(const PointerInput& input) override;
-    void onPointerUp(const PointerInput& input) override;
-    void onCancel() override;
+    void onDragStart(const PointerInput& input) override;
+    void onDragUpdate(const PointerInput& input, float dx, float dy) override;
+    void onDragEnd(const PointerInput& input) override;
+    void onDragCanceled() override;
 
 private:
-    bool dragging = false;
-    int lastX = 0;
-    int lastY = 0;
-    float pixelScale = 1.0f;
     bool zoomToCursor = true;
     float dragSensitivity = 0.08f;
 

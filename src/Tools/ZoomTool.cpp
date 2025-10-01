@@ -7,16 +7,12 @@
 #include <cmath>
 
 ZoomTool::ZoomTool(GeometryKernel* g, CameraController* c)
-    : Tool(g, c)
+    : PointerDragTool(g, c)
 {
 }
 
 void ZoomTool::onPointerDown(const PointerInput& input)
 {
-    pixelScale = std::max(input.devicePixelRatio, 1.0f);
-    lastX = input.x;
-    lastY = input.y;
-
     if (getModifiers().ctrl) {
         setState(State::Idle);
         zoomExtents();
@@ -28,19 +24,20 @@ void ZoomTool::onPointerDown(const PointerInput& input)
         return;
     }
 
-    dragging = true;
-    setState(State::Active);
+    PointerDragTool::onPointerDown(input);
 }
 
-void ZoomTool::onPointerMove(const PointerInput& input)
+void ZoomTool::onDragStart(const PointerInput& input)
 {
-    if (!dragging || !camera)
-        return;
+    (void)input;
+}
 
-    float scale = std::max(pixelScale, 1.0f);
-    float dy = (input.y - lastY) / scale;
-    lastX = input.x;
-    lastY = input.y;
+void ZoomTool::onDragUpdate(const PointerInput& input, float dx, float dy)
+{
+    (void)dx;
+
+    if (!camera)
+        return;
 
     if (std::fabs(dy) < 1e-3f)
         return;
@@ -52,18 +49,13 @@ void ZoomTool::onPointerMove(const PointerInput& input)
     applyZoomDelta(input, delta);
 }
 
-void ZoomTool::onPointerUp(const PointerInput& input)
+void ZoomTool::onDragEnd(const PointerInput& input)
 {
-    lastX = input.x;
-    lastY = input.y;
-    dragging = false;
-    setState(State::Idle);
+    (void)input;
 }
 
-void ZoomTool::onCancel()
+void ZoomTool::onDragCanceled()
 {
-    dragging = false;
-    setState(State::Idle);
 }
 
 void ZoomTool::applyZoomDelta(const PointerInput& input, float delta)

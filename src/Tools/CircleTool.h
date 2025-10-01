@@ -4,11 +4,11 @@
 
 #include <vector>
 
-class ExtrudeTool : public Tool {
+class CircleTool : public Tool {
 public:
-    ExtrudeTool(GeometryKernel* geometry, CameraController* camera);
+    CircleTool(GeometryKernel* geometry, CameraController* camera);
 
-    const char* getName() const override { return "ExtrudeTool"; }
+    const char* getName() const override { return "CircleTool"; }
     MeasurementKind getMeasurementKind() const override { return MeasurementKind::Distance; }
     OverrideResult applyMeasurementOverride(double value) override;
 
@@ -23,15 +23,15 @@ protected:
 
 private:
     bool resolvePoint(const PointerInput& input, Vector3& out) const;
-    Curve* pickCurveAtPoint(const Vector3& point) const;
-    void setHoverCurve(Curve* curve);
-    void updatePreview();
+    void updatePreview(const Vector3& candidate, bool valid);
+    void buildCircle(const Vector3& center, float radius);
     void reset();
 
-    Curve* hoverCurve = nullptr;
-    Curve* activeCurve = nullptr;
-    std::vector<Vector3> baseLoop;
-    std::vector<Vector3> previewLoop;
-    float previewHeight = 1.0f;
+    Vector3 centerPoint{ 0.0f, 0.0f, 0.0f };
+    bool hasCenter = false;
+    Vector3 hoverPoint{ 0.0f, 0.0f, 0.0f };
+    bool hoverValid = false;
+    std::vector<Vector3> previewCircle;
     bool previewValid = false;
 };
+

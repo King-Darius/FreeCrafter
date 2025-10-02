@@ -300,6 +300,7 @@ InferenceEngine::InferenceEngine()
     , dirty(true)
 {
 }
+InferenceEngine::~InferenceEngine() = default;
 
 void InferenceEngine::invalidate()
 {
@@ -589,3 +590,4 @@ const char* toString(InferenceSnapType type)
 }
 
 } // namespace Interaction
+

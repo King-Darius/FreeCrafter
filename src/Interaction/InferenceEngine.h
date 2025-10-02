@@ -50,6 +50,7 @@ struct InferenceContext {
 class InferenceEngine {
 public:
     InferenceEngine();
+    ~InferenceEngine();
 
     void ensureIndex(const GeometryKernel& geometry);
     InferenceResult query(const GeometryKernel& geometry, const InferenceContext& context);
@@ -82,3 +83,4 @@ private:
 const char* toString(InferenceSnapType type);
 
 } // namespace Interaction
+

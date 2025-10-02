@@ -31,24 +31,11 @@ add_library(freecrafter_lib
     src/Tools/Tool.cpp
     src/Tools/ToolGeometryUtils.cpp
     src/Tools/LineTool.cpp
-    src/Tools/ArcTool.cpp
-    src/Tools/CircleTool.cpp
-    src/Tools/PolygonTool.cpp
-    src/Tools/RotatedRectangleTool.cpp
-    src/Tools/FreehandTool.cpp
     src/Tools/SmartSelectTool.cpp
     src/Tools/MoveTool.cpp
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
-    src/Tools/OffsetTool.cpp
-    src/Tools/FollowMeTool.cpp
-    src/Tools/PaintBucketTool.cpp
-    src/Tools/TextTool.cpp
-    src/Tools/DimensionTool.cpp
-    src/Tools/TapeMeasureTool.cpp
-    src/Tools/ProtractorTool.cpp
-    src/Tools/AxesTool.cpp
     src/Tools/SectionTool.cpp
     src/Tools/OrbitTool.cpp
     src/Tools/PanTool.cpp
@@ -62,7 +49,7 @@ add_library(freecrafter_lib
 )
 
 target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui src/Scene)
-target_link_libraries(freecrafter_lib PRIVATE Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+target_link_libraries(freecrafter_lib PUBLIC Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
@@ -77,12 +64,19 @@ install(TARGETS ${PROJECT_NAME}
 # Tests
 enable_testing()
 add_executable(test_render tests/test_render.cpp)
-target_link_libraries(test_render PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
-add_test(NAME render_regression COMMAND test_render)
 
-add_executable(test_tools tests/test_tools.cpp)
-target_link_libraries(test_tools PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
-add_test(NAME tool_suite COMMAND test_tools)
+target_include_directories(test_render PRIVATE src)
+
+target_link_libraries(test_render
+    PRIVATE freecrafter_lib
+            Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+
+set(_qt_bin_dir "${CMAKE_SOURCE_DIR}/qt/6.5.3/msvc2019_64/bin")
+add_test(NAME render_regression COMMAND $<TARGET_FILE:test_render>)
+if(EXISTS "${_qt_bin_dir}")
+  string(REPLACE ";" "\;" _system_path "$ENV{PATH}")
+  set_property(TEST render_regression PROPERTY ENVIRONMENT "PATH=${_qt_bin_dir}\;${_system_path}")
+endif()
 
 # Include Windows redistributable if present
 
@@ -114,3 +108,9 @@ if(WIN32)
 endif()
 
 include(CPack)
+
+
+
+
+
+

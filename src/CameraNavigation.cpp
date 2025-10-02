@@ -6,7 +6,11 @@
 #include <cmath>
 
 namespace {
+
 constexpr float kEpsilon = 1e-6f;
+
+constexpr float kPi = 3.14159265358979323846f;
+
 
 Vector3 computeForward(const CameraController& camera)
 {
@@ -67,7 +71,7 @@ bool computeRay(const CameraController& camera, int pixelX, int pixelY, int view
             return false;
         direction = direction.normalized();
     } else {
-        const float fovRadians = camera.getFieldOfView() * static_cast<float>(M_PI) / 180.0f;
+        const float fovRadians = camera.getFieldOfView() * kPi / 180.0f;
         const float tanHalfFov = std::tan(fovRadians * 0.5f);
         direction = (forward + right * (nx * tanHalfFov * aspect) + up * (ny * tanHalfFov));
         if (direction.lengthSquared() < kEpsilon)
@@ -169,7 +173,7 @@ bool frameBounds(CameraController& camera, const Vector3& minBounds, const Vecto
         float minDistance = radius + 0.5f;
         camera.setDistance(std::max(camera.getDistance(), minDistance));
     } else {
-        const float fovRadians = camera.getFieldOfView() * static_cast<float>(M_PI) / 180.0f;
+        const float fovRadians = camera.getFieldOfView() * kPi / 180.0f;
         const float halfFov = fovRadians * 0.5f;
         float horizontalHalfFov = std::atan(std::tan(halfFov) * aspect);
 
@@ -184,3 +188,5 @@ bool frameBounds(CameraController& camera, const Vector3& minBounds, const Vecto
 }
 
 } // namespace CameraNavigation
+
+

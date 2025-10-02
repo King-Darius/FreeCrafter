@@ -47,27 +47,11 @@ milestones already have code backing them and which ones are still open.
   inference overlay shows hover glyphs, dashed direction guides, and axis lock
   anchors to confirm the active snap. 【F:src/GLViewport.cpp†L352-L420】【F:src/GLViewport.cpp†L935-L1004】
 
-### Phase 4 — Drawing & Modification (implemented)
-
-* **Planar curve tools:** Added dedicated arc, circle, polygon, rotated
-  rectangle, and freehand tools that author `Curve` geometry directly on the
-  ground plane while honoring inference snaps and measurement overrides.
-  【F:src/Tools/ArcTool.cpp†L1-L220】【F:src/Tools/CircleTool.cpp†L1-L182】【F:src/Tools/PolygonTool.cpp†L1-L210】【F:src/Tools/RotatedRectangleTool.cpp†L1-L192】【F:src/Tools/FreehandTool.cpp†L1-L94】
-
-* **Surface modifiers:** Push/Pull now preselects faces, supports distance
-  overrides, and previews resulting geometry, while Offset and Follow Me create
-  additional curves or solids from existing selections. 【F:src/Tools/ExtrudeTool.cpp†L1-L164】【F:src/Tools/OffsetTool.cpp†L1-L231】【F:src/Tools/FollowMeTool.cpp†L1-L81】
-* **Presentation aids:** Paint Bucket assigns per-object colors, and the Text
-  and Dimension tools register annotations in the active document while honoring
-  measurement overrides. 【F:src/Tools/PaintBucketTool.cpp†L1-L103】【F:src/Tools/TextTool.cpp†L1-L42】【F:src/Tools/DimensionTool.cpp†L1-L74】
-* **Guides:** Tape Measure, Protractor, and Axes tools capture linear, angular,
-  and orientation guides in the scene for precision modeling. 【F:src/Tools/TapeMeasureTool.cpp†L1-L64】【F:src/Tools/ProtractorTool.cpp†L1-L132】【F:src/Tools/AxesTool.cpp†L1-L74】【F:src/Scene/Document.cpp†L9-L63】
-
 ### Upcoming Gaps
 
-* **Phase 5 — Object Management:** Groups/components, tags, the outliner, and
-  scenes are still roadmap items without code coverage.
-* **Phases 6–10:** Advanced modeling workflows, file interchange, performance
-  investments, polish, and release readiness tasks have not been started in the
-  repository and remain future backlog.
+* Phases 3–4 still need the expanded drawing and modification tools outlined in
+  the roadmap (arcs, follow-me, push/pull pre-pick, etc.).
+* Later phases (object management, advanced modeling, file I/O, performance,
+  polish, QA) remain untouched in code and should be treated as open backlog
+  items despite the UI placeholders.
 

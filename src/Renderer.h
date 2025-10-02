@@ -11,7 +11,7 @@
 #include <vector>
 #include <array>
 
-class QOpenGLFunctions;
+class QOpenGLExtraFunctions;
 
 class Renderer
 {
@@ -43,7 +43,7 @@ public:
     Renderer();
     ~Renderer();
 
-    void initialize(QOpenGLFunctions* functions);
+    void initialize(QOpenGLExtraFunctions* functions);
     void beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, RenderStyle style);
     void setLightingOptions(const LightingOptions& options);
     void setClipPlanes(const std::vector<QVector4D>& planes);
@@ -116,7 +116,7 @@ private:
     bool renderShadowMap();
     void releaseShadowResources();
 
-    QOpenGLFunctions* functions = nullptr;
+    QOpenGLExtraFunctions* functions = nullptr;
     QOpenGLShaderProgram lineProgram;
     QOpenGLShaderProgram triangleProgram;
     QOpenGLShaderProgram shadowProgram;
@@ -151,4 +151,5 @@ private:
     RenderStyle currentStyle = RenderStyle::ShadedWithEdges;
     bool programsReady = false;
 };
+
 

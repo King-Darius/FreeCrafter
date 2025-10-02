@@ -1,37 +1,12 @@
 #pragma once
-
 #include "Tool.h"
-
-#include <vector>
 
 class ExtrudeTool : public Tool {
 public:
-    ExtrudeTool(GeometryKernel* geometry, CameraController* camera);
-
+    ExtrudeTool(GeometryKernel* g, CameraController* c) : Tool(g,c) {}
     const char* getName() const override { return "ExtrudeTool"; }
-    MeasurementKind getMeasurementKind() const override { return MeasurementKind::Distance; }
-    OverrideResult applyMeasurementOverride(double value) override;
-
 protected:
     void onPointerDown(const PointerInput& input) override;
-    void onPointerMove(const PointerInput& input) override;
-    void onPointerHover(const PointerInput& input) override;
-    void onCommit() override;
-    void onCancel() override;
-    void onInferenceResultChanged(const Interaction::InferenceResult& result) override;
-    PreviewState buildPreview() const override;
-
-private:
-    bool resolvePoint(const PointerInput& input, Vector3& out) const;
-    Curve* pickCurveAtPoint(const Vector3& point) const;
-    void setHoverCurve(Curve* curve);
-    void updatePreview();
-    void reset();
-
-    Curve* hoverCurve = nullptr;
-    Curve* activeCurve = nullptr;
-    std::vector<Vector3> baseLoop;
-    std::vector<Vector3> previewLoop;
-    float previewHeight = 1.0f;
-    bool previewValid = false;
+    void onPointerMove(const PointerInput&) override {}
+    void onPointerUp(const PointerInput&) override {}
 };

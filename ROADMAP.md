@@ -81,10 +81,10 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ## Phase 4 — Drawing & Modification
 
-- [x] Arc (2‑pt, 3‑pt), Circle, Polygon, Rotated Rectangle, Freehand
-- [x] Offset (faces/edges), Follow‑Me, Push/Pull with pre‑pick & hover‑pick
-- [x] Paint Bucket (materials panel), Text, Dimensions
-- [x] Guides: Tape Measure (guide lines/points), Protractor, Axes tool
+- [ ] Arc (2‑pt, 3‑pt), Circle, Polygon, Rotated Rectangle, Freehand
+- [ ] Offset (faces/edges), Follow‑Me, Push/Pull with pre‑pick & hover‑pick
+- [ ] Paint Bucket (materials panel), Text, Dimensions
+- [ ] Guides: Tape Measure (guide lines/points), Protractor, Axes tool
 
 ---
 

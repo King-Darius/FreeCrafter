@@ -4,6 +4,9 @@
 #include <QPainter>
 #include <QMatrix4x4>
 #include <QVector4D>
+
+#include <QOpenGLContext>
+
 #include <QByteArray>
 #include <QFont>
 #include <QtMath>
@@ -23,6 +26,9 @@
 #include "Interaction/InferenceEngine.h"
 #include "SunModel.h"
 
+#include "Scene/SectionPlane.h"
+
+
 GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
 {
@@ -39,7 +45,7 @@ void GLViewport::initializeGL()
     initializeOpenGLFunctions();
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
-    renderer.initialize(this);
+    renderer.initialize(context()->extraFunctions());
 }
 
 void GLViewport::resizeGL(int w, int h)
@@ -601,7 +607,7 @@ void GLViewport::drawSceneOverlays()
             yAxis.normalize();
             normalVec.normalize();
 
-            const SectionFillStyle& style = plane.fillStyle();
+            const Scene::SectionFillStyle& style = plane.fillStyle();
             float extent = std::max(0.25f, style.extent);
             QVector3D right = xAxis * extent;
             QVector3D up = yAxis * extent;
@@ -1316,3 +1322,6 @@ bool GLViewport::projectCursorToGround(const QPointF& pos, QVector3D& world) con
     world = origin + direction * t;
     return true;
 }
+
+
+

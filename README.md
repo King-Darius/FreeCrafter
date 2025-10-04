@@ -150,3 +150,6 @@ Icon assets are stored under `resources/icons` and bundled using Qt's resource s
 
 ## License
 This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
+See [docs/testing.md](docs/testing.md) for regression test notes.
+
+

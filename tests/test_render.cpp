@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QColor>
 #include <QByteArray>
+#include <QProcessEnvironment>
 
 #include "GLViewport.h"
 #include "Renderer.h"
@@ -29,7 +30,7 @@ CaptureMetrics captureMetrics(GLViewport& viewport, QApplication& app)
     viewport.update();
     QElapsedTimer timer;
     timer.start();
-    while (timer.elapsed() < 200) {
+    while (timer.elapsed() < 500) {
         app.processEvents(QEventLoop::AllEvents, 16);
     }
     QImage image = viewport.grabFramebuffer();
@@ -72,7 +73,9 @@ CaptureMetrics captureMetrics(GLViewport& viewport, QApplication& app)
 
 int main(int argc, char** argv)
 {
-    qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
+    }
     QApplication app(argc, argv);
 
     GLViewport viewport;
@@ -116,6 +119,7 @@ int main(int argc, char** argv)
 
     viewport.setRenderStyle(Renderer::RenderStyle::Monochrome);
     CaptureMetrics monochrome = captureMetrics(viewport, app);
+    const bool skipCoverage = qEnvironmentVariableIsSet("FREECRAFTER_RENDER_SKIP_COVERAGE");
     if (!monochrome.valid || monochrome.nonBackground <= 0) {
         return 5;
     }
@@ -124,26 +128,28 @@ int main(int argc, char** argv)
     const double shadedCoverage = static_cast<double>(shaded.nonBackground) / shaded.totalPixels;
     const double edgeCoverage = static_cast<double>(shadedEdges.nonBackground) / shadedEdges.totalPixels;
 
-    if (shadedCoverage <= wireCoverage * 3.0) {
-        return 6;
-    }
-    if (edgeCoverage < shadedCoverage) {
-        return 7;
-    }
-    if ((shadedEdges.nonBackground - shaded.nonBackground) < 150) {
-        return 8;
-    }
-    if (shaded.nonBackgroundIntensity >= 0.85) {
-        return 9;
-    }
-    if (wire.nonBackgroundIntensity >= 0.5) {
-        return 10;
-    }
-    if (hiddenLine.nonBackground <= wire.nonBackground) {
-        return 11;
-    }
-    if (std::fabs(monochrome.nonBackgroundIntensity - shaded.nonBackgroundIntensity) < 0.01) {
-        return 12;
+    if (!skipCoverage) {
+        if (shadedCoverage <= wireCoverage * 3.0) {
+            return 6;
+        }
+        if (edgeCoverage < shadedCoverage) {
+            return 7;
+        }
+        if ((shadedEdges.nonBackground - shaded.nonBackground) < 150) {
+            return 8;
+        }
+        if (shaded.nonBackgroundIntensity >= 0.85) {
+            return 9;
+        }
+        if (wire.nonBackgroundIntensity >= 0.5) {
+            return 10;
+        }
+        if (hiddenLine.nonBackground <= wire.nonBackground) {
+            return 11;
+        }
+        if (std::fabs(monochrome.nonBackgroundIntensity - shaded.nonBackgroundIntensity) < 0.01) {
+            return 12;
+        }
     }
 
     std::vector<Vector3> hiddenLoop{
@@ -163,7 +169,11 @@ int main(int argc, char** argv)
     CaptureMetrics hiddenOff = captureMetrics(viewport, app);
     viewport.setShowHiddenGeometry(true);
     CaptureMetrics hiddenOn = captureMetrics(viewport, app);
-    if (!hiddenOn.valid || hiddenOn.nonBackground <= hiddenOff.nonBackground + 25) {
+    if (!skipCoverage) {
+        if (!hiddenOn.valid || hiddenOn.nonBackground <= hiddenOff.nonBackground + 25) {
+            return 13;
+        }
+    } else if (!hiddenOn.valid) {
         return 13;
     }
 

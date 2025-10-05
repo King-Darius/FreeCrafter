@@ -37,6 +37,10 @@ Welcome, creators and innovators! FreeCrafter is growing fast, and we’re calli
 4. Submit a pull request—we’ll help you get it merged.
 5. Reach out if you want to help with outreach or UI/UX!
 
+   ✅ **Windows testing checklist:**
+   - Run `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest` so Qt's runtime lands on `PATH` during `ctest`.
+   - Peek at [docs/testing.md](docs/testing.md) for deeper automation tips and troubleshooting.
+
 ---
 
 Let’s craft something amazing together!  

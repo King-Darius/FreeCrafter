@@ -53,6 +53,8 @@ For a breakdown of planned milestones and features, see the [ROADMAP](ROADMAP.md
 
 ## Building
 
+For a step-by-step walkthrough—including bootstrap execution, packaging the GUI installer, and troubleshooting common pitfalls—see [docs/getting_started_and_troubleshooting.md](docs/getting_started_and_troubleshooting.md).
+
 The repository ships with a helper script that fetches a minimal Qt runtime and
 builds the project for you. After cloning, simply run the bootstrap script:
 

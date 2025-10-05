@@ -184,6 +184,7 @@ def run_cmake(
     *,
     build: bool = True,
     build_type: Optional[str] = None,
+    install_prefix: Optional[Path] = None,
 ) -> None:
     build_dir = root / "build"
     build_dir.mkdir(exist_ok=True)
@@ -205,6 +206,21 @@ def run_cmake(
     rc = run(build_cmd, env=env)
     if rc != 0:
         raise subprocess.CalledProcessError(rc, build_cmd)
+    if install_prefix:
+        if not install_prefix.is_absolute():
+            install_prefix = root / install_prefix
+        install_cmd = [
+            "cmake",
+            "--install",
+            str(build_dir),
+            "--prefix",
+            str(install_prefix),
+        ]
+        if build_type:
+            install_cmd += ["--config", build_type]
+        rc = run(install_cmd, env=env)
+        if rc != 0:
+            raise subprocess.CalledProcessError(rc, install_cmd)
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser()
@@ -226,6 +242,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Sets CMAKE_BUILD_TYPE=Release for single-config generators."
         ),
     )
+    parser.add_argument(
+        "--install-prefix",
+        type=Path,
+        default=root / "dist",
+        help="Destination directory for cmake --install when bundling Qt",
+    )
     args, unknown = parser.parse_known_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -236,7 +258,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)
         prefix = ensure_qt(args.offline)
-        run_cmake(prefix, build=not args.ci, build_type="Release" if args.ci else None)
+        run_cmake(
+            prefix,
+            build=not args.ci,
+            build_type="Release" if args.ci else None,
+            install_prefix=None if args.ci else args.install_prefix,
+        )
     except subprocess.CalledProcessError as exc:  # pragma: no cover
         logging.error("Command '%s' failed with code %s", " ".join(map(str, exc.cmd)), exc.returncode)
         return exc.returncode

@@ -1,6 +1,11 @@
 # Build artifacts
 build/
 qt/
+!qt/
+qt/**
+!qt/.gitkeep
+!qt/README.md
+!qt/manifest.json
 
 # CMake cache and temporary files
 CMakeCache.txt

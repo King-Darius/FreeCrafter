@@ -32,7 +32,7 @@ bool Document::saveToFile(const std::string& filename) const
     if (!os) {
         return false;
     }
-    os << "FCM 2\n";
+    os << "FCM 3\n";
     os << "BEGIN_GEOMETRY\n";
     geometryKernel.saveToStream(os);
     os << "END_GEOMETRY\n";
@@ -94,7 +94,7 @@ bool Document::loadFromFile(const std::string& filename)
         } else if (token == "END_SECTION_PLANES") {
             continue;
         } else if (token == "BEGIN_SETTINGS") {
-            sceneSettings.deserialize(is);
+            sceneSettings.deserialize(is, version);
         } else if (token == "END_SETTINGS" || token == "END_GEOMETRY") {
             continue;
         }

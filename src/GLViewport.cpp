@@ -38,6 +38,7 @@ GLViewport::GLViewport(QWidget* parent)
     connect(&repaintTimer, &QTimer::timeout, this, QOverload<>::of(&GLViewport::update));
     repaintTimer.start();
     frameTimer.start();
+    paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
 }
 
 void GLViewport::initializeGL()
@@ -88,6 +89,28 @@ void GLViewport::setNavigationPreferences(NavigationPreferences* prefs)
     }
     if (toolManager)
         toolManager->setNavigationConfig(navigationConfig);
+}
+
+void GLViewport::setPalettePreferences(PalettePreferences* prefs)
+{
+    if (palettePrefs == prefs)
+        return;
+    if (palettePrefs)
+        disconnect(palettePrefs, nullptr, this, nullptr);
+    palettePrefs = prefs;
+    if (palettePrefs) {
+        paletteColors = palettePrefs->activeColors();
+        connect(palettePrefs,
+                &PalettePreferences::paletteChanged,
+                this,
+                [this](const PalettePreferences::ColorSet& colors) {
+                    paletteColors = colors;
+                    update();
+                });
+    } else {
+        paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
+    }
+    update();
 }
 
 void GLViewport::setRenderStyle(Renderer::RenderStyle style)
@@ -355,11 +378,24 @@ Vector3 applyGhostTransform(const Vector3& position, const Tool::PreviewGhost& g
     return result;
 }
 
+float luminance(const QVector4D& color)
+{
+    return std::clamp(0.2126f * color.x() + 0.7152f * color.y() + 0.0722f * color.z(), 0.0f, 1.0f);
+}
+
+QVector4D grayscaleWithRange(const QVector4D& color, float minValue, float maxValue)
+{
+    float tone = luminance(color);
+    tone = std::clamp(tone, minValue, maxValue);
+    return QVector4D(tone, tone, tone, color.w());
+}
+
 void drawCurve(Renderer& renderer,
                const Curve& curve,
                bool selected,
                bool treatAsHidden,
-               Renderer::RenderStyle style)
+               Renderer::RenderStyle style,
+               const PalettePreferences::ColorSet& palette)
 {
     const auto& pts = curve.getBoundaryLoop();
     if (pts.size() < 2) {
@@ -373,16 +409,18 @@ void drawCurve(Renderer& renderer,
     QVector4D color;
     float width = selected ? 3.0f : 2.0f;
     if (treatAsHidden) {
-        color = QVector4D(0.35f, 0.35f, 0.35f, 0.65f);
-        width = 1.8f;
+        color = selected ? palette.hiddenCurveSelected : palette.hiddenCurve;
+        width = selected ? 2.0f : 1.8f;
     } else if (style == Renderer::RenderStyle::Monochrome) {
-        color = selected ? QVector4D(0.22f, 0.22f, 0.22f, 1.0f) : QVector4D(0.13f, 0.13f, 0.13f, 1.0f);
+        QVector4D base = selected ? palette.curveSelected : palette.curve;
+        color = grayscaleWithRange(base, selected ? 0.18f : 0.12f, selected ? 0.3f : 0.2f);
         width = selected ? 2.6f : 1.8f;
     } else if (style == Renderer::RenderStyle::HiddenLine) {
-        color = selected ? QVector4D(0.18f, 0.18f, 0.18f, 1.0f) : QVector4D(0.12f, 0.12f, 0.12f, 1.0f);
+        QVector4D base = selected ? palette.curveSelected : palette.curve;
+        color = grayscaleWithRange(base, selected ? 0.18f : 0.12f, selected ? 0.28f : 0.18f);
         width = selected ? 2.4f : 1.6f;
     } else {
-        color = selected ? QVector4D(0.95f, 0.35f, 0.25f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
+        color = selected ? palette.curveSelected : palette.curve;
     }
     bool depthTest = !treatAsHidden;
     bool blend = treatAsHidden;
@@ -402,15 +440,18 @@ void drawSolid(Renderer& renderer,
                const Solid& solid,
                bool selected,
                bool treatAsHidden,
-               Renderer::RenderStyle style)
+               Renderer::RenderStyle style,
+               const PalettePreferences::ColorSet& palette)
 {
     const HalfEdgeMesh& mesh = solid.getMesh();
     const auto& vertices = mesh.getVertices();
     const auto& triangles = mesh.getTriangles();
 
-    QVector4D fillColor = selected ? QVector4D(0.85f, 0.73f, 0.42f, 1.0f) : QVector4D(0.7f, 0.75f, 0.8f, 1.0f);
+    QVector4D fillColor = selected ? palette.fillSelected : palette.fill;
     if (style == Renderer::RenderStyle::Monochrome) {
-        fillColor = selected ? QVector4D(0.93f, 0.93f, 0.93f, 1.0f) : QVector4D(0.82f, 0.84f, 0.86f, 1.0f);
+        fillColor = grayscaleWithRange(fillColor, selected ? 0.8f : 0.7f, selected ? 0.95f : 0.9f);
+    } else if (style == Renderer::RenderStyle::HiddenLine) {
+        fillColor = grayscaleWithRange(fillColor, 0.72f, 0.9f);
     }
     if (!treatAsHidden) {
         for (const auto& tri : triangles) {
@@ -432,12 +473,14 @@ void drawSolid(Renderer& renderer,
         }
     }
 
-    QVector4D edgeColor = selected ? QVector4D(0.35f, 0.15f, 0.05f, 1.0f) : QVector4D(0.1f, 0.1f, 0.1f, 1.0f);
-    if (style == Renderer::RenderStyle::Monochrome || style == Renderer::RenderStyle::HiddenLine) {
-        edgeColor = selected ? QVector4D(0.2f, 0.2f, 0.2f, 1.0f) : QVector4D(0.13f, 0.13f, 0.13f, 1.0f);
+    QVector4D edgeColor = selected ? palette.edgeSelected : palette.edge;
+    if (style == Renderer::RenderStyle::Monochrome) {
+        edgeColor = grayscaleWithRange(edgeColor, selected ? 0.2f : 0.13f, selected ? 0.32f : 0.19f);
+    } else if (style == Renderer::RenderStyle::HiddenLine) {
+        edgeColor = grayscaleWithRange(edgeColor, selected ? 0.2f : 0.12f, selected ? 0.3f : 0.18f);
     }
     if (treatAsHidden) {
-        edgeColor = QVector4D(0.38f, 0.38f, 0.38f, 0.75f);
+        edgeColor = selected ? palette.hiddenEdgeSelected : palette.hiddenEdge;
     }
     const auto& faces = mesh.getFaces();
     for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
@@ -458,8 +501,8 @@ void drawSolid(Renderer& renderer,
             continue;
         }
         if (style == Renderer::RenderStyle::HiddenLine && !treatAsHidden) {
-            QVector4D hiddenEdgeColor = selected ? QVector4D(0.65f, 0.65f, 0.65f, 1.0f)
-                                                 : QVector4D(0.55f, 0.55f, 0.55f, 1.0f);
+            QVector4D hiddenEdgeColor = selected ? palette.hiddenCurveSelected : palette.hiddenCurve;
+            hiddenEdgeColor.setW(1.0f);
             renderer.addLineStrip(positions,
                                   hiddenEdgeColor,
                                   selected ? 1.9f : 1.4f,
@@ -486,7 +529,10 @@ void drawSolid(Renderer& renderer,
     }
 }
 
-void drawGhostCurve(Renderer& renderer, const Curve& curve, const Tool::PreviewGhost& ghost)
+void drawGhostCurve(Renderer& renderer,
+                    const Curve& curve,
+                    const Tool::PreviewGhost& ghost,
+                    const PalettePreferences::ColorSet& palette)
 {
     const auto& pts = curve.getBoundaryLoop();
     if (pts.size() < 2) {
@@ -498,10 +544,15 @@ void drawGhostCurve(Renderer& renderer, const Curve& curve, const Tool::PreviewG
         Vector3 transformed = applyGhostTransform(p, ghost);
         positions.push_back(toQt(transformed));
     }
-    renderer.addLineStrip(positions, QVector4D(0.25f, 0.55f, 0.95f, kGhostAlpha), 2.4f, false, true, true);
+    QVector4D ghostColor = palette.highlight;
+    ghostColor.setW(kGhostAlpha);
+    renderer.addLineStrip(positions, ghostColor, 2.4f, false, true, true);
 }
 
-void drawGhostSolid(Renderer& renderer, const Solid& solid, const Tool::PreviewGhost& ghost)
+void drawGhostSolid(Renderer& renderer,
+                    const Solid& solid,
+                    const Tool::PreviewGhost& ghost,
+                    const PalettePreferences::ColorSet& palette)
 {
     const HalfEdgeMesh& mesh = solid.getMesh();
     const auto& vertices = mesh.getVertices();
@@ -526,7 +577,9 @@ void drawGhostSolid(Renderer& renderer, const Solid& solid, const Tool::PreviewG
         if (!valid || positions.size() < 2) {
             continue;
         }
-        renderer.addLineStrip(positions, QVector4D(0.25f, 0.55f, 0.95f, kGhostAlpha), 2.0f, true, true, true);
+        QVector4D ghostColor = palette.highlight;
+        ghostColor.setW(kGhostAlpha);
+        renderer.addLineStrip(positions, ghostColor, 2.0f, true, true, true);
     }
 }
 
@@ -565,13 +618,15 @@ void GLViewport::drawSceneGeometry()
                       *static_cast<const Curve*>(uptr.get()),
                       uptr->isSelected(),
                       treatAsHidden,
-                      renderStyle);
+                      renderStyle,
+                      paletteColors);
         } else if (uptr->getType() == ObjectType::Solid) {
             drawSolid(renderer,
                       *static_cast<const Solid*>(uptr.get()),
                       uptr->isSelected(),
                       treatAsHidden,
-                      renderStyle);
+                      renderStyle,
+                      paletteColors);
         }
     }
 }
@@ -726,9 +781,9 @@ void GLViewport::drawSceneOverlays()
             continue;
         }
         if (ghost.object->getType() == ObjectType::Curve) {
-            drawGhostCurve(renderer, *static_cast<const Curve*>(ghost.object), ghost);
+            drawGhostCurve(renderer, *static_cast<const Curve*>(ghost.object), ghost, paletteColors);
         } else if (ghost.object->getType() == ObjectType::Solid) {
-            drawGhostSolid(renderer, *static_cast<const Solid*>(ghost.object), ghost);
+            drawGhostSolid(renderer, *static_cast<const Solid*>(ghost.object), ghost, paletteColors);
         }
     }
 }

@@ -150,3 +150,11 @@ Icon assets are stored under `resources/icons` and bundled using Qt's resource s
 
 ## License
 This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
+
+FreeCrafter links against the Qt framework, which is provided under the
+LGPLv3 when using the community distribution. Distributors who ship the
+generated one-click installer must include Qt's licence texts and comply with
+the LGPL's requirements (for example providing a copy of the licence, crediting
+Qt, and allowing relinking against a different Qt build). Refer to
+[`docs/legal/qt-licensing.md`](docs/legal/qt-licensing.md) for the current
+checklist.

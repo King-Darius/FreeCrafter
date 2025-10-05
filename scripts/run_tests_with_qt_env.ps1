@@ -35,6 +35,12 @@ if (-not (Test-Path $buildPath)) {
     Write-Error "Build directory '$buildPath' does not exist." -ErrorAction Stop
 }
 $envPath = $env:PATH
+$commonEnvCommands = [System.Collections.Generic.List[string]]::new()
+$commonEnvCommands.Add("set `"PATH=$qtBin;$envPath`"")
+$commonEnvCommands.Add("set `"QT_PLUGIN_PATH=$qtPlugins`"")
+$commonEnvCommands.Add("set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`"")
+$commonEnvCommands.Add("set `"QT_QPA_PLATFORM=windows`"")
+
 if ($UseCTest) {
     $ctestArgsList = [System.Collections.Generic.List[string]]::new()
     if ($CTestArgs -and $CTestArgs.Count -gt 0) {
@@ -73,13 +79,20 @@ if ($UseCTest) {
     }
 
     $args = [string]::Join(' ', $ctestArgsList)
-    $command = "set `"PATH=$qtBin;$envPath`" && set `"QT_PLUGIN_PATH=$qtPlugins`" && set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`" && set `"QT_QPA_PLATFORM=windows`" && set `"QT_OPENGL=angle`" && set `"FREECRAFTER_RENDER_SKIP_COVERAGE=1`" && set `"QT_DEBUG_PLUGINS=1`" && ctest $args"
+    $envCommands = [System.Collections.Generic.List[string]]::new()
+    foreach ($cmd in $commonEnvCommands) {
+        $envCommands.Add($cmd)
+    }
+    $envCommands.Add("set `"QT_OPENGL=angle`"")
+    $envCommands.Add("set `"FREECRAFTER_RENDER_SKIP_COVERAGE=1`"")
+    $envCommands.Add("set `"QT_DEBUG_PLUGINS=1`"")
+    $command = "{0} && ctest {1}" -f ([string]::Join(' && ', $envCommands)), $args
 } else {
     $binary = Join-Path $buildPath "test_render.exe"
     if (-not (Test-Path $binary)) {
         Write-Error "Test binary not found at $binary" -ErrorAction Stop
     }
-    $command = "set `"PATH=$qtBin;$envPath`" && set `"QT_PLUGIN_PATH=$qtPlugins`" && set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`" && set `"QT_QPA_PLATFORM=windows`" && `"$binary`""
+    $command = "{0} && `"{1}`"" -f ([string]::Join(' && ', $commonEnvCommands)), $binary
 }
 Push-Location $buildPath
 try {

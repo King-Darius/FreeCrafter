@@ -4,6 +4,8 @@
 #include <QPainter>
 #include <QMatrix4x4>
 #include <QVector4D>
+#include <QVector2D>
+#include <QOpenGLShader>
 
 #include <QOpenGLContext>
 
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <array>
+#include <vector>
 
 #include "Tools/ToolManager.h"
 #include "NavigationPreferences.h"
@@ -28,6 +31,35 @@
 
 #include "Scene/SectionPlane.h"
 
+
+namespace {
+
+struct HorizonVertex {
+    QVector2D position;
+    QVector4D color;
+};
+
+constexpr const char* kHorizonVertexShader = R"(
+#version 330 core
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec4 a_color;
+out vec4 v_color;
+void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+    v_color = a_color;
+}
+)";
+
+constexpr const char* kHorizonFragmentShader = R"(
+#version 330 core
+in vec4 v_color;
+out vec4 fragColor;
+void main() {
+    fragColor = v_color;
+}
+)";
+
+}
 
 GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
@@ -44,8 +76,9 @@ void GLViewport::initializeGL()
 {
     initializeOpenGLFunctions();
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
+    glClearColor(0.82f, 0.90f, 0.97f, 1.0f);
     renderer.initialize(context()->extraFunctions());
+    initializeHorizonBand();
 }
 
 void GLViewport::resizeGL(int w, int h)
@@ -170,6 +203,7 @@ void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    drawHorizonBand();
 
     float aspect = width() > 0 ? float(width()) / float(height() > 0 ? height() : 1) : 1.0f;
     QMatrix4x4 projectionMatrix = buildProjectionMatrix(aspect);
@@ -244,12 +278,13 @@ void GLViewport::paintGL()
     painter.setRenderHint(QPainter::Antialiasing, true);
     drawInferenceOverlay(painter, projectionMatrix, viewMatrix);
     drawAxisGizmo(painter, viewMatrix);
-    painter.setPen(QColor(231, 234, 240));
-    painter.setBrush(QColor(11, 13, 16, 220));
+    painter.setPen(QColor(206, 214, 224));
+    painter.setBrush(QColor(255, 255, 255, 225));
     QRect hudRect(12, 12, 200, 60);
-    painter.setOpacity(0.85);
-    painter.drawRoundedRect(hudRect, 8, 8);
+    painter.setOpacity(0.9);
+    painter.drawRoundedRect(hudRect, 10, 10);
     painter.setOpacity(1.0);
+    painter.setPen(QColor(60, 72, 86));
     painter.drawText(hudRect.adjusted(12, 12, -12, -12), Qt::AlignLeft | Qt::AlignTop,
                      tr("FPS: %1\nFrame: %2 ms\nDraw Calls: %3")
                          .arg(smoothedFps, 0, 'f', 1)
@@ -259,24 +294,139 @@ void GLViewport::paintGL()
 
 void GLViewport::drawAxes()
 {
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(1, 0, 0) }, QVector4D(1.0f, 0.0f, 0.0f, 1.0f), 2.0f, true, false);
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 1, 0) }, QVector4D(0.0f, 1.0f, 0.0f, 1.0f), 2.0f, true, false);
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 0, 1) }, QVector4D(0.0f, 0.0f, 1.0f, 1.0f), 2.0f, true, false);
+    const float axisLength = 1.5f;
+    const float tickSpacing = 0.5f;
+    const float tickSize = 0.08f;
+    const QVector4D xColor(0.93f, 0.18f, 0.18f, 1.0f);
+    const QVector4D yColor(0.10f, 0.68f, 0.21f, 1.0f);
+    const QVector4D zColor(0.16f, 0.44f, 0.91f, 1.0f);
+
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(axisLength, 0, 0) }, xColor, 3.0f, true, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, axisLength, 0) }, yColor, 3.0f, true, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 0, axisLength) }, zColor, 3.0f, true, false);
+
+    std::vector<QVector3D> tickSegments;
+    for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
+        tickSegments.push_back(QVector3D(t, 0, -tickSize));
+        tickSegments.push_back(QVector3D(t, 0, tickSize));
+    }
+    if (!tickSegments.empty())
+        renderer.addLineSegments(tickSegments, xColor, 2.0f, true, false);
+
+    tickSegments.clear();
+    for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
+        tickSegments.push_back(QVector3D(-tickSize, t, 0));
+        tickSegments.push_back(QVector3D(tickSize, t, 0));
+    }
+    if (!tickSegments.empty())
+        renderer.addLineSegments(tickSegments, yColor, 2.0f, true, false);
+
+    tickSegments.clear();
+    for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
+        tickSegments.push_back(QVector3D(-tickSize, 0, t));
+        tickSegments.push_back(QVector3D(tickSize, 0, t));
+    }
+    if (!tickSegments.empty())
+        renderer.addLineSegments(tickSegments, zColor, 2.0f, true, false);
 }
 
 void GLViewport::drawGrid()
 {
-    const int N = 20;
-    const float S = 1.0f;
-    std::vector<QVector3D> segments;
-    segments.reserve(static_cast<size_t>((N * 2 + 1) * 4));
-    for (int i = -N; i <= N; ++i) {
-        segments.emplace_back(i * S, 0.0f, -N * S);
-        segments.emplace_back(i * S, 0.0f, N * S);
-        segments.emplace_back(-N * S, 0.0f, i * S);
-        segments.emplace_back(N * S, 0.0f, i * S);
+    const int divisions = 40;
+    const float spacing = 1.0f;
+    const float fadeScale = 0.075f;
+    const float width = 1.35f;
+    const QVector3D extent(divisions * spacing, 0.0f, divisions * spacing);
+    const QVector3D baseColor(0.74f, 0.78f, 0.82f);
+
+    auto addLine = [&](const QVector3D& a, const QVector3D& b, float distance) {
+        float fade = std::exp(-std::abs(distance) * fadeScale);
+        float alpha = 0.55f * fade;
+        if (alpha < 0.02f)
+            return;
+        QVector4D color(baseColor.x(), baseColor.y(), baseColor.z(), alpha);
+        renderer.addLineSegments(std::vector<QVector3D>{ a, b },
+                                 color,
+                                 width,
+                                 true,
+                                 true,
+                                 Renderer::LineCategory::Generic,
+                                 true,
+                                 14.0f);
+    };
+
+    for (int i = -divisions; i <= divisions; ++i) {
+        float coord = i * spacing;
+        QVector3D start(coord, 0.0f, -extent.z());
+        QVector3D end(coord, 0.0f, extent.z());
+        addLine(start, end, coord);
     }
-    renderer.addLineSegments(segments, QVector4D(0.85f, 0.85f, 0.85f, 1.0f), 1.0f, true, false);
+
+    for (int i = -divisions; i <= divisions; ++i) {
+        float coord = i * spacing;
+        QVector3D start(-extent.x(), 0.0f, coord);
+        QVector3D end(extent.x(), 0.0f, coord);
+        addLine(start, end, coord);
+    }
+}
+
+void GLViewport::initializeHorizonBand()
+{
+    horizonReady = false;
+    horizonProgram.removeAllShaders();
+
+    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kHorizonVertexShader))
+        return;
+    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kHorizonFragmentShader))
+        return;
+    if (!horizonProgram.link())
+        return;
+
+    if (!horizonVbo.isCreated() && !horizonVbo.create())
+        return;
+
+    const float horizonHeight = -0.18f;
+    const QVector4D groundColor(0.94f, 0.90f, 0.83f, 1.0f);
+    std::array<HorizonVertex, 4> vertices = {
+        HorizonVertex{ QVector2D(-1.0f, horizonHeight), groundColor },
+        HorizonVertex{ QVector2D(1.0f, horizonHeight), groundColor },
+        HorizonVertex{ QVector2D(-1.0f, -1.0f), groundColor },
+        HorizonVertex{ QVector2D(1.0f, -1.0f), groundColor }
+    };
+
+    horizonVbo.bind();
+    horizonVbo.allocate(vertices.data(), static_cast<int>(vertices.size() * sizeof(HorizonVertex)));
+    horizonVbo.release();
+
+    if (!horizonVao.isCreated() && !horizonVao.create())
+        return;
+
+    QOpenGLVertexArrayObject::Binder binder(&horizonVao);
+    horizonVbo.bind();
+    horizonProgram.bind();
+    horizonProgram.enableAttributeArray(0);
+    horizonProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(HorizonVertex, position), 2, sizeof(HorizonVertex));
+    horizonProgram.enableAttributeArray(1);
+    horizonProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(HorizonVertex, color), 4, sizeof(HorizonVertex));
+    horizonProgram.release();
+    horizonVbo.release();
+
+    horizonReady = true;
+}
+
+void GLViewport::drawHorizonBand()
+{
+    if (!horizonReady)
+        return;
+
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    QOpenGLVertexArrayObject::Binder binder(&horizonVao);
+    horizonProgram.bind();
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    horizonProgram.release();
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
 }
 
 namespace {

@@ -34,8 +34,9 @@ Welcome, creators and innovators! FreeCrafter is growing fast, and we’re calli
 1. **[Visit FreeCrafter on GitHub](https://github.com/King-Darius/FreeCrafter)**
 2. Browse our issues and feature requests. Suggest your own ideas!
 3. Fork the repo and create a branch for your changes.
-4. Submit a pull request—we’ll help you get it merged.
-5. Reach out if you want to help with outreach or UI/UX!
+4. Review the [Getting Started & Troubleshooting guide](docs/getting_started_and_troubleshooting.md) for build, packaging, and validation steps.
+5. Submit a pull request—we’ll help you get it merged.
+6. Reach out if you want to help with outreach or UI/UX!
 
    ✅ **Windows testing checklist:**
    - Run `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest` so Qt's runtime lands on `PATH` during `ctest`.

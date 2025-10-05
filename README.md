@@ -152,4 +152,19 @@ Icon assets are stored under `resources/icons` and bundled using Qt's resource s
 This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
 See [docs/testing.md](docs/testing.md) for regression test notes.
 
+## Testing
+
+Renderer regression tests require Qt's runtime libraries on `PATH` and in the
+appropriate plugin lookup directories. Helper scripts are provided for each
+platform:
+
+- **Windows:** `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest`
+- **macOS / Linux:** `./scripts/run_tests_with_qt_env.sh --ctest`
+
+Both helpers assume that `scripts/bootstrap.py` has been run so the Qt
+deployment lives under `qt/6.5.3/` in the repository. Pass `--build-dir` (or
+`-BuildDir` on PowerShell) to target an alternate build tree. The scripts export
+the Qt plugin paths and then launch `ctest` (or the `test_render` binary
+directly) with the configured environment.
+
 

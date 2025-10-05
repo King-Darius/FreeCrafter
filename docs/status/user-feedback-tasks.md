@@ -9,6 +9,10 @@ These tasks capture recent user feedback that needs follow-up work.
 4. Socialize the palette options with design/UX for sign-off, then break down implementation tasks for updating shaders, UI previews, and configuration storage.
 :::
 
+:::note
+**Update:** Soft Green, Lavender, and Powder Blue presets are now selectable from **View ▸ Surface Palette**, apply immediately in the viewport, and persist with each `.fcm` project. The active choice is also stored in user settings to seed new documents, matching the design backlog workflow. Follow-up validation (Qt-dependent build/tests and in-app smoke checks) remains outstanding and should be rerun once the toolchain is available.
+:::
+
 :::task-stub{title="Write a troubleshooting guide for launching FreeCrafter"}
 1. Expand the README/CONTRIBUTING build sections with a step-by-step Windows walkthrough covering bootstrap, required Qt dependencies, and PATH setup, linking to automation scripts where available.
 2. Document the most common startup failures (missing Qt DLLs, CMake not on PATH, outdated Visual Studio redistributables) and add quick diagnostics/commands for each.

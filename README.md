@@ -161,10 +161,12 @@ platform:
 - **Windows:** `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest`
 - **macOS / Linux:** `./scripts/run_tests_with_qt_env.sh --ctest`
 
-Both helpers assume that `scripts/bootstrap.py` has been run so the Qt
-deployment lives under `qt/6.5.3/` in the repository. Pass `--build-dir` (or
-`-BuildDir` on PowerShell) to target an alternate build tree. The scripts export
-the Qt plugin paths and then launch `ctest` (or the `test_render` binary
-directly) with the configured environment.
+Both helpers reuse `scripts/bootstrap.py` to locate the Qt deployment (for
+example `qt/6.5.3/msvc2019_64` on Windows or `qt/6.5.3/clang_64` on macOS).
+Pass `--build-dir` (or `-BuildDir` on PowerShell) to target an alternate build
+tree. When Qt lives outside the repository, pass `--qt-prefix`/`-QtPrefix` to
+point the helper at a custom Qt installation. The scripts export the Qt plugin
+paths and then launch `ctest` (or the `test_render` binary directly) with the
+configured environment.
 
 

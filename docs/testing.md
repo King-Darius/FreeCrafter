@@ -31,12 +31,15 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseC
 ./scripts/run_tests_with_qt_env.sh --ctest
 ```
 
-The POSIX helper mirrors the PowerShell behaviour with repo-relative paths.
-On Linux the script prefers the `offscreen` Qt platform plugin to avoid
-requiring an attached display, while on macOS it targets the `cocoa` plugin so
-the system toolkits are available. The script adjusts `PATH`,
-`LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`, and the Qt plugin paths before calling
-`ctest` or, if requested, `test_render` directly.
+The POSIX helper mirrors the PowerShell behaviour but defers to
+`scripts/bootstrap.py` to discover the Qt runtime (matching the
+`qt/<version>/<arch>` layout produced by the bootstrapper). On Linux the script
+prefers the `offscreen` Qt platform plugin to avoid requiring an attached
+display, while on macOS it targets the `cocoa` plugin so the system toolkits
+are available. The helper adjusts `PATH`, `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`,
+`DYLD_FRAMEWORK_PATH`, and the Qt plugin paths before calling `ctest` or, if
+requested, `test_render` directly. Pass `--qt-prefix /path/to/Qt` to target a
+system-wide Qt installation.
 
 The `ctest` transcript is always written to
 `build/Testing/Temporary/LastTest.log`.

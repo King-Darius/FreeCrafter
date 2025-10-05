@@ -2,6 +2,21 @@
 
 #include <istream>
 #include <ostream>
+#include <sstream>
+
+namespace {
+
+Scene::SceneSettings::PaletteState defaultPalette()
+{
+    Scene::SceneSettings::PaletteState state;
+    state.id = "softGreen";
+    state.fill = {0.74f, 0.83f, 0.78f, 1.0f};
+    state.edge = {0.20f, 0.30f, 0.24f, 1.0f};
+    state.highlight = {0.36f, 0.62f, 0.49f, 1.0f};
+    return state;
+}
+
+} // namespace
 
 namespace Scene {
 
@@ -14,22 +29,68 @@ void SceneSettings::reset()
 {
     planesVisible = true;
     fillsVisible = true;
+    paletteState = defaultPalette();
 }
 
 void SceneSettings::serialize(std::ostream& os) const
 {
-    os << (planesVisible ? 1 : 0) << ' ' << (fillsVisible ? 1 : 0) << '\n';
+    os << "planes " << (planesVisible ? 1 : 0) << '\n';
+    os << "fills " << (fillsVisible ? 1 : 0) << '\n';
+    os << "palette " << paletteState.id << '\n';
+    os << "fill " << paletteState.fill.r << ' ' << paletteState.fill.g << ' ' << paletteState.fill.b << ' '
+       << paletteState.fill.a << '\n';
+    os << "edge " << paletteState.edge.r << ' ' << paletteState.edge.g << ' ' << paletteState.edge.b << ' '
+       << paletteState.edge.a << '\n';
+    os << "highlight " << paletteState.highlight.r << ' ' << paletteState.highlight.g << ' '
+       << paletteState.highlight.b << ' ' << paletteState.highlight.a << '\n';
 }
 
-bool SceneSettings::deserialize(std::istream& is)
+bool SceneSettings::deserialize(std::istream& is, int version)
 {
-    int planes = 1;
-    int fills = 1;
-    if (!(is >> planes >> fills)) {
-        return false;
+    reset();
+    if (version < 3) {
+        int planes = 1;
+        int fills = 1;
+        if (!(is >> planes >> fills)) {
+            return false;
+        }
+        planesVisible = planes != 0;
+        fillsVisible = fills != 0;
+        return true;
     }
-    planesVisible = planes != 0;
-    fillsVisible = fills != 0;
+
+    std::string line;
+    while (std::getline(is, line)) {
+        if (line.empty())
+            continue;
+        if (line == "END_SETTINGS")
+            break;
+        std::istringstream ss(line);
+        std::string key;
+        ss >> key;
+        if (key == "planes") {
+            int value = planesVisible ? 1 : 0;
+            if (ss >> value)
+                planesVisible = value != 0;
+        } else if (key == "fills") {
+            int value = fillsVisible ? 1 : 0;
+            if (ss >> value)
+                fillsVisible = value != 0;
+        } else if (key == "palette") {
+            ss >> paletteState.id;
+        } else if (key == "fill") {
+            ss >> paletteState.fill.r >> paletteState.fill.g >> paletteState.fill.b >> paletteState.fill.a;
+        } else if (key == "edge") {
+            ss >> paletteState.edge.r >> paletteState.edge.g >> paletteState.edge.b >> paletteState.edge.a;
+        } else if (key == "highlight") {
+            ss >> paletteState.highlight.r >> paletteState.highlight.g >> paletteState.highlight.b
+               >> paletteState.highlight.a;
+        }
+    }
+
+    if (paletteState.id.empty())
+        paletteState = defaultPalette();
+
     return true;
 }
 

@@ -14,6 +14,7 @@ class QTabBar;
 class QActionGroup;
 class MeasurementWidget;
 class NavigationPreferences;
+class PalettePreferences;
 class EnvironmentPanel;
 
 #include "HotkeyManager.h"
@@ -22,6 +23,8 @@ class EnvironmentPanel;
 #include "CameraController.h"
 #include "Navigation/ViewPresetManager.h"
 #include "SunSettings.h"
+
+#include <QHash>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -89,6 +92,7 @@ private:
     GLViewport* viewport = nullptr;
     std::unique_ptr<ToolManager> toolManager;
     std::unique_ptr<NavigationPreferences> navigationPrefs;
+    std::unique_ptr<PalettePreferences> palettePrefs;
     MeasurementWidget* measurementWidget = nullptr;
     QLabel* hintLabel = nullptr;
     QLabel* coordLabel = nullptr;
@@ -148,6 +152,7 @@ private:
     QAction* gridAction = nullptr;
 
     QActionGroup* renderStyleGroup = nullptr;
+    QActionGroup* paletteActionGroup = nullptr;
     QAction* renderWireframeAction = nullptr;
     QAction* renderShadedAction = nullptr;
     QAction* renderShadedEdgesAction = nullptr;
@@ -158,6 +163,7 @@ private:
     QActionGroup* toolActionGroup = nullptr;
 
     HotkeyManager hotkeys;
+    QHash<QString, QAction*> paletteActions;
     bool darkTheme = true;
     Renderer::RenderStyle renderStyleChoice = Renderer::RenderStyle::ShadedWithEdges;
     bool showHiddenGeometry = false;

@@ -6,19 +6,21 @@ param(
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
-$qtRoot = Join-Path $repoRoot "qt/6.5.3/msvc2019_64"
-$qtBin = Join-Path $qtRoot "bin"
-$qtPlugins = Join-Path $qtRoot "plugins"
-$qtPlatformPlugins = Join-Path $qtPlugins "platforms"
 
 $cmdTool = Get-Command cmd.exe -ErrorAction SilentlyContinue
 if (-not $cmdTool) {
-    Write-Error "cmd.exe was not found on PATH. Launch the script from a standard Windows shell or ensure System32 is available." -ErrorAction Stop
+    Write-Error "cmd.exe was not found on PATH. Run this script from a Visual Studio Developer Prompt or ensure System32 is on PATH." -ErrorAction Stop
 }
+
 $ctestTool = Get-Command ctest -ErrorAction SilentlyContinue
 if ($UseCTest -and -not $ctestTool) {
     Write-Error "CTest was not found on PATH. Run from a Visual Studio Developer Prompt or add CMake's bin directory to PATH." -ErrorAction Stop
 }
+
+$qtRoot = Join-Path $repoRoot "qt/6.5.3/msvc2019_64"
+$qtBin = Join-Path $qtRoot "bin"
+$qtPlugins = Join-Path $qtRoot "plugins"
+$qtPlatformPlugins = Join-Path $qtPlugins "platforms"
 
 if (-not (Test-Path $qtBin)) {
     Write-Error "Qt runtime not found at $qtBin. Run scripts/bootstrap.py first." -ErrorAction Stop

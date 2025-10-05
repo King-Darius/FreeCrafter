@@ -1,0 +1,11 @@
+{
+  "version": "6.5.3",
+  "modules": [
+    "qtbase",
+    "qtimageformats",
+    "qttools",
+    "qtsvg",
+    "qttranslations"
+  ],
+  "last_updated": null
+}

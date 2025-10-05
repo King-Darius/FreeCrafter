@@ -19,6 +19,7 @@ downloading one.
 
 import argparse
 import hashlib
+import json
 import logging
 import os
 import subprocess
@@ -27,7 +28,37 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-QT_VERSION = "6.5.3"
+root = Path(__file__).resolve().parent.parent
+qt_root = root / "qt"
+manifest_path = qt_root / "manifest.json"
+
+DEFAULT_QT_VERSION = "6.5.3"
+DEFAULT_QT_MODULES = [
+    "qtbase",
+    "qtimageformats",
+    "qttools",
+    "qtsvg",
+    "qttranslations",
+]
+DEFAULT_QT_TOOLS: List[str] = []
+
+
+def _load_manifest() -> dict:
+    if not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        logging.warning("Failed to read %s: %s", manifest_path, exc)
+        return {}
+    return data
+
+
+manifest = _load_manifest()
+
+QT_VERSION = manifest.get("version", DEFAULT_QT_VERSION)
+
 HOST = {
     "linux": "linux",
     "linux2": "linux",
@@ -41,8 +72,9 @@ ARCH = {
     "win32": "win64_msvc2019_64",
 }[sys.platform]
 
-root = Path(__file__).resolve().parent.parent
-qt_root = root / "qt"
+REQUESTED_MODULES = manifest.get("modules", DEFAULT_QT_MODULES)
+REQUESTED_TOOLS = manifest.get("tools", DEFAULT_QT_TOOLS)
+
 install_dir = qt_root / QT_VERSION / ARCH
 
 def _valid_prefix(prefix: Path) -> bool:
@@ -171,6 +203,10 @@ def ensure_qt(offline: bool) -> Path:
         "-O",
         str(qt_root),
     ]
+    modules = [module for module in REQUESTED_MODULES if module]
+    if modules:
+        logging.info("Requesting Qt modules: %s", ", ".join(modules))
+        cmd += ["--modules", *modules]
     rc = run(cmd)
     if rc != 0:
         raise subprocess.CalledProcessError(rc, cmd)

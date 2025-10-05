@@ -56,7 +56,9 @@ constexpr double kPi = 3.14159265358979323846;
 
 
 #include <QLabel>
-
+#include "NavigationPreferences.h"
+#include "PalettePreferences.h"
+
 
 
 #include <QMenu>
@@ -113,7 +115,9 @@ constexpr double kPi = 3.14159265358979323846;
 
 #include <QVBoxLayout>
 
-
+    if (palettePrefs)
+        palettePrefs->setActivePalette(palettePrefs->activePaletteId());
+
 
 #include <QWidgetAction>
 
@@ -896,6 +900,19 @@ MeasurementParseResult parseDistanceMeasurement(const QString& raw, const QStrin
 
 
 {
+    palettePrefs = std::make_unique<PalettePreferences>(this);
+    palettePrefs->attachDocument(viewport->getDocument());
+    connect(palettePrefs.get(),
+            &PalettePreferences::paletteChanged,
+            this,
+            [this](const PalettePreferences::ColorSet&) {
+                syncViewSettingsUI();
+                if (paletteActionGroup) {
+                    if (statusBar())
+                        statusBar()->showMessage(tr("Palette set to %1").arg(palettePrefs->activePaletteLabel()), 1500);
+                    persistViewSettings();
+                }
+            });
 
 
 
@@ -948,6 +965,14 @@ MeasurementParseResult parseAngleMeasurement(const QString& raw)
 
 
         return result;
+    QString storedPaletteId;
+        storedPaletteId = settings.value(QStringLiteral("%1/paletteId").arg(kSettingsGroup), storedPaletteId).toString();
+    if (palettePrefs) {
+        if (!storedPaletteId.isEmpty())
+            palettePrefs->setActivePalette(storedPaletteId);
+        viewport->setPalettePreferences(palettePrefs.get());
+    }
+
 
 
 
@@ -1366,7 +1391,29 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 }
 
 
-
+    QMenu* paletteMenu = viewMenu->addMenu(tr("Surface Palette"));
+    paletteActionGroup = new QActionGroup(this);
+    paletteActionGroup->setExclusive(true);
+    paletteActions.clear();
+    QList<PalettePreferences::PaletteInfo> palettes = palettePrefs ? palettePrefs->availablePalettes() : QList<PalettePreferences::PaletteInfo>{};
+    QString activePaletteId = palettePrefs ? palettePrefs->activePaletteId() : QString();
+    for (const auto& info : palettes) {
+        QAction* paletteAction = paletteMenu->addAction(info.label);
+        paletteAction->setCheckable(true);
+        paletteAction->setData(info.id);
+        paletteAction->setToolTip(info.description);
+        paletteActionGroup->addAction(paletteAction);
+        paletteActions.insert(info.id, paletteAction);
+        if (info.id == activePaletteId)
+            paletteAction->setChecked(true);
+        connect(paletteAction, &QAction::triggered, this, [this, id = info.id]() {
+            if (palettePrefs)
+                palettePrefs->setActivePalette(id);
+        });
+    }
+    if (paletteMenu->actions().isEmpty())
+        paletteMenu->setEnabled(false);
+
 
 
 
@@ -1567,7 +1614,17 @@ QString MainWindow::navigationHintForTool(const QString& toolName) const
 
 
 
-        parts << button;
+        parts << button;    if (palettePrefs && !paletteActions.isEmpty()) {
+        const QString activePalette = palettePrefs->activePaletteId();
+        for (auto it = paletteActions.begin(); it != paletteActions.end(); ++it) {
+            QAction* paletteAction = it.value();
+            if (!paletteAction)
+                continue;
+            QSignalBlocker blocker(paletteAction);
+            paletteAction->setChecked(it.key() == activePalette);
+        }
+    }
+
 
 
 
@@ -2316,6 +2373,8 @@ void MainWindow::createMenus()
 
         statusBar()->showMessage(tr("Zoomed out"), 600);
 
+    if (palettePrefs)
+        settings.setValue(QStringLiteral("paletteId"), palettePrefs->activePaletteId());
 
 
     });
@@ -2444,7 +2503,10 @@ void MainWindow::createMenus()
 
     connect(actionViewTop, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Top); });
 
-
+    if (palettePrefs)
+        palettePrefs->refreshFromDocument();
+    if (palettePrefs)
+        palettePrefs->refreshFromDocument();
 
 
 

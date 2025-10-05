@@ -2,6 +2,9 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
+#include <QOpenGLShaderProgram>
+#include <QOpenGLBuffer>
+#include <QOpenGLVertexArrayObject>
 #include <QTimer>
 #include <QPoint>
 #include <QElapsedTimer>
@@ -78,6 +81,8 @@ protected:
 private:
     void drawAxes();
     void drawGrid();
+    void initializeHorizonBand();
+    void drawHorizonBand();
     void drawSceneGeometry();
     void drawSceneOverlays();
     void drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const;
@@ -114,4 +119,9 @@ private:
     SunSettings environmentSettings;
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");
+
+    QOpenGLShaderProgram horizonProgram;
+    QOpenGLBuffer horizonVbo { QOpenGLBuffer::VertexBuffer };
+    QOpenGLVertexArrayObject horizonVao;
+    bool horizonReady = false;
 };

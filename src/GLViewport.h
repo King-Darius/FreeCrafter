@@ -16,6 +16,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
+#include "PalettePreferences.h"
 #include "SunSettings.h"
 #include "Navigation/ViewPresetManager.h"
 #include "NavigationConfig.h"
@@ -35,6 +36,7 @@ public:
 
     void setToolManager(ToolManager* manager);
     void setNavigationPreferences(NavigationPreferences* prefs);
+    void setPalettePreferences(PalettePreferences* prefs);
     void setRenderStyle(Renderer::RenderStyle style);
     Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
     void setShowHiddenGeometry(bool show);
@@ -100,6 +102,8 @@ private:
     ToolManager* toolManager = nullptr;
     NavigationPreferences* navigationPrefs = nullptr;
     NavigationConfig navigationConfig;
+    PalettePreferences* palettePrefs = nullptr;
+    PalettePreferences::ColorSet paletteColors;
 
     QPoint lastMouse;
     QPoint lastDeviceMouse;
@@ -125,3 +129,4 @@ private:
     QOpenGLVertexArrayObject horizonVao;
     bool horizonReady = false;
 };
+

@@ -17,6 +17,7 @@ add_library(freecrafter_lib
     src/CameraNavigation.cpp
     src/HotkeyManager.cpp
     src/NavigationPreferences.cpp
+    src/PalettePreferences.cpp
     src/Navigation/ViewPresetManager.cpp
     src/GeometryKernel/Curve.cpp
     src/GeometryKernel/HalfEdgeMesh.cpp
@@ -80,12 +81,18 @@ target_link_libraries(test_render
     PRIVATE freecrafter_lib
             Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
+add_executable(test_scene_settings tests/test_scene_settings.cpp)
+target_include_directories(test_scene_settings PRIVATE src)
+target_link_libraries(test_scene_settings PRIVATE freecrafter_lib)
+
 set(_qt_bin_dir "${CMAKE_SOURCE_DIR}/qt/6.5.3/msvc2019_64/bin")
 add_test(NAME render_regression COMMAND $<TARGET_FILE:test_render>)
 if(EXISTS "${_qt_bin_dir}")
   string(REPLACE ";" "\;" _system_path "$ENV{PATH}")
   set_property(TEST render_regression PROPERTY ENVIRONMENT "PATH=${_qt_bin_dir}\;${_system_path}")
 endif()
+
+add_test(NAME scene_settings COMMAND $<TARGET_FILE:test_scene_settings>)
 
 # Include Windows redistributable if present
 

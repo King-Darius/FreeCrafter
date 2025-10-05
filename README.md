@@ -181,19 +181,21 @@ Icon assets are stored under `resources/icons` and bundled using Qt's resource s
 This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
 See [docs/testing.md](docs/testing.md) for regression test notes.
 
-### Troubleshooting Qt plugin discovery on Windows
+## Testing
 
-When running the automated test suite on Windows, prefer invoking the helper
-script with the `-UseCTest` flag:
+Renderer regression tests require Qt's runtime libraries on `PATH` and in the
+appropriate plugin lookup directories. Helper scripts are provided for each
+platform:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest
-```
+- **Windows:** `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest`
+- **macOS / Linux:** `./scripts/run_tests_with_qt_env.sh --ctest`
 
-The script now forces `QT_DEBUG_PLUGINS=1` for the CTest invocation and extends
-the process environment so Qt can locate its `platforms`, `styles`, and other
-plugin directories that ship alongside the bootstrapped runtime. The resulting
-log output is written directly to the console, making it easier to diagnose any
-future plugin loading failures without additional setup.
+Both helpers reuse `scripts/bootstrap.py` to locate the Qt deployment (for
+example `qt/6.5.3/msvc2019_64` on Windows or `qt/6.5.3/clang_64` on macOS).
+Pass `--build-dir` (or `-BuildDir` on PowerShell) to target an alternate build
+tree. When Qt lives outside the repository, pass `--qt-prefix`/`-QtPrefix` to
+point the helper at a custom Qt installation. The scripts export the Qt plugin
+paths and then launch `ctest` (or the `test_render` binary directly) with the
+configured environment.
 
 

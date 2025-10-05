@@ -82,19 +82,22 @@ If you prefer a graphical installer, launch:
 python scripts/gui_bootstrap.py
 ```
 
-This GUI streams progress from `bootstrap.py` and provides an "Install" button to start the build. To create a standalone executable that users can double‑click, run:
+This GUI streams progress from `bootstrap.py` and provides an "Install" button
+to start the build. To create a standalone executable that users can
+double‑click, run:
 
 ```bash
 python scripts/package_gui_bootstrap.py
 ```
 
-The command uses [PyInstaller](https://pyinstaller.org/) and writes the bundled executable to the `dist` directory.
+The command uses [PyInstaller](https://pyinstaller.org/) and writes the bundled
+executable to the `dist` directory.
 
-
-> **Note:** IDEs or language servers may report `Import "aqtinstall" could not be resolved`
-> until the packages listed in [`scripts/requirements.txt`](scripts/requirements.txt) are
-> installed for the Python interpreter they use. Creating a virtual environment and
-> ensuring `pip` points to that interpreter usually resolves the warning.
+> **Note:** IDEs or language servers may report `Import "aqtinstall" could not
+> be resolved` until the packages listed in
+> [`scripts/requirements.txt`](scripts/requirements.txt) are installed for the
+> Python interpreter they use. Creating a virtual environment and ensuring `pip`
+> points to that interpreter usually resolves the warning.
 
 The script installs its Python dependencies (including `aqtinstall`) from
 [PyPI](https://pypi.org/project/aqtinstall/) if they are missing, downloads the
@@ -106,6 +109,25 @@ The built program can be found in the `build` directory and should run on a
 machine without any additional setup.
 
 Though we hope to skip even this step in future.
+
+### Windows test helper
+
+When running the renderer regression tests on Windows, prefer the PowerShell
+wrapper in `scripts/run_tests_with_qt_env.ps1` instead of invoking `ctest`
+directly. The script extends `PATH` so the bundled Qt runtime can be found,
+sets diagnostic environment variables, and exports
+`FREECRAFTER_RENDER_SKIP_COVERAGE=1` to keep the tests stable on machines that
+fall back to the software WARP renderer.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest
+```
+
+Use raw `ctest` only if you have already bootstrapped a shell where Qt's
+`bin` directory precedes everything else on `PATH` and you are confident the
+default platform plugin works in your environment. Additional logging options
+and troubleshooting tips are collected in
+[docs/testing.md](docs/testing.md#running-the-windows-regression-test).
 
 ### Installing or Packaging
 
@@ -153,5 +175,22 @@ Icon assets are stored under `resources/icons` and bundled using Qt's resource s
 ## License
 This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
 See [docs/testing.md](docs/testing.md) for regression test notes.
+
+## Testing
+
+Renderer regression tests require Qt's runtime libraries on `PATH` and in the
+appropriate plugin lookup directories. Helper scripts are provided for each
+platform:
+
+- **Windows:** `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest`
+- **macOS / Linux:** `./scripts/run_tests_with_qt_env.sh --ctest`
+
+Both helpers reuse `scripts/bootstrap.py` to locate the Qt deployment (for
+example `qt/6.5.3/msvc2019_64` on Windows or `qt/6.5.3/clang_64` on macOS).
+Pass `--build-dir` (or `-BuildDir` on PowerShell) to target an alternate build
+tree. When Qt lives outside the repository, pass `--qt-prefix`/`-QtPrefix` to
+point the helper at a custom Qt installation. The scripts export the Qt plugin
+paths and then launch `ctest` (or the `test_render` binary directly) with the
+configured environment.
 
 

@@ -6,19 +6,21 @@ param(
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
-$qtRoot = Join-Path $repoRoot "qt/6.5.3/msvc2019_64"
-$qtBin = Join-Path $qtRoot "bin"
-$qtPlugins = Join-Path $qtRoot "plugins"
-$qtPlatformPlugins = Join-Path $qtPlugins "platforms"
 
 $cmdTool = Get-Command cmd.exe -ErrorAction SilentlyContinue
 if (-not $cmdTool) {
-    Write-Error "cmd.exe was not found on PATH. Launch the script from a standard Windows shell or ensure System32 is available." -ErrorAction Stop
+    Write-Error "cmd.exe was not found on PATH. Run this script from a Visual Studio Developer Prompt or ensure System32 is on PATH." -ErrorAction Stop
 }
+
 $ctestTool = Get-Command ctest -ErrorAction SilentlyContinue
 if ($UseCTest -and -not $ctestTool) {
     Write-Error "CTest was not found on PATH. Run from a Visual Studio Developer Prompt or add CMake's bin directory to PATH." -ErrorAction Stop
 }
+
+$qtRoot = Join-Path $repoRoot "qt/6.5.3/msvc2019_64"
+$qtBin = Join-Path $qtRoot "bin"
+$qtPlugins = Join-Path $qtRoot "plugins"
+$qtPlatformPlugins = Join-Path $qtPlugins "platforms"
 
 if (-not (Test-Path $qtBin)) {
     Write-Error "Qt runtime not found at $qtBin. Run scripts/bootstrap.py first." -ErrorAction Stop
@@ -35,6 +37,12 @@ if (-not (Test-Path $buildPath)) {
     Write-Error "Build directory '$buildPath' does not exist." -ErrorAction Stop
 }
 $envPath = $env:PATH
+$commonEnvCommands = [System.Collections.Generic.List[string]]::new()
+$commonEnvCommands.Add("set `"PATH=$qtBin;$envPath`"")
+$commonEnvCommands.Add("set `"QT_PLUGIN_PATH=$qtPlugins`"")
+$commonEnvCommands.Add("set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`"")
+$commonEnvCommands.Add("set `"QT_QPA_PLATFORM=windows`"")
+
 if ($UseCTest) {
     $ctestArgsList = [System.Collections.Generic.List[string]]::new()
     if ($CTestArgs -and $CTestArgs.Count -gt 0) {
@@ -73,13 +81,20 @@ if ($UseCTest) {
     }
 
     $args = [string]::Join(' ', $ctestArgsList)
-    $command = "set `"PATH=$qtBin;$envPath`" && set `"QT_PLUGIN_PATH=$qtPlugins`" && set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`" && set `"QT_QPA_PLATFORM=windows`" && set `"QT_OPENGL=angle`" && set `"FREECRAFTER_RENDER_SKIP_COVERAGE=1`" && set `"QT_DEBUG_PLUGINS=1`" && ctest $args"
+    $envCommands = [System.Collections.Generic.List[string]]::new()
+    foreach ($cmd in $commonEnvCommands) {
+        $envCommands.Add($cmd)
+    }
+    $envCommands.Add("set `"QT_OPENGL=angle`"")
+    $envCommands.Add("set `"FREECRAFTER_RENDER_SKIP_COVERAGE=1`"")
+    $envCommands.Add("set `"QT_DEBUG_PLUGINS=1`"")
+    $command = "{0} && ctest {1}" -f ([string]::Join(' && ', $envCommands)), $args
 } else {
     $binary = Join-Path $buildPath "test_render.exe"
     if (-not (Test-Path $binary)) {
         Write-Error "Test binary not found at $binary" -ErrorAction Stop
     }
-    $command = "set `"PATH=$qtBin;$envPath`" && set `"QT_PLUGIN_PATH=$qtPlugins`" && set `"QT_QPA_PLATFORM_PLUGIN_PATH=$qtPlatformPlugins`" && set `"QT_QPA_PLATFORM=windows`" && `"$binary`""
+    $command = "{0} && `"{1}`"" -f ([string]::Join(' && ', $commonEnvCommands)), $binary
 }
 Push-Location $buildPath
 try {

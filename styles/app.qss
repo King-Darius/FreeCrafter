@@ -1,52 +1,52 @@
 QMainWindow {
-    background: #0B0D10;
-    color: #E7EAF0;
+    background: #F4F7FB;
+    color: #1F2B38;
 }
 
 QToolBar {
-    background: #0F1216;
+    background: #EAF1F8;
     border: none;
-    spacing: 8px;
-    padding: 0 8px;
+    spacing: 10px;
+    padding: 4px 12px;
 }
 
 QToolBar::separator {
-    background: rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.08);
     width: 1px;
     margin: 8px 4px;
 }
 
 QToolBar QToolButton {
-    min-width: 32px;
-    min-height: 32px;
-    border-radius: 6px;
-    color: #E7EAF0;
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 8px;
+    color: #1F2B38;
 }
 
 QToolBar QToolButton:checked {
-    background: rgba(106,169,255,0.24);
+    background: rgba(92, 142, 232, 0.28);
 }
 
 QToolBar QToolButton:hover {
-    background: rgba(255,255,255,0.12);
+    background: rgba(92, 142, 232, 0.18);
 }
 
 QStatusBar {
-    background: #0F1216;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    background: #EAF1F8;
+    border-top: 1px solid rgba(0,0,0,0.08);
     min-height: 28px;
 }
 
 QStatusBar QLabel {
-    color: #E7EAF0;
+    color: #1F2B38;
 }
 
 QComboBox, QLineEdit {
-    background: #14181F;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 6px;
-    padding: 4px 8px;
-    color: #E7EAF0;
+    background: #FFFFFF;
+    border: 1px solid rgba(31,43,56,0.18);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #1F2B38;
 }
 
 QComboBox::drop-down {
@@ -59,21 +59,21 @@ QTabWidget::pane {
 
 QTabBar::tab {
     height: 36px;
-    padding: 0 12px;
-    color: #E7EAF0;
+    padding: 0 16px;
+    color: #1F2B38;
     background: transparent;
-    border-radius: 6px;
+    border-radius: 8px;
 }
 
 QTabBar::tab:selected {
-    background: rgba(255,255,255,0.08);
+    background: rgba(92, 142, 232, 0.16);
 }
 
 QTabBar::tab:hover {
-    background: rgba(255,255,255,0.12);
+    background: rgba(92, 142, 232, 0.24);
 }
 
 *:focus {
-    outline: 2px solid #6AA9FF;
+    outline: 2px solid rgba(92, 142, 232, 0.8);
     outline-offset: 2px;
 }

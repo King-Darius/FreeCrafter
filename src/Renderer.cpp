@@ -1,15 +1,27 @@
 #include "Renderer.h"
 
 #include <QOpenGLExtraFunctions>
-#include <QOpenGLShader>
-#include <QtMath>
-#include <utility>
-#include <algorithm>
-#include <limits>
-
-namespace {
-const char* kLineVertexShader = R"(
-#version 330 core
+const char* kLineFragmentShader = R"(
+#version 330 core
+in vec4 v_color;
+uniform float u_stippleEnabled;
+uniform float u_stippleScale;
+uniform float u_profileMix;
+uniform vec4 u_profileColor;
+out vec4 fragColor;
+void main() {
+    if (u_stippleEnabled > 0.5) {
+        float scale = max(u_stippleScale, 1.0);
+        float pattern = mod(gl_FragCoord.x + gl_FragCoord.y, scale);
+        if (pattern < 0.5 * scale) {
+            discard;
+        }
+    }
+    vec4 baseColor = mix(v_color, u_profileColor, clamp(u_profileMix, 0.0, 1.0));
+    fragColor = baseColor;
+}
+)";
+
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec4 a_color;
 uniform mat4 u_mvp;
@@ -175,12 +187,19 @@ Renderer::~Renderer()
 void Renderer::initialize(QOpenGLExtraFunctions* funcs)
 {
     functions = funcs;
-    if (!lineBuffer.isCreated())
-        lineBuffer.create();
-    if (!triangleBuffer.isCreated())
-        triangleBuffer.create();
-    if (!lineVao.isCreated())
-        lineVao.create();
+    if (!lineBuffer.isCreated())    lineProgram.setUniformValue("u_mvp", mvp);
+    lineProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+    if (clipPlaneCount > 0)
+        lineProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+    lineProgram.setUniformValue("u_stippleEnabled", batch.config.stippled ? 1.0f : 0.0f);
+    lineProgram.setUniformValue("u_stippleScale", batch.config.stippleScale);
+    lineProgram.setUniformValue("u_profileMix", 0.0f);
+    lineProgram.setUniformValue("u_profileColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+    lineProgram.enableAttributeArray(0);
+    lineProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(LineVertex, position), 3, sizeof(LineVertex));
+    lineProgram.enableAttributeArray(1);
+    lineProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(LineVertex, color), 4, sizeof(LineVertex));
+
     if (!triangleVao.isCreated())
         triangleVao.create();
     if (!shadowVao.isCreated())
@@ -322,10 +341,36 @@ void Renderer::addTriangle(const QVector3D& a,
             boundsMax.setZ(std::max(boundsMax.z(), p.z()));
         }
     };
-    updateBounds(a);
-    updateBounds(b);
-    updateBounds(c);
-    triangleBufferDirty = true;
+    updateBounds(a);    bool profilePassActive = currentStyle == RenderStyle::Shaded
+        || currentStyle == RenderStyle::ShadedWithEdges
+        || currentStyle == RenderStyle::Monochrome;
+
+    if (profilePassActive) {
+        for (const auto& batch : lineBatches) {
+            if (batch.vertices.empty())
+                continue;
+            if (batch.config.category != LineCategory::Edge)
+                continue;
+            if (!batch.config.depthTest)
+                continue;
+            ensureLineState(batch);
+            lineProgram.setUniformValue("u_profileColor", QVector4D(0.05f, 0.05f, 0.05f, 1.0f));
+            lineProgram.setUniformValue("u_profileMix", 1.0f);
+            functions->glLineWidth(batch.config.width + 1.2f);
+            functions->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(batch.vertices.size()));
+            ++draws;
+            lineProgram.setUniformValue("u_profileMix", 0.0f);
+            functions->glLineWidth(batch.config.width);
+        }
+    }
+
+    for (const auto& batch : lineBatches) {
+        if (batch.vertices.empty())
+            continue;
+        if (batch.config.category == LineCategory::Edge && currentStyle == RenderStyle::Shaded)
+            continue;
+        ensureLineState(batch);
+
 }
 
 void Renderer::ensurePrograms()

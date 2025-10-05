@@ -1,128 +1,162 @@
 # Getting Started & Troubleshooting
 
-This guide is intended for contributors who want to build FreeCrafter from source, generate a distributable "one-click" bootstrapper, and diagnose the most common errors encountered along the way. Follow the sections in order the first time you work with the repository, then use the troubleshooting references and validation checklist to keep subsequent builds healthy.
+This guide walks you through building FreeCrafter from source, producing the
+PyInstaller-based “one-click” bootstrapper, and verifying that the resulting
+package works on a clean machine. It also catalogs the most common runtime
+errors and the helper scripts that detect or resolve them.
+
+If you are onboarding for the first time, follow the sections in order. Once you
+have a working setup, jump straight to the troubleshooting matrix and validation
+checklist when preparing releases.
 
 ## 1. Prepare Your Environment
 
-1. Install **Python 3.10+** with `pip` on your development machine.
-2. Install the **Visual Studio 2022 Build Tools** (or the full IDE) with the *Desktop development with C++* workload. This provides the MSVC compiler, Windows SDK, and `ctest`.
-3. Ensure Git is on `PATH` and you can clone repositories.
-4. Optionally create and activate a Python virtual environment before running any of the scripts.
+> The bootstrap scripts expect a Windows host today. Linux and macOS builds are
+> still experimental.
 
-> ℹ️ The bootstrap script automatically installs Python dependencies listed in [`scripts/requirements.txt`](../scripts/requirements.txt) on-demand. You only need manual `pip install -r scripts/requirements.txt` runs if you prefer to pre-populate a virtual environment.
+1. Install **Python 3.10 or newer**. `python --version` should resolve to the
+   interpreter you intend to use.
+2. Install the **Visual Studio 2022 Build Tools** (or the full IDE) with the
+   *Desktop development with C++* workload. This installs MSVC, Ninja/CMake, and
+   `ctest`.
+3. Ensure Git is on your `PATH` and that long file paths are enabled if your
+   checkout is under a deep directory hierarchy.
+4. Optional but recommended: create a virtual environment and activate it
+   before running any Python scripts:
 
-## 2. Run the Bootstrap Build (CLI)
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install --upgrade pip
+   ```
 
-1. Open a **Developer Command Prompt for VS 2022** so the MSVC compiler and CMake tools are available on `PATH`.
+5. If you plan to work offline, download the wheels listed in
+   [`scripts/requirements.txt`](../scripts/requirements.txt) ahead of time and
+   place them into a cache directory that you can reference with
+   `python scripts/bootstrap.py --wheel-cache <path>`.
+
+## 2. Run the Bootstrap Build (CLI & GUI)
+
+Both bootstrap entry points live in the `scripts/` directory:
+
+- `bootstrap.py` performs the entire build from the command line.
+- `gui_bootstrap.py` wraps the same logic in a Qt interface for a friendlier
+  “one-click” experience.
+
+### CLI bootstrap
+
+1. Open a **Developer Command Prompt for VS 2022** (or any shell where `cl.exe`
+   and `cmake` resolve).
 2. Clone the repository and change into it.
-3. Execute the bootstrap script:
+3. Run:
 
    ```powershell
    python scripts/bootstrap.py
    ```
 
-4. The script will:
-   - Download the pinned Qt runtime if it is not already cached under `qt/6.5.3/`.
-   - Configure CMake with the located Qt.
-   - Build the application and stage a runnable binary under `build/`.
-   - Deploy Qt runtime artifacts into the build output so the program can launch on machines without Qt installed.
+The script will:
 
-5. On success you can run `build/FreeCrafter.exe` directly. Keep the `build/` directory around for testing and packaging in later steps.
+- Reuse an existing Qt install when available (it searches `CMAKE_PREFIX_PATH`,
+  `Qt6_DIR`, and caches under `qt/6.5.3/<arch>/`).
+- If Qt is missing, call `aqtinstall` to download the pinned `6.5.3`
+  distribution into `qt/`.
+- Configure CMake under `build/`.
+- Compile the application and deploy the Qt runtime beside
+  `build/FreeCrafter.exe` so the binary can launch on machines without Qt.
 
-### GUI Bootstrapper (Optional)
+Captured build output stays in the console. When diagnosing failures, rerun the
+command with `--verbose` to echo the full CMake trace.
 
-For a friendlier experience, launch the Qt-based bootstrapper that wraps the same workflow:
+### GUI bootstrap
+
+Launch the GUI wrapper for the same workflow:
 
 ```powershell
 python scripts/gui_bootstrap.py
 ```
 
-The GUI streams the output of `bootstrap.py` and exposes an **Install** button. Leave the window open until it reports completion, then verify the same `build/` directory described above.
+Keep the window open until it reports **Finished**. The GUI streams the same log
+output you see in the CLI and writes the binaries to the identical `build/`
+folder. When you are satisfied with the run, close the window and proceed to the
+packaging step.
 
-## 3. Generate the One-Click Installer
+## 3. Package the GUI Bootstrapper
 
-The repository provides [`scripts/package_gui_bootstrap.py`](../scripts/package_gui_bootstrap.py) to turn the GUI bootstrapper into a single-file executable via PyInstaller.
+The repository includes [`scripts/package_gui_bootstrap.py`](../scripts/package_gui_bootstrap.py)
+to turn `gui_bootstrap.py` into a single executable using PyInstaller.
 
-1. From the repository root, ensure PyInstaller is available (either through `pip install pyinstaller` or the bootstrap script installing it).
-2. Run the packaging script:
+1. Make sure the bootstrap step above completed successfully so that all
+   dependencies (including `PyInstaller`) are installed.
+2. From the repository root, execute:
 
    ```powershell
    python scripts/package_gui_bootstrap.py
    ```
 
-3. The script emits `dist/FreeCrafterInstaller.exe`. This file contains Python, Qt, and the bootstrapper UI, allowing teammates to kick off the build with one double-click.
-4. Archive the `dist/` output when preparing releases, and keep the build logs produced in the console for later validation.
+3. PyInstaller writes the bundle to `dist/FreeCrafterInstaller.exe` on Windows
+   (and `dist/FreeCrafterInstaller` on Unix hosts). Subsequent runs overwrite the
+   file, so archive it elsewhere when cutting a release.
+4. Collect the console transcript for the release notes—it documents which Qt
+   build and Python environment the installer was produced with.
+
+If you hit import errors here, consult the troubleshooting section on Python
+package issues.
 
 ## 4. Verify the Packaged Build
 
-After packaging, always exercise the installer in an environment that mimics an end-user machine:
+Always test the generated installer on a fresh machine (or virtual machine) that
+mimics an end-user environment:
 
-1. Copy `dist/FreeCrafterInstaller.exe` to a **clean system** (VM, container, or freshly provisioned machine) without pre-installed Qt or build tools.
-2. Launch the executable. The GUI should start without missing DLL errors and run through the bootstrap workflow.
-3. Confirm the script downloads Qt, configures CMake, and builds FreeCrafter successfully on the clean system.
-4. Locate the generated application (`build/FreeCrafter.exe`) and run it once to ensure Qt plugins load correctly.
-5. Optionally install the build with `cmake --install build --prefix dist` to inspect the deployable artifacts.
-
-## 5. Troubleshooting Common Failures
-
-### Missing Qt DLLs or Plugins
-
-**Symptoms:** When running the bootstrapper or the built application you see errors such as `Could not find the Qt platform plugin "windows"` or the process exits immediately.
-
-**Detection:**
-- The bootstrap scripts warn when Qt folders under `qt/6.5.3/` are missing.
-- [`scripts/run_tests_with_qt_env.ps1`](../scripts/run_tests_with_qt_env.ps1) explicitly checks for `bin`, `plugins`, and `plugins/platforms` directories and aborts if they are missing.
-
-**Fix:**
-1. Rerun `python scripts/bootstrap.py` to reinstall Qt.
-2. Ensure antivirus or disk cleaning tools are not deleting the cached Qt directory.
-3. When distributing builds, keep the `platforms/` and other plugin folders alongside the executable or rely on the bootstrapper to populate them.
-
-### `ctest` Not Found
-
-**Symptoms:** Running tests or `cmake --build` fails with `ctest is not recognized` or similar messages.
-
-**Detection:**
-- Launching [`scripts/run_tests_with_qt_env.ps1`](../scripts/run_tests_with_qt_env.ps1) with `-UseCTest` performs a `Get-Command ctest` check and stops with a descriptive error if CTest is absent.
-- Manual invocations of `ctest` from a non-developer shell will also fail.
-
-**Fix:**
-1. Use the **Developer Command Prompt for VS 2022** where CMake and CTest are preconfigured on `PATH`.
-2. Alternatively, add the CMake `bin/` directory (e.g., `C:\Program Files\CMake\bin`) to your system `PATH`.
-3. Re-run the tests via:
+1. Copy `dist/FreeCrafterInstaller.exe` and the bootstrap logs to the clean
+   system. Do **not** install Visual Studio or Qt on this host.
+2. Launch the executable and confirm that:
+   - The GUI starts without missing-DLL dialogs.
+   - Qt downloads (when not cached) and installs into `%LOCALAPPDATA%` or the
+     repository checkout.
+   - CMake configures and builds FreeCrafter without human intervention.
+3. Locate `build/FreeCrafter.exe` on the clean host and run it once. Ensure the
+   Qt window opens, the viewport renders, and basic camera controls (orbit, pan,
+   zoom) work.
+4. Optional: run the staging install to inspect deployable artifacts:
 
    ```powershell
-   pwsh scripts/run_tests_with_qt_env.ps1 -UseCTest
+   cmake --install build --prefix dist
    ```
 
-### Visual C++ Redistributables Missing on Target Machines
+   Confirm that `dist/FreeCrafter.exe` (or the platform equivalent) launches.
 
-**Symptoms:** Launching `FreeCrafter.exe` on a clean system results in runtime errors such as `VCRUNTIME140.dll was not found`.
+Document your observations so the release artifacts remain auditable.
 
-**Detection:**
-- Windows Event Viewer logs and the pop-up dialog will reference the missing MSVC runtime DLLs.
-- Running the executable from `cmd.exe` will print the missing DLL name.
+## 5. Troubleshooting Reference
 
-**Fix:**
-1. Install the [Microsoft Visual C++ Redistributable for VS 2022](https://aka.ms/vs/17/release/vc_redist.x64.exe) on the target machine.
-2. For automated validation, include the redistributable installer in your VM snapshot or provisioning script before testing user-facing builds.
-3. Future releases can bundle the redistributable as part of the official installer—track this in the release checklist.
-
-### Other Dependency Issues
-
-- **Python package import errors (`ImportError: No module named aqtinstall`):** Run `pip install -r scripts/requirements.txt` in your active environment.
-- **`mt.exe` not located:** Ensure the Windows SDK is installed and that `C:\Program Files (x86)\Windows Kits\10\bin\<version>\x64` is on `PATH`, or run `run_bootstrap.bat`, which sets `CMAKE_MT` explicitly.
+| Symptom | Detection | Resolution |
+| --- | --- | --- |
+| **Missing Qt DLLs or plugins** | The application prints `Could not find the Qt platform plugin "windows"` or exits immediately. [`scripts/run_tests_with_qt_env.ps1`](../scripts/run_tests_with_qt_env.ps1) checks for the required `bin`, `plugins`, and `plugins/platforms` directories and aborts if they are missing. | Rerun `python scripts/bootstrap.py` so Qt is redeployed. Verify antivirus or cleanup tools are not deleting the `qt/6.5.3/<arch>/` cache. When distributing builds, ensure the `platforms/` and `styles/` folders travel with the executable. |
+| **`ctest` not found** | Manual `ctest` runs fail, or `run_tests_with_qt_env.ps1 -UseCTest` halts with a descriptive message. | Launch a Developer Command Prompt where CMake/CTest are on `PATH`, or add `C:\Program Files\CMake\bin` manually. Re-run the helper script: `pwsh scripts/run_tests_with_qt_env.ps1 -UseCTest`. |
+| **Visual C++ redistributable missing** | Running `FreeCrafter.exe` on a clean machine pops up `VCRUNTIME140.dll was not found`. | Install the [VS 2022 redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) on the target host. Add this step to your VM provisioning scripts. |
+| **Python import errors (`ImportError: No module named aqtinstall`)** | Bootstrap or packaging scripts fail while importing helper modules. | Activate your virtual environment (if any) and execute `pip install -r scripts/requirements.txt`. When offline, point `bootstrap.py` at a pre-populated wheel cache with `--wheel-cache`. |
+| **`mt.exe` or Windows SDK tools missing** | Resource compilation fails during the build. | Ensure the Windows 10/11 SDK is installed alongside the build tools. Re-run `run_bootstrap.bat`, which sets `CMAKE_MT` explicitly before calling CMake. |
 
 ## 6. Validation Checklist
 
-Use this checklist before publishing an internal build or release candidate:
+Run this checklist before promoting any build to teammates or users:
 
-- [ ] **Bootstrap build passes locally** by running `python scripts/bootstrap.py` (or via the GUI wrapper).
-- [ ] **Installer executable generated** using `python scripts/package_gui_bootstrap.py`, with logs captured for traceability.
-- [ ] **Clean-system installation validated:** copy `dist/FreeCrafterInstaller.exe` to a fresh VM/host, run it end-to-end, and confirm the application launches.
-- [ ] **Smoke test on first launch:** open FreeCrafter, load the default scene, interact with basic tools (orbit, pan, simple sketch) to ensure no immediate crashes.
-- [ ] **Optional automated tests** executed with `pwsh scripts/run_tests_with_qt_env.ps1 -UseCTest` (requires CTest on `PATH`).
-- [ ] **Visual C++ Redistributable** presence verified on the target machine (install if absent).
-- [ ] **Artifacts archived:** store `dist/FreeCrafterInstaller.exe`, bootstrap logs, and smoke-test notes in your release folder.
+- [ ] **Bootstrap build (CLI or GUI) succeeds** on the development machine using
+      `python scripts/bootstrap.py` or the GUI wrapper.
+- [ ] **PyInstaller package generated** via `python scripts/package_gui_bootstrap.py`,
+      with the artifact stored under version control or release storage.
+- [ ] **Clean-system verification completed:** the packaged installer was executed
+      on a fresh VM/host with no pre-existing Qt or MSVC runtimes, and the
+      bootstrap flow completed end-to-end.
+- [ ] **First-launch smoke test passed:** `build/FreeCrafter.exe` (or the staged
+      `dist/` copy) launches, renders the default scene, and basic camera
+      interactions succeed without crashes.
+- [ ] **Optional regression tests executed** with `pwsh scripts/run_tests_with_qt_env.ps1 -UseCTest`
+      when `ctest` is available.
+- [ ] **Visual C++ redistributable presence confirmed** on any target machines
+      used for validation or distribution.
+- [ ] **Artifacts archived:** keep the PyInstaller output, bootstrap logs, smoke
+      test notes, and any regression logs with the release hand-off.
 
-Keeping this checklist in your release documentation ensures the "one-click installer" promise is verifiable and repeatable.
+Keep this document handy during release cycles so the “one-click installer”
+promise remains measurable and trustworthy.

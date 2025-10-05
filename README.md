@@ -76,6 +76,18 @@ The script also searches common install locations such as `~/Qt` on Unix
 systems or `C:/Qt` on Windows and falls back to downloading Qt if none is
 found.
 
+To update the vendored Qt runtime or refresh its metadata, use the companion
+script:
+
+```bash
+python scripts/fetch_qt_runtime.py
+```
+
+The script reads `qt/manifest.json` to determine which Qt version and modules
+to download, writes a timestamped record back to the manifest, and places the
+runtime under `qt/<version>/<arch>`. Keeping this manifest in git guarantees
+that all contributors and automated builds fetch the same Qt components.
+
 If you prefer a graphical installer, launch:
 
 ```bash
@@ -173,7 +185,9 @@ to the `build` directory.
 Icon assets are stored under `resources/icons` and bundled using Qt's resource system.  They are currently only dummy assets.
 
 ## License
-This project is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
+FreeCrafter's source code is released under the terms of the MIT License. See [LICENSE](LICENSE) for details.
+
+The application dynamically links against Qt 6, which is provided under the LGPL. If you redistribute builds that bundle Qt, make sure you follow the Qt licensing requirements summarized in [docs/legal/qt_lgpl_compliance.md](docs/legal/qt_lgpl_compliance.md) (for example, shipping the Qt license texts and offering the Qt sources).
 See [docs/testing.md](docs/testing.md) for regression test notes.
 
 ## Testing

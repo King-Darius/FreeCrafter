@@ -1,6 +1,8 @@
 # Renderer Test Notes
 
-## Running the Windows regression test
+## Running the regression tests
+
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest
@@ -22,6 +24,22 @@ Plugin debug output prints to stderr. To capture it for later inspection run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest 2> build/qt_plugins.log
 ```
+
+### macOS and Linux
+
+```bash
+./scripts/run_tests_with_qt_env.sh --ctest
+```
+
+The POSIX helper mirrors the PowerShell behaviour but defers to
+`scripts/bootstrap.py` to discover the Qt runtime (matching the
+`qt/<version>/<arch>` layout produced by the bootstrapper). On Linux the script
+prefers the `offscreen` Qt platform plugin to avoid requiring an attached
+display, while on macOS it targets the `cocoa` plugin so the system toolkits
+are available. The helper adjusts `PATH`, `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`,
+`DYLD_FRAMEWORK_PATH`, and the Qt plugin paths before calling `ctest` or, if
+requested, `test_render` directly. Pass `--qt-prefix /path/to/Qt` to target a
+system-wide Qt installation.
 
 The `ctest` transcript is always written to
 `build/Testing/Temporary/LastTest.log`.

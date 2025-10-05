@@ -61,6 +61,15 @@ install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .)
 
+if(COMMAND qt_generate_deploy_app_script)
+  qt_generate_deploy_app_script(
+    TARGET ${PROJECT_NAME}
+    OUTPUT_SCRIPT qt_deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+  )
+  install(SCRIPT ${qt_deploy_script})
+endif()
+
 # Tests
 enable_testing()
 add_executable(test_render tests/test_render.cpp)

@@ -17,6 +17,7 @@ FreeCrafter targets feature parity with popular CAD and archviz tools while addi
 6. **Advanced Tools (Phase 6)** – loft, fillet, subdivision, and sculpt workflows.
 7. **File I/O (Phase 7)** – full import/export stack with glTF as baseline and SKP stretch goal.
 8. **Performance & QA (Phases 8–10)** – BVH selection acceleration, autosave/recovery, localization, installer, automated QA.
+9. **Surface Painting & Materials (Phase 11, post-MVP)** – brush-driven texturing, SmartWrap UV accuracy, layered materials, and guided paint workspace UX for an artist-ready finish.
 
 ## Out of Scope for MVP
 - Cloud syncing, multi-user editing, and shared scenes.

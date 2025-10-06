@@ -147,7 +147,18 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ---
 
-**How to contribute:**  
+## Phase 11 — Surface Painting & Materials
+
+- [ ] SurfacePaint tool: brush-based 3D painting with pressure/tilt-aware strokes, live masking, and viewport-aligned cursor feedback so color application matches the artist's hand movement.
+- [ ] Adaptive SmartWrap: auto-seam detection and multi-projection blending that locks texture pixels to geometry with per-face accuracy; manual seam and projection overrides for edge cases.
+- [ ] Layered material stack: base color/roughness/normal/displacement layers with blend modes, masks, and history-backed adjustments for non-destructive editing.
+- [ ] Palette & swatch UX: color stories, eyedropper sampling from scene/reference, quick-favorite decks, and per-project libraries synced with the Materials panel.
+- [ ] Brush & asset presets: save/load brush engines (tip/spacing/flow), drag-and-drop texture stamps, HDR lighting previews, and instant undo/redo with replay for confidence.
+- [ ] Immersive paint workspace UX: split-view material inspector, gesture-friendly HUD, contextual shortcuts, and onboarding tours that teach brush logic without breaking flow.
+
+---
+
+**How to contribute:**
 - If you want to help with a feature, check the [issues](../../issues) and mention the corresponding roadmap item in your PR or discussion.
 - For suggestions or clarifications, open a [discussion](../../discussions).
 

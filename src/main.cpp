@@ -4,10 +4,10 @@
 #include "MainWindow.h"
 
 int main(int argc, char *argv[]) {
-    // Request compatibility profile for fixed-function calls used in the starter renderer
+    // Request a modern OpenGL context compatible with the renderer's shaders
     QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
-    fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
-    fmt.setVersion(2, 1);
+    fmt.setProfile(QSurfaceFormat::CoreProfile);
+    fmt.setVersion(3, 3);
     QSurfaceFormat::setDefaultFormat(fmt);
 
     QApplication app(argc, argv);

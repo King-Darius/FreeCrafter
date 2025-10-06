@@ -35,6 +35,7 @@ public:
 private slots:
     void newFile();
     void openFile();
+    void importExternalModel();
     void saveFile();
     void saveFileAs();
     void exportFile();
@@ -108,6 +109,7 @@ private:
 
     QAction* actionNew = nullptr;
     QAction* actionOpen = nullptr;
+    QAction* actionImport = nullptr;
     QAction* actionSave = nullptr;
     QAction* actionSaveAs = nullptr;
     QAction* actionExport = nullptr;

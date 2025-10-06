@@ -1,31 +1,18 @@
-#include "Renderer.h"
-
-#include <QOpenGLExtraFunctions>
-const char* kLineFragmentShader = R"(
-#version 330 core
-in vec4 v_color;
-uniform float u_stippleEnabled;
-uniform float u_stippleScale;
-uniform float u_profileMix;
-uniform vec4 u_profileColor;
-out vec4 fragColor;
-void main() {
-    if (u_stippleEnabled > 0.5) {
-        float scale = max(u_stippleScale, 1.0);
-        float pattern = mod(gl_FragCoord.x + gl_FragCoord.y, scale);
-        if (pattern < 0.5 * scale) {
-            discard;
-        }
-    }
-    vec4 baseColor = mix(v_color, u_profileColor, clamp(u_profileMix, 0.0, 1.0));
-    fragColor = baseColor;
-}
-)";
+const char* kLineVertexShader = R"(
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec4 a_color;
+uniform mat4 u_mvp;
+uniform int u_clipPlaneCount;
+uniform vec4 u_clipPlanes[4];
+out vec4 v_color;
+    v_color = a_color;
+    gl_Position = u_mvp * vec4(a_position, 1.0);
+    for (int i = 0; i < 4; ++i) {
+        if (i < u_clipPlaneCount) {
+            gl_ClipDistance[i] = dot(vec4(a_position, 1.0), u_clipPlanes[i]);
+        } else {
+            gl_ClipDistance[i] = 1.0;
 
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec4 a_color;
-uniform mat4 u_mvp;
-uniform int u_clipPlaneCount;
 uniform vec4 u_clipPlanes[4];
 out vec4 v_color;
 void main() {

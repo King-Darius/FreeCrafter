@@ -13,6 +13,8 @@ public:
     GeometryKernel() = default;
     GeometryObject* addCurve(const std::vector<Vector3>& points);
     GeometryObject* extrudeCurve(GeometryObject* curveObj, float height);
+    GeometryObject* addObject(std::unique_ptr<GeometryObject> object);
+    GeometryObject* cloneObject(const GeometryObject& source);
     void deleteObject(GeometryObject* obj);
     void clear();
     bool saveToFile(const std::string& filename) const;

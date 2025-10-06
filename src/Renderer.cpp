@@ -689,347 +689,691 @@ int Renderer::flush()
     return draws;
 }
 
-        shadowProgram.link();
-    }
-
-    programsReady = lineProgram.isLinked() && triangleProgram.isLinked() && shadowProgram.isLinked();
-}
-
-void Renderer::uploadTriangleBufferIfNeeded()
-{
-    if (!triangleBufferDirty || triangleVertices.empty())
-        return;
-
-    if (!triangleBuffer.bind())
-        return;
-
-    triangleBuffer.setUsagePattern(QOpenGLBuffer::DynamicDraw);
-    triangleBuffer.allocate(triangleVertices.data(),
-                             static_cast<int>(triangleVertices.size() * sizeof(TriangleVertex)));
-    triangleBuffer.release();
-    triangleBufferDirty = false;
-}
-
-
-void Renderer::ensureLineState(const LineBatch& batch)
-{
-    QOpenGLVertexArrayObject::Binder binder(&lineVao);
-    lineBuffer.bind();
-    lineBuffer.setUsagePattern(QOpenGLBuffer::DynamicDraw);
-    lineBuffer.allocate(batch.vertices.data(), static_cast<int>(batch.vertices.size() * sizeof(LineVertex)));
-
-    lineProgram.bind();
-    lineProgram.setUniformValue("u_mvp", mvp);
-    lineProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
-    if (clipPlaneCount > 0)
-        lineProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
-    lineProgram.setUniformValue("u_stippleEnabled", batch.config.stippled ? 1.0f : 0.0f);
-    lineProgram.setUniformValue("u_stippleScale", batch.config.stippleScale);
-    lineProgram.enableAttributeArray(0);
-    lineProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(LineVertex, position), 3, sizeof(LineVertex));
-    lineProgram.enableAttributeArray(1);
-    lineProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(LineVertex, color), 4, sizeof(LineVertex));
-
-    if (functions) {
-        for (int i = 0; i < 4; ++i) {
-            if (i < clipPlaneCount)
-                functions->glEnable(GL_CLIP_DISTANCE0 + i);
-            else
-                functions->glDisable(GL_CLIP_DISTANCE0 + i);
-        }
-    }
-
-    if (batch.config.depthTest)
-        functions->glEnable(GL_DEPTH_TEST);
-    else
-        functions->glDisable(GL_DEPTH_TEST);
-
-    if (batch.config.blend) {
-        functions->glEnable(GL_BLEND);
-        functions->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    } else {
-        functions->glDisable(GL_BLEND);
-    }
-    functions->glLineWidth(batch.config.width);
-}
-
-void Renderer::ensureTriangleState()
-{
-    if (triangleVertices.empty())
-        return;
-
-    uploadTriangleBufferIfNeeded();
-
-    QOpenGLVertexArrayObject::Binder binder(&triangleVao);
-    triangleBuffer.bind();
-
-    triangleProgram.bind();
-    triangleProgram.setUniformValue("u_mvp", mvp);
-    triangleProgram.setUniformValue("u_normalMatrix", normalMatrix);
-    triangleProgram.setUniformValue("u_lightDir", lightDir);
-    triangleProgram.setUniformValue("u_lightMVP", lightViewProjection);
-    triangleProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
-    if (clipPlaneCount > 0)
-        triangleProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
-
-    int styleMode = currentStyle == RenderStyle::Monochrome ? 1 : 0;
-    triangleProgram.setUniformValue("u_styleMode", styleMode);
-
-    const bool enableShadows = shadowMapReady && lightingOptions.shadowsEnabled && lightingOptions.sunValid;
-    triangleProgram.setUniformValue("u_shadowEnabled", enableShadows ? 1.0f : 0.0f);
-    triangleProgram.setUniformValue("u_shadowStrength", lightingOptions.shadowStrength);
-    triangleProgram.setUniformValue("u_shadowBias", lightingOptions.shadowBias);
-    triangleProgram.setUniformValue("u_shadowSampleRadius", lightingOptions.shadowSampleRadius);
-    QVector2D texelSize(0.0f, 0.0f);
-    if (enableShadows && shadowMapSize > 0)
-        texelSize = QVector2D(1.0f / float(shadowMapSize), 1.0f / float(shadowMapSize));
-    triangleProgram.setUniformValue("u_shadowTexelSize", texelSize);
-    triangleProgram.setUniformValue("u_shadowMap", 0);
-
-    if (enableShadows) {
-        functions->glActiveTexture(GL_TEXTURE0);
-        functions->glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
-    } else {
-        functions->glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
-    triangleProgram.enableAttributeArray(0);
-    triangleProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
-    triangleProgram.enableAttributeArray(1);
-    triangleProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(TriangleVertex, normal), 3, sizeof(TriangleVertex));
-    triangleProgram.enableAttributeArray(2);
-    triangleProgram.setAttributeBuffer(2, GL_FLOAT, offsetof(TriangleVertex, color), 4, sizeof(TriangleVertex));
-
-    functions->glDisable(GL_BLEND);
-    functions->glEnable(GL_DEPTH_TEST);
-    functions->glLineWidth(1.0f);
-    for (int i = 0; i < 4; ++i) {
-        if (i < clipPlaneCount)
-            functions->glEnable(GL_CLIP_DISTANCE0 + i);
-        else
-            functions->glDisable(GL_CLIP_DISTANCE0 + i);
-    }
-}
-
-void Renderer::ensureShadowResources(int resolution)
-{
-    if (!functions)
-        return;
-    int size = std::max(resolution, 64);
-    if (shadowFramebuffer != 0 && shadowDepthTexture != 0 && shadowMapSize == size)
-        return;
-
-    releaseShadowResources();
-    shadowMapSize = size;
-
-    functions->glGenFramebuffers(1, &shadowFramebuffer);
-    functions->glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer);
-    functions->glGenTextures(1, &shadowDepthTexture);
-    functions->glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
-    functions->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, shadowMapSize, shadowMapSize, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    const float border[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    functions->glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
-
-    functions->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthTexture, 0);
-    functions->glDrawBuffers(0, nullptr);
-    functions->glReadBuffer(GL_NONE);
-
-    GLenum status = functions->glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        releaseShadowResources();
-        shadowMapSize = 0;
-    }
-
-    functions->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    functions->glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-bool Renderer::renderShadowMap()
-{
-    if (!functions)
-        return false;
-    if (!lightingOptions.shadowsEnabled || !lightingOptions.sunValid)
-        return false;
-    if (triangleVertices.empty() || !boundsValid)
-        return false;
-
-    ensurePrograms();
-    ensureShadowResources(lightingOptions.shadowMapResolution);
-    if (shadowFramebuffer == 0 || shadowDepthTexture == 0 || shadowMapSize <= 0)
-        return false;
-
-    uploadTriangleBufferIfNeeded();
-
-    QVector3D sunDir = lightingOptions.sunDirection;
-    if (sunDir.isNull())
-        sunDir = QVector3D(0.3f, 0.8f, 0.6f);
-    sunDir.normalize();
-
-    QVector3D center = (boundsMin + boundsMax) * 0.5f;
-    QVector3D diag = boundsMax - boundsMin;
-    float radius = diag.length() * 0.5f;
-    if (radius < 1.0f)
-        radius = 1.0f;
-
-    QVector3D up = QVector3D(0.0f, 1.0f, 0.0f);
-    if (std::fabs(QVector3D::dotProduct(up, sunDir)) > 0.9f)
-        up = QVector3D(0.0f, 0.0f, 1.0f);
-    QVector3D eye = center - sunDir * (radius * 2.5f + 5.0f);
-
-    lightViewMatrix.setToIdentity();
-    lightViewMatrix.lookAt(eye, center, up);
-
-    QVector3D corners[8] = {
-        { boundsMin.x(), boundsMin.y(), boundsMin.z() },
-        { boundsMax.x(), boundsMin.y(), boundsMin.z() },
-        { boundsMin.x(), boundsMax.y(), boundsMin.z() },
-        { boundsMax.x(), boundsMax.y(), boundsMin.z() },
-        { boundsMin.x(), boundsMin.y(), boundsMax.z() },
-        { boundsMax.x(), boundsMin.y(), boundsMax.z() },
-        { boundsMin.x(), boundsMax.y(), boundsMax.z() },
-        { boundsMax.x(), boundsMax.y(), boundsMax.z() }
-    };
-
-    float minX = std::numeric_limits<float>::max();
-    float maxX = -std::numeric_limits<float>::max();
-    float minY = std::numeric_limits<float>::max();
-    float maxY = -std::numeric_limits<float>::max();
-    float minZ = std::numeric_limits<float>::max();
-    float maxZ = -std::numeric_limits<float>::max();
-    for (const auto& corner : corners) {
-        QVector4D t = lightViewMatrix * QVector4D(corner, 1.0f);
-        minX = std::min(minX, t.x());
-        maxX = std::max(maxX, t.x());
-        minY = std::min(minY, t.y());
-        maxY = std::max(maxY, t.y());
-        minZ = std::min(minZ, t.z());
-        maxZ = std::max(maxZ, t.z());
-    }
-
-    float margin = std::max(radius * 0.1f, 1.0f);
-    minX -= margin;
-    maxX += margin;
-    minY -= margin;
-    maxY += margin;
-
-    float nearPlane = std::max(0.1f, -maxZ - margin);
-    float farPlane = std::max(nearPlane + 1.0f, -minZ + margin);
-
-    lightProjectionMatrix.setToIdentity();
-    lightProjectionMatrix.ortho(minX, maxX, minY, maxY, nearPlane, farPlane);
-    lightViewProjection = lightProjectionMatrix * lightViewMatrix;
-
-    GLint prevViewport[4];
-    functions->glGetIntegerv(GL_VIEWPORT, prevViewport);
-    GLint prevFbo = 0;
-    functions->glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevFbo);
-
-    functions->glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer);
-    functions->glViewport(0, 0, shadowMapSize, shadowMapSize);
-    functions->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    functions->glDisable(GL_BLEND);
-    functions->glEnable(GL_DEPTH_TEST);
-    functions->glClear(GL_DEPTH_BUFFER_BIT);
-
-    QOpenGLVertexArrayObject::Binder binder(&shadowVao);
-    triangleBuffer.bind();
-
-    shadowProgram.bind();
-    shadowProgram.setUniformValue("u_lightMVP", lightViewProjection);
-    shadowProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
-    if (clipPlaneCount > 0)
-        shadowProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
-    shadowProgram.enableAttributeArray(0);
-    shadowProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
-
-    if (functions) {
-        for (int i = 0; i < 4; ++i) {
-            if (i < clipPlaneCount)
-                functions->glEnable(GL_CLIP_DISTANCE0 + i);
-            else
-                functions->glDisable(GL_CLIP_DISTANCE0 + i);
-        }
-    }
-
-    functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
-
-    shadowProgram.disableAttributeArray(0);
-
-    functions->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    functions->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
-    functions->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-
-    for (int i = 0; i < 4; ++i)
-        functions->glDisable(GL_CLIP_DISTANCE0 + i);
-
-    return true;
-}
-
-void Renderer::releaseShadowResources()
-{
-    if (!functions)
-        return;
-    if (shadowDepthTexture) {
-        functions->glDeleteTextures(1, &shadowDepthTexture);
-        shadowDepthTexture = 0;
-    }
-    if (shadowFramebuffer) {
-        functions->glDeleteFramebuffers(1, &shadowFramebuffer);
-        shadowFramebuffer = 0;
-    }
-}
-
-int Renderer::flush()
-{
-    ensurePrograms();
-    int draws = 0;
-
-    if (!triangleVertices.empty()) {
-        shadowMapReady = renderShadowMap();
-    } else {
-        shadowMapReady = false;
-    }
-
-    bool colorMaskDisabled = false;
-    if (currentStyle == RenderStyle::HiddenLine) {
-        if (!triangleVertices.empty()) {
-            ensureTriangleState();
-            if (functions) {
-                functions->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-                colorMaskDisabled = true;
-            }
-            functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
-            ++draws;
-        }
-        if (colorMaskDisabled && functions)
-            functions->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    } else if (currentStyle != RenderStyle::Wireframe && !triangleVertices.empty()) {
-        ensureTriangleState();
-        functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
-        ++draws;
-    }
-
-    for (const auto& batch : lineBatches) {
-        if (batch.vertices.empty())
-            continue;
-        if (batch.config.category == LineCategory::Edge && currentStyle == RenderStyle::Shaded)
-            continue;
-        ensureLineState(batch);
-        functions->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(batch.vertices.size()));
-        ++draws;
-    }
-
-    functions->glDisable(GL_BLEND);
-    functions->glEnable(GL_DEPTH_TEST);
-    functions->glLineWidth(1.0f);
-    functions->glBindTexture(GL_TEXTURE_2D, 0);
-
-    for (int i = 0; i < 4; ++i)
-        functions->glDisable(GL_CLIP_DISTANCE0 + i);
-
-    return draws;
-}
+        shadowProgram.link();
+
+    }
+
+
+
+    programsReady = lineProgram.isLinked() && triangleProgram.isLinked() && shadowProgram.isLinked();
+
+}
+
+
+
+void Renderer::uploadTriangleBufferIfNeeded()
+
+{
+
+    if (!triangleBufferDirty || triangleVertices.empty())
+
+        return;
+
+
+
+    if (!triangleBuffer.bind())
+
+        return;
+
+
+
+    triangleBuffer.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+
+    triangleBuffer.allocate(triangleVertices.data(),
+
+                             static_cast<int>(triangleVertices.size() * sizeof(TriangleVertex)));
+
+    triangleBuffer.release();
+
+    triangleBufferDirty = false;
+
+}
+
+
+
+
+
+void Renderer::ensureLineState(const LineBatch& batch)
+
+{
+
+    QOpenGLVertexArrayObject::Binder binder(&lineVao);
+
+    lineBuffer.bind();
+
+    lineBuffer.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+
+    lineBuffer.allocate(batch.vertices.data(), static_cast<int>(batch.vertices.size() * sizeof(LineVertex)));
+
+
+
+    lineProgram.bind();
+
+    lineProgram.setUniformValue("u_mvp", mvp);
+
+    lineProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+
+    if (clipPlaneCount > 0)
+
+        lineProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+
+    lineProgram.setUniformValue("u_stippleEnabled", batch.config.stippled ? 1.0f : 0.0f);
+
+    lineProgram.setUniformValue("u_stippleScale", batch.config.stippleScale);
+
+    lineProgram.enableAttributeArray(0);
+
+    lineProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(LineVertex, position), 3, sizeof(LineVertex));
+
+    lineProgram.enableAttributeArray(1);
+
+    lineProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(LineVertex, color), 4, sizeof(LineVertex));
+
+
+
+    if (functions) {
+
+        for (int i = 0; i < 4; ++i) {
+
+            if (i < clipPlaneCount)
+
+                functions->glEnable(GL_CLIP_DISTANCE0 + i);
+
+            else
+
+                functions->glDisable(GL_CLIP_DISTANCE0 + i);
+
+        }
+
+    }
+
+
+
+    if (batch.config.depthTest)
+
+        functions->glEnable(GL_DEPTH_TEST);
+
+    else
+
+        functions->glDisable(GL_DEPTH_TEST);
+
+
+
+    if (batch.config.blend) {
+
+        functions->glEnable(GL_BLEND);
+
+        functions->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    } else {
+
+        functions->glDisable(GL_BLEND);
+
+    }
+
+    functions->glLineWidth(batch.config.width);
+
+}
+
+
+
+void Renderer::ensureTriangleState()
+
+{
+
+    if (triangleVertices.empty())
+
+        return;
+
+
+
+    uploadTriangleBufferIfNeeded();
+
+
+
+    QOpenGLVertexArrayObject::Binder binder(&triangleVao);
+
+    triangleBuffer.bind();
+
+
+
+    triangleProgram.bind();
+
+    triangleProgram.setUniformValue("u_mvp", mvp);
+
+    triangleProgram.setUniformValue("u_normalMatrix", normalMatrix);
+
+    triangleProgram.setUniformValue("u_lightDir", lightDir);
+
+    triangleProgram.setUniformValue("u_lightMVP", lightViewProjection);
+
+    triangleProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+
+    if (clipPlaneCount > 0)
+
+        triangleProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+
+
+
+    int styleMode = currentStyle == RenderStyle::Monochrome ? 1 : 0;
+
+    triangleProgram.setUniformValue("u_styleMode", styleMode);
+
+
+
+    const bool enableShadows = shadowMapReady && lightingOptions.shadowsEnabled && lightingOptions.sunValid;
+
+    triangleProgram.setUniformValue("u_shadowEnabled", enableShadows ? 1.0f : 0.0f);
+
+    triangleProgram.setUniformValue("u_shadowStrength", lightingOptions.shadowStrength);
+
+    triangleProgram.setUniformValue("u_shadowBias", lightingOptions.shadowBias);
+
+    triangleProgram.setUniformValue("u_shadowSampleRadius", lightingOptions.shadowSampleRadius);
+
+    QVector2D texelSize(0.0f, 0.0f);
+
+    if (enableShadows && shadowMapSize > 0)
+
+        texelSize = QVector2D(1.0f / float(shadowMapSize), 1.0f / float(shadowMapSize));
+
+    triangleProgram.setUniformValue("u_shadowTexelSize", texelSize);
+
+    triangleProgram.setUniformValue("u_shadowMap", 0);
+
+
+
+    if (enableShadows) {
+
+        functions->glActiveTexture(GL_TEXTURE0);
+
+        functions->glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
+
+    } else {
+
+        functions->glBindTexture(GL_TEXTURE_2D, 0);
+
+    }
+
+
+
+    triangleProgram.enableAttributeArray(0);
+
+    triangleProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
+
+    triangleProgram.enableAttributeArray(1);
+
+    triangleProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(TriangleVertex, normal), 3, sizeof(TriangleVertex));
+
+    triangleProgram.enableAttributeArray(2);
+
+    triangleProgram.setAttributeBuffer(2, GL_FLOAT, offsetof(TriangleVertex, color), 4, sizeof(TriangleVertex));
+
+
+
+    functions->glDisable(GL_BLEND);
+
+    functions->glEnable(GL_DEPTH_TEST);
+
+    functions->glLineWidth(1.0f);
+
+    for (int i = 0; i < 4; ++i) {
+
+        if (i < clipPlaneCount)
+
+            functions->glEnable(GL_CLIP_DISTANCE0 + i);
+
+        else
+
+            functions->glDisable(GL_CLIP_DISTANCE0 + i);
+
+    }
+
+}
+
+
+
+void Renderer::ensureShadowResources(int resolution)
+
+{
+
+    if (!functions)
+
+        return;
+
+    int size = std::max(resolution, 64);
+
+    if (shadowFramebuffer != 0 && shadowDepthTexture != 0 && shadowMapSize == size)
+
+        return;
+
+
+
+    releaseShadowResources();
+
+    shadowMapSize = size;
+
+
+
+    functions->glGenFramebuffers(1, &shadowFramebuffer);
+
+    functions->glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer);
+
+    functions->glGenTextures(1, &shadowDepthTexture);
+
+    functions->glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
+
+    functions->glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, shadowMapSize, shadowMapSize, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+
+    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+
+    functions->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    const float border[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+    functions->glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border);
+
+
+
+    functions->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthTexture, 0);
+
+    functions->glDrawBuffers(0, nullptr);
+
+    functions->glReadBuffer(GL_NONE);
+
+
+
+    GLenum status = functions->glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+
+        releaseShadowResources();
+
+        shadowMapSize = 0;
+
+    }
+
+
+
+    functions->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    functions->glBindTexture(GL_TEXTURE_2D, 0);
+
+}
+
+
+
+bool Renderer::renderShadowMap()
+
+{
+
+    if (!functions)
+
+        return false;
+
+    if (!lightingOptions.shadowsEnabled || !lightingOptions.sunValid)
+
+        return false;
+
+    if (triangleVertices.empty() || !boundsValid)
+
+        return false;
+
+
+
+    ensurePrograms();
+
+    ensureShadowResources(lightingOptions.shadowMapResolution);
+
+    if (shadowFramebuffer == 0 || shadowDepthTexture == 0 || shadowMapSize <= 0)
+
+        return false;
+
+
+
+    uploadTriangleBufferIfNeeded();
+
+
+
+    QVector3D sunDir = lightingOptions.sunDirection;
+
+    if (sunDir.isNull())
+
+        sunDir = QVector3D(0.3f, 0.8f, 0.6f);
+
+    sunDir.normalize();
+
+
+
+    QVector3D center = (boundsMin + boundsMax) * 0.5f;
+
+    QVector3D diag = boundsMax - boundsMin;
+
+    float radius = diag.length() * 0.5f;
+
+    if (radius < 1.0f)
+
+        radius = 1.0f;
+
+
+
+    QVector3D up = QVector3D(0.0f, 1.0f, 0.0f);
+
+    if (std::fabs(QVector3D::dotProduct(up, sunDir)) > 0.9f)
+
+        up = QVector3D(0.0f, 0.0f, 1.0f);
+
+    QVector3D eye = center - sunDir * (radius * 2.5f + 5.0f);
+
+
+
+    lightViewMatrix.setToIdentity();
+
+    lightViewMatrix.lookAt(eye, center, up);
+
+
+
+    QVector3D corners[8] = {
+
+        { boundsMin.x(), boundsMin.y(), boundsMin.z() },
+
+        { boundsMax.x(), boundsMin.y(), boundsMin.z() },
+
+        { boundsMin.x(), boundsMax.y(), boundsMin.z() },
+
+        { boundsMax.x(), boundsMax.y(), boundsMin.z() },
+
+        { boundsMin.x(), boundsMin.y(), boundsMax.z() },
+
+        { boundsMax.x(), boundsMin.y(), boundsMax.z() },
+
+        { boundsMin.x(), boundsMax.y(), boundsMax.z() },
+
+        { boundsMax.x(), boundsMax.y(), boundsMax.z() }
+
+    };
+
+
+
+    float minX = std::numeric_limits<float>::max();
+
+    float maxX = -std::numeric_limits<float>::max();
+
+    float minY = std::numeric_limits<float>::max();
+
+    float maxY = -std::numeric_limits<float>::max();
+
+    float minZ = std::numeric_limits<float>::max();
+
+    float maxZ = -std::numeric_limits<float>::max();
+
+    for (const auto& corner : corners) {
+
+        QVector4D t = lightViewMatrix * QVector4D(corner, 1.0f);
+
+        minX = std::min(minX, t.x());
+
+        maxX = std::max(maxX, t.x());
+
+        minY = std::min(minY, t.y());
+
+        maxY = std::max(maxY, t.y());
+
+        minZ = std::min(minZ, t.z());
+
+        maxZ = std::max(maxZ, t.z());
+
+    }
+
+
+
+    float margin = std::max(radius * 0.1f, 1.0f);
+
+    minX -= margin;
+
+    maxX += margin;
+
+    minY -= margin;
+
+    maxY += margin;
+
+
+
+    float nearPlane = std::max(0.1f, -maxZ - margin);
+
+    float farPlane = std::max(nearPlane + 1.0f, -minZ + margin);
+
+
+
+    lightProjectionMatrix.setToIdentity();
+
+    lightProjectionMatrix.ortho(minX, maxX, minY, maxY, nearPlane, farPlane);
+
+    lightViewProjection = lightProjectionMatrix * lightViewMatrix;
+
+
+
+    GLint prevViewport[4];
+
+    functions->glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    GLint prevFbo = 0;
+
+    functions->glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevFbo);
+
+
+
+    functions->glBindFramebuffer(GL_FRAMEBUFFER, shadowFramebuffer);
+
+    functions->glViewport(0, 0, shadowMapSize, shadowMapSize);
+
+    functions->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+    functions->glDisable(GL_BLEND);
+
+    functions->glEnable(GL_DEPTH_TEST);
+
+    functions->glClear(GL_DEPTH_BUFFER_BIT);
+
+
+
+    QOpenGLVertexArrayObject::Binder binder(&shadowVao);
+
+    triangleBuffer.bind();
+
+
+
+    shadowProgram.bind();
+
+    shadowProgram.setUniformValue("u_lightMVP", lightViewProjection);
+
+    shadowProgram.setUniformValue("u_clipPlaneCount", clipPlaneCount);
+
+    if (clipPlaneCount > 0)
+
+        shadowProgram.setUniformValueArray("u_clipPlanes", clipPlanes.data(), clipPlaneCount);
+
+    shadowProgram.enableAttributeArray(0);
+
+    shadowProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
+
+
+
+    if (functions) {
+
+        for (int i = 0; i < 4; ++i) {
+
+            if (i < clipPlaneCount)
+
+                functions->glEnable(GL_CLIP_DISTANCE0 + i);
+
+            else
+
+                functions->glDisable(GL_CLIP_DISTANCE0 + i);
+
+        }
+
+    }
+
+
+
+    functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
+
+
+
+    shadowProgram.disableAttributeArray(0);
+
+
+
+    functions->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    functions->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
+
+    functions->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+
+
+
+    for (int i = 0; i < 4; ++i)
+
+        functions->glDisable(GL_CLIP_DISTANCE0 + i);
+
+
+
+    return true;
+
+}
+
+
+
+void Renderer::releaseShadowResources()
+
+{
+
+    if (!functions)
+
+        return;
+
+    if (shadowDepthTexture) {
+
+        functions->glDeleteTextures(1, &shadowDepthTexture);
+
+        shadowDepthTexture = 0;
+
+    }
+
+    if (shadowFramebuffer) {
+
+        functions->glDeleteFramebuffers(1, &shadowFramebuffer);
+
+        shadowFramebuffer = 0;
+
+    }
+
+}
+
+
+
+int Renderer::flush()
+
+{
+
+    ensurePrograms();
+
+    int draws = 0;
+
+
+
+    if (!triangleVertices.empty()) {
+
+        shadowMapReady = renderShadowMap();
+
+    } else {
+
+        shadowMapReady = false;
+
+    }
+
+
+
+    bool colorMaskDisabled = false;
+
+    if (currentStyle == RenderStyle::HiddenLine) {
+
+        if (!triangleVertices.empty()) {
+
+            ensureTriangleState();
+
+            if (functions) {
+
+                functions->glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+                colorMaskDisabled = true;
+
+            }
+
+            functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
+
+            ++draws;
+
+        }
+
+        if (colorMaskDisabled && functions)
+
+            functions->glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    } else if (currentStyle != RenderStyle::Wireframe && !triangleVertices.empty()) {
+
+        ensureTriangleState();
+
+        functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
+
+        ++draws;
+
+    }
+
+
+
+    for (const auto& batch : lineBatches) {
+
+        if (batch.vertices.empty())
+
+            continue;
+
+        if (batch.config.category == LineCategory::Edge && currentStyle == RenderStyle::Shaded)
+
+            continue;
+
+        ensureLineState(batch);
+
+        functions->glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(batch.vertices.size()));
+
+        ++draws;
+
+    }
+
+
+
+    functions->glDisable(GL_BLEND);
+
+    functions->glEnable(GL_DEPTH_TEST);
+
+    functions->glLineWidth(1.0f);
+
+    functions->glBindTexture(GL_TEXTURE_2D, 0);
+
+
+
+    for (int i = 0; i < 4; ++i)
+
+        functions->glDisable(GL_CLIP_DISTANCE0 + i);
+
+
+
+    return draws;
+
+}
+

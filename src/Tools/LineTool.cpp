@@ -1,29 +1,9 @@
-#include "LineTool.h"
-
-#include <cmath>
-
-namespace {
-constexpr float kPi = 3.14159265358979323846f;
-
-bool screenToGround(CameraController* cam, int x, int y, int viewportW, int viewportH, Vector3& out)
-{
-    if (viewportW <= 0 || viewportH <= 0)
-        return false;
-
-    float cx, cy, cz;
-    cam->getCameraPosition(cx, cy, cz);
-    float yaw = cam->getYaw();
-    float pitch = cam->getPitch();
-    float ry = yaw * kPi / 180.0f;
-    float rp = pitch * kPi / 180.0f;
-    Vector3 forward(-sinf(ry) * cosf(rp), -sinf(rp), -cosf(ry) * cosf(rp));
-    forward = forward.normalized();
-    Vector3 up(0.0f, 1.0f, 0.0f);
-    Vector3 right = forward.cross(up).normalized();
-    up = right.cross(forward).normalized();
-
-    const float fov = 60.0f;
-    float aspect = static_cast<float>(viewportW) / static_cast<float>(viewportH);
+#include <cmath>
+
+#include "GroundProjection.h"
+
+using ToolHelpers::axisSnap;
+using ToolHelpers::screenToGround;
     float nx = (2.0f * static_cast<float>(x) / static_cast<float>(viewportW)) - 1.0f;
     float ny = 1.0f - (2.0f * static_cast<float>(y) / static_cast<float>(viewportH));
     float tanHalf = tanf((fov * kPi / 180.0f) / 2.0f);

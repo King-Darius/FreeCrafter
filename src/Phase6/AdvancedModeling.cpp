@@ -1346,7 +1346,7 @@ bool SubD::subdivide(Solid& solid, const SubdivisionOptions& options) const
 
         std::vector<Vector3> facePoints(loops.size(), Vector3());
         std::vector<std::vector<int>> vertexFaces(verts.size());
-        std::vector<std::vector<int>> vertexEdges(verts.size());
+        std::vector<std::vector<long long>> vertexEdges(verts.size());
 
         for (std::size_t f = 0; f < loops.size(); ++f) {
             Vector3 sum(0.0f, 0.0f, 0.0f);
@@ -1370,8 +1370,8 @@ bool SubD::subdivide(Solid& solid, const SubdivisionOptions& options) const
                 Vector3 midpoint = (verts[static_cast<std::size_t>(v0)].position + verts[static_cast<std::size_t>(v1)].position) * 0.5f;
                 edgePoints[key] += midpoint;
                 edgeFaces[key].push_back(static_cast<int>(f));
-                vertexEdges[static_cast<std::size_t>(v0)].push_back(static_cast<int>(key));
-                vertexEdges[static_cast<std::size_t>(v1)].push_back(static_cast<int>(key));
+                vertexEdges[static_cast<std::size_t>(v0)].push_back(key);
+                vertexEdges[static_cast<std::size_t>(v1)].push_back(key);
             }
         }
 
@@ -1412,8 +1412,8 @@ bool SubD::subdivide(Solid& solid, const SubdivisionOptions& options) const
             F /= static_cast<float>(facesAround.size());
 
             Vector3 R(0.0f, 0.0f, 0.0f);
-            for (int edgeKeyValue : edgesAround) {
-                long long eKey = static_cast<long long>(edgeKeyValue);
+            for (long long edgeKeyValue : edgesAround) {
+                long long eKey = edgeKeyValue;
                 auto it = edgePoints.find(eKey);
                 if (it != edgePoints.end())
                     R += it->second / 2.0f; // average of original edge endpoints

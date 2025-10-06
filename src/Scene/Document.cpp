@@ -3,6 +3,7 @@
 #include "SectionPlane.h"
 #include "SceneSettings.h"
 #include "../CameraController.h"
+#include "../FileIO/Importers/FileImporter.h"
 
 #include <algorithm>
 #include <fstream>
@@ -11,6 +12,9 @@
 #include <queue>
 #include <sstream>
 #include <utility>
+#include <QString>
+#include <QFileInfo>
+#include <QObject>
 
 namespace {
 constexpr const char* kBeginGeometry = "BEGIN_GEOMETRY";
@@ -456,6 +460,8 @@ void Document::resetInternal(bool clearGeometry)
     tagMap.clear();
     colorByTagEnabled = false;
     isolationIds.clear();
+    importedProvenance.clear();
+    lastImportErrorMessage.clear();
     nextObjectId = 1;
     nextTagId = 1;
     nextDefinitionId = 1;
@@ -558,6 +564,38 @@ bool Document::loadFromFile(const std::string& filename)
     }
 
     synchronizeWithGeometry();
+    updateVisibility();
+    return true;
+}
+
+bool Document::importExternalModel(const std::string& path, FileFormat fmt)
+{
+    lastImportErrorMessage.clear();
+    QString qPath = QString::fromStdString(path);
+    auto importResult = FileIO::Importers::FileImporter::import(qPath, *this, fmt);
+    if (!importResult.success) {
+        lastImportErrorMessage = importResult.errorMessage.toStdString();
+        return false;
+    }
+
+    if (importResult.objects.empty()) {
+        lastImportErrorMessage = QObject::tr("No importable geometry found").toStdString();
+        return false;
+    }
+
+    std::string absolutePath = QFileInfo(qPath).absoluteFilePath().toStdString();
+    auto timestamp = std::chrono::system_clock::now();
+    for (const auto& summary : importResult.objects) {
+        if (summary.objectId == 0)
+            continue;
+        ImportMetadata metadata;
+        metadata.sourcePath = absolutePath;
+        metadata.format = importResult.resolvedFormat;
+        metadata.materialSlots = summary.materialSlots;
+        metadata.importedAt = timestamp;
+        importedProvenance[summary.objectId] = std::move(metadata);
+    }
+
     updateVisibility();
     return true;
 }
@@ -777,6 +815,9 @@ void Document::unregisterNode(ObjectNode* node)
     if (!node)
         return;
     nodeIndex.erase(node->id);
+    if (node->kind == NodeKind::Geometry) {
+        clearImportMetadata(node->id);
+    }
     if (node->kind == NodeKind::ComponentInstance) {
         auto it = componentInstances.find(node->definitionId);
         if (it != componentInstances.end()) {
@@ -800,7 +841,16 @@ void Document::unregisterGeometry(GeometryObject* geometry)
 {
     if (!geometry)
         return;
-    geometryIndex.erase(geometry);
+    auto it = geometryIndex.find(geometry);
+    if (it != geometryIndex.end()) {
+        clearImportMetadata(it->second);
+        geometryIndex.erase(it);
+    }
+}
+
+void Document::clearImportMetadata(ObjectId id)
+{
+    importedProvenance.erase(id);
 }
 
 void Document::detachFromParent(ObjectNode* node)

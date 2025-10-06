@@ -1,6 +1,7 @@
 #include "HalfEdgeMesh.h"
 #include <algorithm>
 #include <utility>
+#include <cmath>
 
 namespace {
 inline long long makeEdgeKey(int from, int to) {
@@ -13,9 +14,17 @@ inline long long makeUndirectedKey(int a, int b) {
 }
 }
 
-int HalfEdgeMesh::addVertex(const Vector3& position) {
+int HalfEdgeMesh::addVertex(const Vector3& position, const Vector3& normal, const Vector2& uv, bool hasNormal, bool hasUV)
+{
     int index = static_cast<int>(vertices.size());
-    vertices.push_back({ position, -1 });
+    HalfEdgeVertex vertex;
+    vertex.position = position;
+    vertex.normal = normal;
+    vertex.uv = uv;
+    vertex.hasNormal = hasNormal;
+    vertex.hasUV = hasUV;
+    vertex.halfEdge = -1;
+    vertices.push_back(vertex);
     return index;
 }
 
@@ -103,6 +112,22 @@ void HalfEdgeMesh::clear() {
     directedEdgeMap.clear();
 }
 
+void HalfEdgeMesh::setVertexNormal(int index, const Vector3& normal)
+{
+    if (index < 0 || static_cast<std::size_t>(index) >= vertices.size())
+        return;
+    vertices[static_cast<std::size_t>(index)].normal = normal;
+    vertices[static_cast<std::size_t>(index)].hasNormal = true;
+}
+
+void HalfEdgeMesh::setVertexUV(int index, const Vector2& uv)
+{
+    if (index < 0 || static_cast<std::size_t>(index) >= vertices.size())
+        return;
+    vertices[static_cast<std::size_t>(index)].uv = uv;
+    vertices[static_cast<std::size_t>(index)].hasUV = true;
+}
+
 bool HalfEdgeMesh::isManifold() const {
     std::unordered_map<long long, int> undirectedCounts;
     for (size_t i = 0; i < halfEdges.size(); ++i) {
@@ -175,6 +200,42 @@ void HalfEdgeMesh::recomputeNormals()
             tri.normal = Vector3();
         }
     }
+
+    std::vector<Vector3> accum(vertices.size(), Vector3());
+    std::vector<int> counts(vertices.size(), 0);
+    for (const auto& tri : triangles) {
+        if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0)
+            continue;
+        const Vector3& n = tri.normal;
+        if (n.lengthSquared() <= 1e-8f)
+            continue;
+        auto accumulate = [&](int idx) {
+            if (idx < 0 || static_cast<std::size_t>(idx) >= vertices.size())
+                return;
+            if (vertices[idx].hasNormal)
+                return;
+            accum[idx] += n;
+            counts[idx] += 1;
+        };
+        accumulate(tri.v0);
+        accumulate(tri.v1);
+        accumulate(tri.v2);
+    }
+
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+        if (vertices[i].hasNormal)
+            continue;
+        if (counts[i] == 0) {
+            vertices[i].normal = Vector3();
+            continue;
+        }
+        Vector3 n = accum[i];
+        float lengthSq = n.lengthSquared();
+        if (lengthSq > 1e-8f) {
+            vertices[i].normal = n / std::sqrt(lengthSq);
+            vertices[i].hasNormal = true;
+        }
+    }
 }
 
 void HalfEdgeMesh::heal(float weldTolerance, float minEdgeLength)
@@ -197,6 +258,14 @@ void HalfEdgeMesh::heal(float weldTolerance, float minEdgeLength)
             Vector3 delta = uniqueVertices[j].position - position;
             if (delta.lengthSquared() <= weldSq) {
                 remap[i] = static_cast<int>(j);
+                if (vertices[i].hasNormal && !uniqueVertices[j].hasNormal) {
+                    uniqueVertices[j].normal = vertices[i].normal;
+                    uniqueVertices[j].hasNormal = true;
+                }
+                if (vertices[i].hasUV && !uniqueVertices[j].hasUV) {
+                    uniqueVertices[j].uv = vertices[i].uv;
+                    uniqueVertices[j].hasUV = true;
+                }
                 merged = true;
                 break;
             }
@@ -205,6 +274,11 @@ void HalfEdgeMesh::heal(float weldTolerance, float minEdgeLength)
             remap[i] = static_cast<int>(uniqueVertices.size());
             HalfEdgeVertex v;
             v.position = position;
+            v.normal = vertices[i].normal;
+            v.uv = vertices[i].uv;
+            v.hasNormal = vertices[i].hasNormal;
+            v.hasUV = vertices[i].hasUV;
+            v.halfEdge = vertices[i].halfEdge;
             uniqueVertices.push_back(v);
         }
     }
@@ -284,6 +358,15 @@ void HalfEdgeMesh::heal(float weldTolerance, float minEdgeLength)
         }
 
         rebuiltFaces.emplace_back(std::move(collapsed));
+    }
+
+    for (auto& vertex : uniqueVertices) {
+        if (vertex.hasNormal) {
+            float lenSq = vertex.normal.lengthSquared();
+            if (lenSq > 1e-8f) {
+                vertex.normal /= std::sqrt(lenSq);
+            }
+        }
     }
 
     vertices = uniqueVertices;

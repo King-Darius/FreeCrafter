@@ -115,6 +115,7 @@ private:
     void ensureShadowResources(int resolution);
     bool renderShadowMap();
     void releaseShadowResources();
+    void expandBounds(const QVector3D& point);
 
     QOpenGLExtraFunctions* functions = nullptr;
     QOpenGLShaderProgram lineProgram;

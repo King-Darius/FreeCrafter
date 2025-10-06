@@ -172,15 +172,15 @@ def test_ensure_aqt_online_user_flag(monkeypatch, no_aqt):
 def test_main_success(monkeypatch):
     calls = []
 
-    def fake_ensure_aqt(offline, wheel_cache):
-        calls.append(("aqt", offline, wheel_cache))
+    def fake_ensure_aqt(offline, wheel_cache, **kwargs):
+        calls.append(("aqt", offline, wheel_cache, kwargs.get("use_user_site")))
 
     def fake_ensure_qt(offline):
         calls.append(("qt", offline))
         return Path("/qt")
 
-    def fake_run_cmake(prefix):
-        calls.append(("cmake", prefix))
+    def fake_run_cmake(prefix, **kwargs):
+        calls.append(("cmake", prefix, kwargs))
 
     monkeypatch.setattr(bootstrap, "ensure_aqt", fake_ensure_aqt)
     monkeypatch.setattr(bootstrap, "ensure_qt", fake_ensure_qt)
@@ -188,17 +188,29 @@ def test_main_success(monkeypatch):
 
     rc = bootstrap.main(["--offline"])
     assert rc == 0
-    assert calls == [("aqt", True, None), ("qt", True), ("cmake", Path("/qt"))]
+    assert calls == [
+        ("aqt", True, None, True),
+        ("qt", True),
+        (
+            "cmake",
+            Path("/qt"),
+            {
+                "build": True,
+                "build_type": None,
+                "install_prefix": Path.cwd() / "dist",
+            },
+        ),
+    ]
 
 
 def test_main_subprocess_error(monkeypatch, caplog):
-    def fake_ensure_aqt(offline, wheel_cache):
-        pass
+    def fake_ensure_aqt(offline, wheel_cache, **kwargs):
+        assert kwargs.get("use_user_site") is True
 
     def fake_ensure_qt(offline):
         return Path("/qt")
 
-    def fake_run_cmake(prefix):
+    def fake_run_cmake(prefix, **kwargs):
         raise subprocess.CalledProcessError(2, ["cmake"])
 
     monkeypatch.setattr(bootstrap, "ensure_aqt", fake_ensure_aqt)
@@ -212,8 +224,8 @@ def test_main_subprocess_error(monkeypatch, caplog):
 
 
 def test_main_exception_logging(monkeypatch, caplog):
-    def fake_ensure_aqt(offline, wheel_cache):
-        pass
+    def fake_ensure_aqt(offline, wheel_cache, **kwargs):
+        assert kwargs.get("use_user_site") is True
 
     def fake_ensure_qt(offline):
         raise RuntimeError("boom")

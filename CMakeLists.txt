@@ -71,6 +71,9 @@ add_library(freecrafter_lib
     src/Tools/ToolManager.cpp
     src/Phase6/AdvancedModeling.cpp
     src/Interaction/InferenceEngine.cpp
+    src/FileIO/SceneIOFormat.cpp
+    src/FileIO/Exporters/SceneExporter.cpp
+    src/FileIO/Importers/SceneImporter.cpp
     src/ui/MeasurementWidget.cpp
     src/ui/ViewSettingsDialog.cpp
     src/ui/EnvironmentPanel.cpp

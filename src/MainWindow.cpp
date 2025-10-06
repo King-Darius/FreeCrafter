@@ -2569,9 +2569,9 @@ void MainWindow::exportFile()
 
     auto formats = FileIO::Exporters::supportedFormats();
     if (formats.empty()) {
-        QMessageBox::information(this, tr("Export Unavailable"),
-                                 tr("No export formats are enabled in this build."));
-        statusBar()->showMessage(tr("Export formats unavailable"), 4000);
+        const QString message = tr("Export workflow not implemented in this build");
+        QMessageBox::information(this, tr("Export Unavailable"), message);
+        statusBar()->showMessage(message, 2000);
         return;
     }
 

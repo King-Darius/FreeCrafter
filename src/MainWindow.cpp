@@ -1087,6 +1087,11 @@ MeasurementParseResult parseAngleMeasurement(const QString& raw)
     result.display = raw.trimmed();
 
 
+    actionImport = fileMenu->addAction(tr("Import…"), this, &MainWindow::importExternalModel);
+
+
+    actionImport->setStatusTip(tr("Import geometry from external formats"));
+
 
     if (result.display.isEmpty()) {
 
@@ -2511,6 +2516,45 @@ void MainWindow::createMenus()
 
 
 
+
+void MainWindow::importExternalModel()
+{
+    const QString filter = tr("3D Models (*.obj *.stl *.fbx *.dxf *.dwg);;Wavefront OBJ (*.obj);;STL (*.stl);;FBX (*.fbx);;DXF (*.dxf);;DWG (*.dwg)");
+    const QString fn = QFileDialog::getOpenFileName(this, tr("Import Model"), QString(), filter);
+    if (fn.isEmpty())
+        return;
+
+    Scene::Document::FileFormat format = Scene::Document::FileFormat::Auto;
+    const QString suffix = QFileInfo(fn).suffix().toLower();
+    if (suffix == QLatin1String("obj")) {
+        format = Scene::Document::FileFormat::Obj;
+    } else if (suffix == QLatin1String("stl")) {
+        format = Scene::Document::FileFormat::Stl;
+    } else if (suffix == QLatin1String("fbx")) {
+        format = Scene::Document::FileFormat::Fbx;
+    } else if (suffix == QLatin1String("dxf")) {
+        format = Scene::Document::FileFormat::Dxf;
+    } else if (suffix == QLatin1String("dwg")) {
+        format = Scene::Document::FileFormat::Dwg;
+    }
+
+    Scene::Document* doc = viewport ? viewport->getDocument() : nullptr;
+    if (!doc) {
+        statusBar()->showMessage(tr("No active document for import"), 2000);
+        return;
+    }
+
+    bool ok = doc->importExternalModel(fn.toStdString(), format);
+    if (ok) {
+        statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fn).fileName()), 1500);
+        viewport->update();
+    } else {
+        QString reason = QString::fromStdString(doc->lastImportError());
+        if (reason.isEmpty())
+            reason = tr("Unknown import error");
+        statusBar()->showMessage(tr("Failed to import %1: %2").arg(QFileInfo(fn).fileName(), reason), 4000);
+    }
+}
 
     actionViewBottom = viewMenu->addAction(tr("Bottom View"));
 

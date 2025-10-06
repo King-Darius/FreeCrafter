@@ -47,6 +47,19 @@ milestones already have code backing them and which ones are still open.
   inference overlay shows hover glyphs, dashed direction guides, and axis lock
   anchors to confirm the active snap. 【F:src/GLViewport.cpp†L352-L420】【F:src/GLViewport.cpp†L935-L1004】
 
+### Phase 5 — Object Management (implemented)
+
+* **Groups, hierarchy, and components:** `Scene::Document` creates groups,
+  re-parents nodes, and tracks component definitions/instances so that the
+  outliner tree can be reorganised and instanced content refreshed or made
+  unique on demand. 【F:src/Scene/Document.cpp†L132-L275】
+* **Tags, visibility, and isolation:** Object tags carry colours, visibility
+  toggles, and isolation stacks while `updateVisibility()` applies the resulting
+  rules to geometry so hidden items drop out of inference. 【F:src/Scene/Document.cpp†L277-L360】【F:src/Scene/Document.cpp†L640-L704】
+* **Scenes & persistence:** Scene snapshots capture camera pose, style toggles,
+  tag visibilities, and colour-by-tag state, and can be saved/loaded alongside
+  geometry for round-tripping document state. 【F:src/Scene/Document.cpp†L371-L517】
+
 ### Upcoming Gaps
 
 * Phases 3–4 still need the expanded drawing and modification tools outlined in

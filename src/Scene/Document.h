@@ -177,6 +177,7 @@ private:
     void serializeScenes(std::ostream& os) const;
     bool deserializeScenes(std::istream& is, int version);
     bool parsePrototype(std::istream& is, const std::vector<GeometryObject*>& geometryObjects, PrototypeNode& proto);
+    void resetInternal(bool clearGeometry);
 
     GeometryKernel geometryKernel;
     std::vector<SectionPlane> planes;

@@ -1,5 +1,7 @@
 #include "GeometryKernel.h"
 #include "Serialization.h"
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <string>
 
@@ -32,7 +34,15 @@ void GeometryKernel::deleteObject(GeometryObject* obj) {
     }
 }
 
-void GeometryKernel::clear() { objects.clear(); }
+void GeometryKernel::clear()
+{
+    objects.clear();
+    materialAssignments.clear();
+    textAnnotations.clear();
+    dimensions.clear();
+    clearGuides();
+    resetAxes();
+}
 
 bool GeometryKernel::saveToFile(const std::string& filename) const {
     std::ofstream os(filename, std::ios::out | std::ios::trunc);
@@ -68,7 +78,7 @@ bool GeometryKernel::loadFromFile(const std::string& filename) {
         }
         return true;
     }
-    objects.clear();
+    clear();
     while (is) {
         std::string type; if (!(is>>type)) break;
         if (type=="Curve") {
@@ -84,7 +94,7 @@ bool GeometryKernel::loadFromFile(const std::string& filename) {
 
 void GeometryKernel::loadFromStream(std::istream& is, const std::string& terminator)
 {
-    objects.clear();
+    clear();
     std::string type;
     while (is >> type) {
         if (type == terminator) {
@@ -104,4 +114,96 @@ void GeometryKernel::loadFromStream(std::istream& is, const std::string& termina
             break;
         }
     }
+}
+
+void GeometryKernel::assignMaterial(const GeometryObject* object, const std::string& materialName)
+{
+    if (!object)
+        return;
+    if (materialName.empty()) {
+        materialAssignments.erase(object);
+    } else {
+        materialAssignments[object] = materialName;
+    }
+}
+
+std::string GeometryKernel::getMaterial(const GeometryObject* object) const
+{
+    if (!object)
+        return {};
+    auto it = materialAssignments.find(object);
+    if (it == materialAssignments.end())
+        return {};
+    return it->second;
+}
+
+void GeometryKernel::addTextAnnotation(const Vector3& position, std::string text, float height)
+{
+    if (text.empty())
+        return;
+    TextAnnotation annotation;
+    annotation.position = position;
+    annotation.text = std::move(text);
+    annotation.height = std::max(0.01f, height);
+    textAnnotations.push_back(std::move(annotation));
+}
+
+void GeometryKernel::addDimension(const Vector3& start, const Vector3& end)
+{
+    LinearDimension dim;
+    dim.start = start;
+    dim.end = end;
+    dim.value = (end - start).length();
+    dimensions.push_back(dim);
+}
+
+void GeometryKernel::addGuideLine(const Vector3& start, const Vector3& end)
+{
+    GuideState::GuideLine line{ start, end };
+    guides.lines.push_back(line);
+}
+
+void GeometryKernel::addGuidePoint(const Vector3& position)
+{
+    guides.points.push_back({ position });
+}
+
+void GeometryKernel::addGuideAngle(const Vector3& origin, const Vector3& startDirection, const Vector3& endDirection)
+{
+    Vector3 s = startDirection.normalized();
+    Vector3 e = endDirection.normalized();
+    float dot = std::max(-1.0f, std::min(1.0f, s.dot(e)));
+    float angle = std::acos(dot) * 180.0f / 3.14159265358979323846f;
+    guides.angles.push_back({ origin, s, e, angle });
+}
+
+void GeometryKernel::clearGuides()
+{
+    guides.lines.clear();
+    guides.points.clear();
+    guides.angles.clear();
+}
+
+void GeometryKernel::setAxes(const Vector3& origin, const Vector3& xDirection, const Vector3& yDirection)
+{
+    Vector3 x = xDirection.lengthSquared() > 1e-8f ? xDirection.normalized() : Vector3(1.0f, 0.0f, 0.0f);
+    Vector3 y = yDirection.lengthSquared() > 1e-8f ? yDirection.normalized() : Vector3(0.0f, 1.0f, 0.0f);
+    Vector3 z = x.cross(y);
+    if (z.lengthSquared() <= 1e-6f) {
+        z = Vector3(0.0f, 0.0f, 1.0f);
+        y = z.cross(x).normalized();
+    } else {
+        z = z.normalized();
+        y = z.cross(x).normalized();
+    }
+    axes.origin = origin;
+    axes.xAxis = x;
+    axes.yAxis = y;
+    axes.zAxis = z;
+    axes.valid = true;
+}
+
+void GeometryKernel::resetAxes()
+{
+    axes = AxesState{};
 }

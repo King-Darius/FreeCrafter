@@ -99,18 +99,20 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ## Phase 6 — Integrated Advanced Tools
 
-- [ ] Round Corner: edge fillet/chamfer; previews; corner resolution; hard/soft edges
-- [ ] CurveIt: loft/skin/bridge by rails; closed loops; subdivision smoothing
-- [ ] PushANDPull: thicken normals; offset surfaces; thickness with caps
-- [ ] Surface: draw/offset on curved faces; remesh helpers
-- [ ] BezierKnife: Bezier/NURBS/Polyline; grips; degree/knots
-- [ ] QuadTools: quad tagging; loop/ring select; grid fill
-- [ ] SubD: Catmull‑Clark; creases; level previews; cage overlay
-- [ ] Weld: weld/unweld; preserve direction
-- [ ] Vertex Tools: soft selection; falloff; transform gizmo
-- [ ] Clean: purge, merge co‑planar faces, erase stray edges
-- [ ] ClothEngine: PBD solver; pin/weight maps; collision with solids
-- [ ] CAD Designer: Pull+, Shell, Split, Mirror, Pattern, Revolve, Sweep, Imprint/Project
+Reference: [Phase 6 planning brief](docs/planning/phase-6-integrated-advanced-tools.md)
+
+- [x] Round Corner — interactive fillet/chamfer creation with preview, resolution, and edge tagging controls
+- [x] CurveIt — rail-driven loft, skin, and bridge workflows with subdivision smoothing support
+- [x] PushANDPull — surface thickening and offsetting along normals with automatic capping
+- [x] Surface — direct drawing/offsetting on curved faces with remesh helpers
+- [x] BezierKnife — precision Bézier/NURBS/polyline cutting with manipulators and curve controls
+- [x] QuadTools — quad topology tagging, loop/ring selection, and grid filling utilities
+- [x] SubD — Catmull–Clark subdivision with crease management, level previews, and cage overlays
+- [x] Weld — direction-aware vertex weld/unweld operations with tolerant selection
+- [x] Vertex Tools — soft-selection transforms with customizable falloff and gizmo controls
+- [x] Clean — automated cleanup passes for unused data, coplanar merges, and stray edge removal
+- [x] ClothEngine — PBD cloth simulation with pin/weight maps and solid collision handling
+- [x] CAD Designer — Pull+, shell, split, mirror, pattern, revolve, sweep, and imprint/project suite
 
 ---
 

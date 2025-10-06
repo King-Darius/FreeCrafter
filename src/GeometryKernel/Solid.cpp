@@ -4,6 +4,7 @@
 #include "MeshUtils.h"
 #include "TransformUtils.h"
 #include <algorithm>
+#include <limits>
 
 namespace {
 constexpr float kDefaultTolerance = 1e-4f;
@@ -84,6 +85,43 @@ std::unique_ptr<Solid> Solid::createFromCurve(const Curve& curve, float height) 
     return createFromProfile(curve.getBoundaryLoop(), height);
 }
 
+std::unique_ptr<Solid> Solid::createFromMesh(HalfEdgeMesh meshData)
+{
+    meshData.heal(kDefaultTolerance, kDefaultTolerance);
+    if (!meshData.isManifold()) {
+        return nullptr;
+    }
+
+    const auto& verts = meshData.getVertices();
+    if (verts.empty()) {
+        return nullptr;
+    }
+
+    float minY = std::numeric_limits<float>::max();
+    float maxY = std::numeric_limits<float>::lowest();
+    for (const auto& v : verts) {
+        minY = std::min(minY, v.position.y);
+        maxY = std::max(maxY, v.position.y);
+    }
+
+    std::vector<Vector3> base;
+    for (const auto& v : verts) {
+        if (std::abs(v.position.y - minY) <= kDefaultTolerance * 10.0f) {
+            base.push_back(Vector3(v.position.x, minY, v.position.z));
+        }
+    }
+    if (base.size() < 3) {
+        // fall back to projecting entire mesh
+        base.clear();
+        for (const auto& v : verts) {
+            base.push_back(Vector3(v.position.x, minY, v.position.z));
+        }
+    }
+
+    float height = std::max(kDefaultTolerance, maxY - minY);
+    return std::unique_ptr<Solid>(new Solid(std::move(base), height, std::move(meshData)));
+}
+
 void Solid::applyTransform(const std::function<Vector3(const Vector3&)>& fn)
 {
     for (auto& point : baseLoop) {
@@ -114,4 +152,16 @@ std::unique_ptr<GeometryObject> Solid::clone() const
     copy->setVisible(isVisible());
     copy->setHidden(isHidden());
     return copy;
+}
+
+void Solid::setMesh(HalfEdgeMesh meshData)
+{
+    mesh = std::move(meshData);
+    mesh.heal(kDefaultTolerance, kDefaultTolerance);
+}
+
+void Solid::setBaseMetadata(std::vector<Vector3> base, float newHeight)
+{
+    baseLoop = std::move(base);
+    height = std::max(newHeight, kDefaultTolerance);
 }

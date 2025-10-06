@@ -90,10 +90,10 @@ The following tracked milestones correspond to major roadmap items A–H:
 
 ## Phase 5 — Object Management
 
-- [ ] Groups/Components: make/edit; component definitions; Make Unique; replace/reload; gluing & cutting behavior later
-- [ ] Tags: create, color, toggle, color‑by‑tag; hidden objects excluded from inference
-- [ ] Outliner: drag‑drop hierarchy; isolate/edit‑in‑context UX
-- [ ] Scenes: capture camera, styles, section states, tag visibilities
+- [x] Groups/Components: make/edit; component definitions; Make Unique; replace/reload; gluing & cutting behavior later
+- [x] Tags: create, color, toggle, color‑by‑tag; hidden objects excluded from inference
+- [x] Outliner: drag‑drop hierarchy; isolate/edit‑in‑context UX
+- [x] Scenes: capture camera, styles, section states, tag visibilities
 
 ---
 

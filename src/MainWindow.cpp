@@ -5,7 +5,9 @@
 
 
 
-
+#include <QFileInfo>
+#include "FileIO/Exporters/SceneExporter.h"
+
 
 constexpr double kPi = 3.14159265358979323846;
 #include <QAction>
@@ -2593,13 +2595,92 @@ void MainWindow::importExternalModel()
 
     connect(actionViewFront, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Front); });
 
-
-
-
-
-
-
-    actionViewBack = viewMenu->addAction(tr("Back View"));
+void MainWindow::exportFile()
+
+
+
+{
+
+
+
+    if (!viewport) {
+        statusBar()->showMessage(tr("No active viewport to export"), 4000);
+        return;
+    }
+
+    Scene::Document* document = viewport->getDocument();
+    if (!document) {
+        statusBar()->showMessage(tr("No document attached to viewport"), 4000);
+        return;
+    }
+
+    auto formats = FileIO::Exporters::supportedFormats();
+    if (formats.empty()) {
+        QMessageBox::information(this, tr("Export Unavailable"),
+                                 tr("No export formats are enabled in this build."));
+        statusBar()->showMessage(tr("Export formats unavailable"), 4000);
+        return;
+    }
+
+    QStringList filters;
+    for (auto format : formats) {
+        filters << QString::fromStdString(FileIO::formatFilterString(format));
+    }
+
+    QFileDialog dialog(this, tr("Export Model"));
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters(filters);
+    if (!filters.isEmpty()) {
+        dialog.selectNameFilter(filters.first());
+        const auto& defaultFormat = formats.front();
+        const std::string extension = FileIO::formatExtension(defaultFormat);
+        if (!extension.empty()) {
+            dialog.setDefaultSuffix(QString::fromStdString(extension.substr(1)));
+        }
+    }
+
+    if (dialog.exec() == QDialog::Rejected) {
+        return;
+    }
+
+    const QStringList selected = dialog.selectedFiles();
+    if (selected.isEmpty()) {
+        return;
+    }
+
+    QString filePath = selected.first();
+    QString selectedFilter = dialog.selectedNameFilter();
+    FileIO::SceneFormat chosenFormat = formats.front();
+    for (auto format : formats) {
+        if (selectedFilter == QString::fromStdString(FileIO::formatFilterString(format))) {
+            chosenFormat = format;
+            break;
+        }
+    }
+
+    QString extension = QString::fromStdString(FileIO::formatExtension(chosenFormat));
+    if (!extension.isEmpty() && !filePath.endsWith(extension, Qt::CaseInsensitive)) {
+        filePath += extension;
+    }
+
+    document->synchronizeWithGeometry();
+
+    std::string errorMessage;
+    if (!FileIO::Exporters::exportScene(*document, filePath.toStdString(), chosenFormat, &errorMessage)) {
+        QString message = QString::fromStdString(errorMessage);
+        if (message.isEmpty()) {
+            message = tr("Unknown export error");
+        }
+        QMessageBox::critical(this, tr("Export Failed"),
+                              tr("Could not export the scene:\n%1").arg(message));
+        statusBar()->showMessage(tr("Export failed"), 5000);
+        return;
+    }
+
+    statusBar()->showMessage(tr("Exported \"%1\"").arg(QFileInfo(filePath).fileName()), 4000);
+}
+
 
 
 

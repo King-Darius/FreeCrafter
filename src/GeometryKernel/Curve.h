@@ -6,7 +6,9 @@
 
 class Curve : public GeometryObject {
 public:
-    static std::unique_ptr<Curve> createFromPoints(const std::vector<Vector3>& pts);
+    static std::unique_ptr<Curve> createFromPoints(const std::vector<Vector3>& pts,
+        const std::vector<bool>& edgeHardness = {});
+    bool rebuildFromPoints(const std::vector<Vector3>& pts, const std::vector<bool>& edgeHardness = {});
 
     ObjectType getType() const override { return ObjectType::Curve; }
     const HalfEdgeMesh& getMesh() const override { return mesh; }
@@ -14,6 +16,9 @@ public:
     std::unique_ptr<GeometryObject> clone() const override;
 
     const std::vector<Vector3>& getBoundaryLoop() const { return boundaryLoop; }
+    const std::vector<bool>& getEdgeHardness() const { return hardnessFlags; }
+    void setEdgeHardness(std::vector<bool> hardness);
+    void tagAllEdgesHard(bool hard);
 
     void applyTransform(const std::function<Vector3(const Vector3&)>& fn);
     void translate(const Vector3& delta);
@@ -21,8 +26,9 @@ public:
     void scale(const Vector3& pivot, const Vector3& factors);
 
 private:
-    Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh);
+    Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness);
 
     std::vector<Vector3> boundaryLoop;
     HalfEdgeMesh mesh;
+    std::vector<bool> hardnessFlags;
 };

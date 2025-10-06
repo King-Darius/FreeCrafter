@@ -5,6 +5,17 @@
 #include <fstream>
 #include <string>
 
+namespace {
+Vector3 safeNormalize(const Vector3& v)
+{
+    float len = v.length();
+    if (len <= 1e-6f) {
+        return Vector3(0.0f, 1.0f, 0.0f);
+    }
+    return v / len;
+}
+}
+
 GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
     auto obj = Curve::createFromPoints(points);
     if (!obj) {
@@ -198,6 +209,106 @@ void GeometryKernel::addGuideAngle(const Vector3& origin, const Vector3& startDi
     float dot = std::max(-1.0f, std::min(1.0f, s.dot(e)));
     float angle = std::acos(dot) * 180.0f / 3.14159265358979323846f;
     guides.angles.push_back({ origin, s, e, angle });
+}
+
+GeometryKernel::MeshBuffer GeometryKernel::buildMeshBuffer(const GeometryObject& object) const
+{
+    MeshBuffer buffer;
+    const HalfEdgeMesh& mesh = object.getMesh();
+    const auto& vertices = mesh.getVertices();
+    buffer.positions.reserve(vertices.size());
+    buffer.normals.assign(vertices.size(), Vector3());
+    for (const auto& vertex : vertices) {
+        buffer.positions.push_back(vertex.position);
+    }
+
+    const auto& triangles = mesh.getTriangles();
+    buffer.indices.reserve(triangles.size() * 3);
+    for (const auto& tri : triangles) {
+        if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0) {
+            continue;
+        }
+        buffer.indices.push_back(static_cast<std::uint32_t>(tri.v0));
+        buffer.indices.push_back(static_cast<std::uint32_t>(tri.v1));
+        buffer.indices.push_back(static_cast<std::uint32_t>(tri.v2));
+        if (static_cast<std::size_t>(tri.v0) < buffer.normals.size()) {
+            buffer.normals[static_cast<std::size_t>(tri.v0)] += tri.normal;
+        }
+        if (static_cast<std::size_t>(tri.v1) < buffer.normals.size()) {
+            buffer.normals[static_cast<std::size_t>(tri.v1)] += tri.normal;
+        }
+        if (static_cast<std::size_t>(tri.v2) < buffer.normals.size()) {
+            buffer.normals[static_cast<std::size_t>(tri.v2)] += tri.normal;
+        }
+    }
+
+    if (buffer.indices.empty() && !vertices.empty()) {
+        // Fallback to constructing triangles from faces if triangulation data is missing
+        const auto& faces = mesh.getFaces();
+        for (const auto& face : faces) {
+            std::vector<std::uint32_t> loop;
+            int he = face.halfEdge;
+            if (he < 0) {
+                continue;
+            }
+            const auto& halfEdges = mesh.getHalfEdges();
+            int start = he;
+            do {
+                const auto& record = halfEdges[he];
+                loop.push_back(static_cast<std::uint32_t>(record.origin));
+                he = record.next;
+            } while (he >= 0 && he != start && loop.size() < vertices.size());
+            if (loop.size() < 3) {
+                continue;
+            }
+            for (std::size_t i = 1; i + 1 < loop.size(); ++i) {
+                buffer.indices.push_back(loop[0]);
+                buffer.indices.push_back(loop[i]);
+                buffer.indices.push_back(loop[i + 1]);
+            }
+        }
+    }
+
+    for (auto& normal : buffer.normals) {
+        normal = safeNormalize(normal);
+    }
+    if (buffer.normals.size() != buffer.positions.size()) {
+        buffer.normals.assign(buffer.positions.size(), Vector3(0.0f, 1.0f, 0.0f));
+    }
+    return buffer;
+}
+
+std::array<float, 16> GeometryKernel::identityTransform()
+{
+    return { 1.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f, 0.0f, 0.0f,
+             0.0f, 0.0f, 1.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 1.0f };
+}
+
+HalfEdgeMesh GeometryKernel::meshFromIndexedData(const std::vector<Vector3>& positions,
+                                                 const std::vector<std::uint32_t>& indices)
+{
+    HalfEdgeMesh mesh;
+    for (const auto& pos : positions) {
+        mesh.addVertex(pos);
+    }
+    for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
+        std::uint32_t i0 = indices[i];
+        std::uint32_t i1 = indices[i + 1];
+        std::uint32_t i2 = indices[i + 2];
+        if (i0 >= positions.size() || i1 >= positions.size() || i2 >= positions.size()) {
+            continue;
+        }
+        std::vector<int> face = {
+            static_cast<int>(i0),
+            static_cast<int>(i1),
+            static_cast<int>(i2)
+        };
+        mesh.addFace(face);
+    }
+    mesh.heal();
+    return mesh;
 }
 
 void GeometryKernel::clearGuides()

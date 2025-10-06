@@ -86,7 +86,6 @@ private:
     void syncViewSettingsUI();
     void handleSunSettingsChanged(const SunSettings& settings);
     void updateShadowStatus(const SunSettings& previous, const SunSettings& current);
-
     void closeEvent(QCloseEvent* event) override;
 
     GLViewport* viewport = nullptr;

@@ -24,3 +24,4 @@
 - [x] SPDX headers to be added gradually as files are touched (tracked in Phase 8).
 - [x] Third-party acknowledgements to live in `/docs/legal/notices.md` (to be created Phase 7).
 - [ ] Export compliance review before shipping encryption-capable plugins (Phase 10).
+- [ ] Texture/material licensing review for bundled brushes, swatches, and SmartWrap reference assets ahead of the Phase 11 surface painting release.

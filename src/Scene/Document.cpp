@@ -435,7 +435,13 @@ void Document::clearSectionPlanes()
 
 void Document::reset()
 {
-    geometryKernel.clear();
+    resetInternal(true);
+}
+
+void Document::resetInternal(bool clearGeometry)
+{
+    if (clearGeometry)
+        geometryKernel.clear();
     planes.clear();
     sceneSettings.reset();
     rootNode = std::make_unique<ObjectNode>();
@@ -501,31 +507,14 @@ bool Document::loadFromFile(const std::string& filename)
 
     if (version <= 1) {
         bool loaded = geometryKernel.loadFromFile(filename);
-        reset();
+        // Legacy files only serialize the kernel, so rebuild scene state while
+        // preserving the freshly imported geometry objects.
+        resetInternal(false);
         synchronizeWithGeometry();
         return loaded;
     }
 
-    geometryKernel.clear();
-    planes.clear();
-    sceneSettings.reset();
-    tagMap.clear();
-    componentDefinitions.clear();
-    componentInstances.clear();
-    sceneMap.clear();
-    colorByTagEnabled = false;
-    isolationIds.clear();
-    nodeIndex.clear();
-    geometryIndex.clear();
-    rootNode = std::make_unique<ObjectNode>();
-    rootNode->id = 0;
-    rootNode->kind = NodeKind::Root;
-    rootNode->name = "Root";
-    nextObjectId = 1;
-    nextTagId = 1;
-    nextDefinitionId = 1;
-    nextSceneId = 1;
-    registerNode(rootNode.get());
+    reset();
 
     std::string token;
     while (is >> token) {

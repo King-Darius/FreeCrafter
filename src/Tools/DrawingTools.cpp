@@ -2,6 +2,7 @@
 
 #include "GroundProjection.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {

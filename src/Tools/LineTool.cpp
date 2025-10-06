@@ -1,23 +1,11 @@
-#include <cmath>
+#include "LineTool.h"
 
 #include "GroundProjection.h"
 
+#include <cmath>
+
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
-    float nx = (2.0f * static_cast<float>(x) / static_cast<float>(viewportW)) - 1.0f;
-    float ny = 1.0f - (2.0f * static_cast<float>(y) / static_cast<float>(viewportH));
-    float tanHalf = tanf((fov * kPi / 180.0f) / 2.0f);
-    Vector3 dir = (forward + right * (nx * tanHalf * aspect) + up * (ny * tanHalf)).normalized();
-
-    Vector3 origin(cx, cy, cz);
-    if (std::fabs(dir.y) < 1e-6f)
-        return false;
-    float t = -origin.y / dir.y;
-    if (t < 0.0f)
-        return false;
-    out = origin + dir * t;
-    return true;
-}
 
 void axisSnap(Vector3& point)
 {

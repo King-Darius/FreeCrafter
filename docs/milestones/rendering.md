@@ -6,9 +6,9 @@ Tracks [roadmap item A](../../ROADMAP.md#high-level-milestones).
 Implement the rendering infrastructure needed for FreeCrafter's real-time viewport.
 
 ## Acceptance Criteria
-- [ ] Basic OpenGL pipeline with shader management.
-- [ ] Support for wireframe, shaded, and shaded with edges styles.
-- [ ] Frame rate HUD displays FPS and draw calls.
+- [x] Basic OpenGL pipeline with shader management.
+- [x] Support for wireframe, shaded, and shaded with edges styles.
+- [x] Frame rate HUD displays FPS and draw calls.
 - [ ] Rendering performance meets target (60 FPS on reference hardware).
 
 ## Test Plan

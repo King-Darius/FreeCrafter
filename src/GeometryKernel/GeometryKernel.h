@@ -1,4 +1,6 @@
 #pragma once
+#include <array>
+#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <string>
@@ -82,6 +84,17 @@ public:
     void setAxes(const Vector3& origin, const Vector3& xDirection, const Vector3& yDirection);
     void resetAxes();
     const AxesState& getAxesState() const { return axes; }
+
+    struct MeshBuffer {
+        std::vector<Vector3> positions;
+        std::vector<Vector3> normals;
+        std::vector<std::uint32_t> indices;
+    };
+
+    MeshBuffer buildMeshBuffer(const GeometryObject& object) const;
+    static std::array<float, 16> identityTransform();
+    static HalfEdgeMesh meshFromIndexedData(const std::vector<Vector3>& positions,
+                                           const std::vector<std::uint32_t>& indices);
 
 private:
     std::vector<std::unique_ptr<GeometryObject>> objects;

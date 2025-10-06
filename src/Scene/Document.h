@@ -13,11 +13,21 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <chrono>
 
 namespace Scene {
 
 class Document {
 public:
+    enum class FileFormat {
+        Auto,
+        Obj,
+        Stl,
+        Fbx,
+        Dxf,
+        Dwg
+    };
+
     enum class NodeKind {
         Root,
         Geometry,
@@ -125,6 +135,17 @@ public:
     bool saveToFile(const std::string& filename) const;
     bool loadFromFile(const std::string& filename);
 
+    struct ImportMetadata {
+        std::string sourcePath;
+        FileFormat format = FileFormat::Auto;
+        std::vector<std::string> materialSlots;
+        std::chrono::system_clock::time_point importedAt{};
+    };
+
+    bool importExternalModel(const std::string& path, FileFormat fmt = FileFormat::Auto);
+    const std::string& lastImportError() const { return lastImportErrorMessage; }
+    const std::unordered_map<ObjectId, ImportMetadata>& importedObjectMetadata() const { return importedProvenance; }
+
 private:
     struct PrototypeNode {
         NodeKind kind = NodeKind::Geometry;
@@ -179,6 +200,8 @@ private:
     bool parsePrototype(std::istream& is, const std::vector<GeometryObject*>& geometryObjects, PrototypeNode& proto);
     void resetInternal(bool clearGeometry);
 
+    void clearImportMetadata(ObjectId id);
+
     GeometryKernel geometryKernel;
     std::vector<SectionPlane> planes;
     SceneSettings sceneSettings;
@@ -198,6 +221,9 @@ private:
 
     bool colorByTagEnabled = false;
     std::vector<ObjectId> isolationIds;
+
+    std::unordered_map<ObjectId, ImportMetadata> importedProvenance;
+    std::string lastImportErrorMessage;
 };
 
 } // namespace Scene

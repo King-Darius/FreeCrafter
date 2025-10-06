@@ -118,7 +118,7 @@ Reference: [Phase 6 planning brief](docs/planning/phase-6-integrated-advanced-to
 
 ## Phase 7 — File I/O
 
-- [ ] Import: OBJ, STL, FBX, DAE, 3DS, DXF/DWG
+- [x] Import: OBJ, STL, FBX, DAE, 3DS, DXF/DWG
 - [ ] Export: OBJ, STL, FBX, DAE, glTF
 - [ ] SKP via SDK if allowed; otherwise robust DAE/glTF
 

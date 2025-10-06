@@ -80,7 +80,16 @@ add_library(freecrafter_lib
     resources.qrc
 )
 
-target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui src/Scene src/Phase6 src/FileIO)
+target_include_directories(freecrafter_lib
+    PRIVATE
+        src
+        src/GeometryKernel
+        src/Tools
+        src/Interaction
+        src/ui
+        src/Scene
+        src/Phase6
+        src/FileIO)
 target_link_libraries(freecrafter_lib PUBLIC Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
 if(FREECRAFTER_HAS_ASSIMP)
@@ -156,10 +165,10 @@ target_include_directories(test_phase6 PRIVATE src)
 target_link_libraries(test_phase6 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME phase6_advanced_tools COMMAND $<TARGET_FILE:test_phase6>)
 
-add_executable(test_file_import tests/file_io/test_file_import.cpp)
-target_include_directories(test_file_import PRIVATE src)
-target_link_libraries(test_file_import PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
-add_test(NAME file_import COMMAND $<TARGET_FILE:test_file_import>)
+add_executable(test_exporters tests/file_io/test_exporters.cpp)
+target_include_directories(test_exporters PRIVATE src)
+target_link_libraries(test_exporters PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME file_io_exporters COMMAND $<TARGET_FILE:test_exporters>)
 
 # Include Windows redistributable if present
 

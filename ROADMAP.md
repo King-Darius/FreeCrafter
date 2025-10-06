@@ -118,9 +118,9 @@ Reference: [Phase 6 planning brief](docs/planning/phase-6-integrated-advanced-to
 
 ## Phase 7 — File I/O
 
-- [x] Import: OBJ, STL, FBX, DAE, 3DS, DXF/DWG
-- [ ] Export: OBJ, STL, FBX, DAE, glTF
-- [ ] SKP via SDK if allowed; otherwise robust DAE/glTF
+- [x] Import pipeline landed: OBJ, STL, glTF (FBX/DAE/3DS/DXF/DWG surface when optional Assimp integrations are enabled)
+- [x] Export pipeline landed: OBJ, STL, glTF (FBX/DAE routed through Assimp when present; UI hides formats otherwise)
+- [x] SKP via SDK if allowed; otherwise robust DAE/glTF fallback documented and gated
 
 ---
 

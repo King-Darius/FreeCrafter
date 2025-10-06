@@ -11,6 +11,20 @@
 
 namespace {
 
+constexpr int kMaxClipPlanes = 4;
+
+void ApplyClipPlaneState(QOpenGLExtraFunctions* functions, int clipPlaneCount)
+{
+    if (!functions)
+        return;
+    for (int i = 0; i < kMaxClipPlanes; ++i) {
+        if (i < clipPlaneCount)
+            functions->glEnable(GL_CLIP_DISTANCE0 + i);
+        else
+            functions->glDisable(GL_CLIP_DISTANCE0 + i);
+    }
+}
+
 const char* kLineVertexShader = R"(#version 330 core
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec4 a_color;
@@ -236,9 +250,27 @@ void Renderer::beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, 
 
 void Renderer::setClipPlanes(const std::vector<QVector4D>& planes)
 {
-    clipPlaneCount = std::min<int>(planes.size(), static_cast<int>(clipPlanes.size()));
+    clipPlaneCount = std::min<int>(planes.size(), kMaxClipPlanes);
     for (int i = 0; i < clipPlaneCount; ++i)
         clipPlanes[static_cast<size_t>(i)] = planes[static_cast<size_t>(i)];
+    for (int i = clipPlaneCount; i < kMaxClipPlanes; ++i)
+        clipPlanes[static_cast<size_t>(i)] = QVector4D();
+}
+
+void Renderer::expandBounds(const QVector3D& point)
+{
+    if (!boundsValid) {
+        boundsMin = boundsMax = point;
+        boundsValid = true;
+        return;
+    }
+
+    boundsMin.setX(std::min(boundsMin.x(), point.x()));
+    boundsMin.setY(std::min(boundsMin.y(), point.y()));
+    boundsMin.setZ(std::min(boundsMin.z(), point.z()));
+    boundsMax.setX(std::max(boundsMax.x(), point.x()));
+    boundsMax.setY(std::max(boundsMax.y(), point.y()));
+    boundsMax.setZ(std::max(boundsMax.z(), point.z()));
 }
 
 Renderer::LineBatch& Renderer::fetchBatch(float width,
@@ -322,23 +354,9 @@ void Renderer::addTriangle(const QVector3D& a,
     triangleVertices.push_back({ b, normal, color });
     triangleVertices.push_back({ c, normal, color });
 
-    auto updateBounds = [this](const QVector3D& p) {
-        if (!boundsValid) {
-            boundsMin = boundsMax = p;
-            boundsValid = true;
-        } else {
-            boundsMin.setX(std::min(boundsMin.x(), p.x()));
-            boundsMin.setY(std::min(boundsMin.y(), p.y()));
-            boundsMin.setZ(std::min(boundsMin.z(), p.z()));
-            boundsMax.setX(std::max(boundsMax.x(), p.x()));
-            boundsMax.setY(std::max(boundsMax.y(), p.y()));
-            boundsMax.setZ(std::max(boundsMax.z(), p.z()));
-        }
-    };
-
-    updateBounds(a);
-    updateBounds(b);
-    updateBounds(c);
+    expandBounds(a);
+    expandBounds(b);
+    expandBounds(c);
 
     triangleBufferDirty = true;
 }
@@ -394,14 +412,7 @@ void Renderer::ensureLineState(const LineBatch& batch)
     lineProgram.bind();
     lineProgram.setUniformValue("u_mvp", mvp);
 
-    if (functions) {
-        for (int i = 0; i < 4; ++i) {
-            if (i < clipPlaneCount)
-                functions->glEnable(GL_CLIP_DISTANCE0 + i);
-            else
-                functions->glDisable(GL_CLIP_DISTANCE0 + i);
-        }
-    }
+    ApplyClipPlaneState(functions, clipPlaneCount);
 
     if (batch.config.depthTest)
         functions->glEnable(GL_DEPTH_TEST);
@@ -467,12 +478,7 @@ void Renderer::ensureTriangleState()
     functions->glDisable(GL_BLEND);
     functions->glEnable(GL_DEPTH_TEST);
     functions->glLineWidth(1.0f);
-    for (int i = 0; i < 4; ++i) {
-        if (i < clipPlaneCount)
-            functions->glEnable(GL_CLIP_DISTANCE0 + i);
-        else
-            functions->glDisable(GL_CLIP_DISTANCE0 + i);
-    }
+    ApplyClipPlaneState(functions, clipPlaneCount);
 }
 
 void Renderer::ensureShadowResources(int resolution)
@@ -611,14 +617,7 @@ bool Renderer::renderShadowMap()
     shadowProgram.enableAttributeArray(0);
     shadowProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(TriangleVertex, position), 3, sizeof(TriangleVertex));
 
-    if (functions) {
-        for (int i = 0; i < 4; ++i) {
-            if (i < clipPlaneCount)
-                functions->glEnable(GL_CLIP_DISTANCE0 + i);
-            else
-                functions->glDisable(GL_CLIP_DISTANCE0 + i);
-        }
-    }
+    ApplyClipPlaneState(functions, clipPlaneCount);
 
     functions->glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(triangleVertices.size()));
 
@@ -628,8 +627,7 @@ bool Renderer::renderShadowMap()
     functions->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
     functions->glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
-    for (int i = 0; i < 4; ++i)
-        functions->glDisable(GL_CLIP_DISTANCE0 + i);
+    ApplyClipPlaneState(functions, 0);
 
     return true;
 }
@@ -683,8 +681,7 @@ int Renderer::flush()
     functions->glLineWidth(1.0f);
     functions->glBindTexture(GL_TEXTURE_2D, 0);
 
-    for (int i = 0; i < 4; ++i)
-        functions->glDisable(GL_CLIP_DISTANCE0 + i);
+    ApplyClipPlaneState(functions, 0);
 
     return draws;
 }

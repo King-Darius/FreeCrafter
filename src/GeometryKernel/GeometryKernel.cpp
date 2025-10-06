@@ -27,6 +27,29 @@ GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float hei
     return raw;
 }
 
+GeometryObject* GeometryKernel::addObject(std::unique_ptr<GeometryObject> object)
+{
+    if (!object)
+        return nullptr;
+    GeometryObject* raw = object.get();
+    objects.push_back(std::move(object));
+    return raw;
+}
+
+GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
+{
+    auto clone = source.clone();
+    if (!clone)
+        return nullptr;
+    GeometryObject* raw = clone.get();
+    objects.push_back(std::move(clone));
+    auto it = materialAssignments.find(&source);
+    if (it != materialAssignments.end()) {
+        materialAssignments[raw] = it->second;
+    }
+    return raw;
+}
+
 void GeometryKernel::deleteObject(GeometryObject* obj) {
     if (!obj) return;
     for (auto it = objects.begin(); it != objects.end(); ++it) {

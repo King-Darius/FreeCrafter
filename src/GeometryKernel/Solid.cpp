@@ -106,3 +106,12 @@ void Solid::scale(const Vector3& pivot, const Vector3& factors)
 {
     applyTransform([&](const Vector3& p) { return GeometryTransforms::scaleFromPivot(p, pivot, factors); });
 }
+
+std::unique_ptr<GeometryObject> Solid::clone() const
+{
+    auto copy = std::unique_ptr<Solid>(new Solid(baseLoop, height, mesh));
+    copy->setSelected(isSelected());
+    copy->setVisible(isVisible());
+    copy->setHidden(isHidden());
+    return copy;
+}

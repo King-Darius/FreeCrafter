@@ -46,6 +46,15 @@ std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts) 
     return std::unique_ptr<Curve>(new Curve(std::move(healed), std::move(mesh)));
 }
 
+std::unique_ptr<GeometryObject> Curve::clone() const
+{
+    auto copy = std::unique_ptr<Curve>(new Curve(boundaryLoop, mesh));
+    copy->setSelected(isSelected());
+    copy->setVisible(isVisible());
+    copy->setHidden(isHidden());
+    return copy;
+}
+
 void Curve::applyTransform(const std::function<Vector3(const Vector3&)>& fn)
 {
     for (auto& point : boundaryLoop) {

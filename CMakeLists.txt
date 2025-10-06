@@ -102,6 +102,11 @@ target_include_directories(test_phase4 PRIVATE src)
 target_link_libraries(test_phase4 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME phase4_tools COMMAND $<TARGET_FILE:test_phase4>)
 
+add_executable(test_phase5 tests/test_phase5.cpp)
+target_include_directories(test_phase5 PRIVATE src)
+target_link_libraries(test_phase5 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME phase5_object_management COMMAND $<TARGET_FILE:test_phase5>)
+
 # Include Windows redistributable if present
 
 # Uninstall target

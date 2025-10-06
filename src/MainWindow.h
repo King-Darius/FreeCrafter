@@ -86,6 +86,7 @@ private:
     void syncViewSettingsUI();
     void handleSunSettingsChanged(const SunSettings& settings);
     void updateShadowStatus(const SunSettings& previous, const SunSettings& current);
+    void showExportUnavailableMessage(const QString& details);
 
     void closeEvent(QCloseEvent* event) override;
 

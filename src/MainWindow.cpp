@@ -2569,9 +2569,7 @@ void MainWindow::exportFile()
 
     auto formats = FileIO::Exporters::supportedFormats();
     if (formats.empty()) {
-        const QString message = tr("Export workflow not implemented in this build");
-        QMessageBox::information(this, tr("Export Unavailable"), message);
-        statusBar()->showMessage(message, 2000);
+        showExportUnavailableMessage({});
         return;
     }
 
@@ -2634,10 +2632,17 @@ void MainWindow::exportFile()
     statusBar()->showMessage(tr("Exported \"%1\"").arg(QFileInfo(filePath).fileName()), 4000);
 }
 
-
-
-
-    actionViewBack->setShortcut(QKeySequence(QStringLiteral("Ctrl+5")));
+void MainWindow::showExportUnavailableMessage(const QString& details)
+{
+    const QString message = details.isEmpty()
+                                ? tr("Export workflow not implemented in this build")
+                                : details;
+    QMessageBox::information(this, tr("Export Unavailable"), message);
+    statusBar()->showMessage(message, 2000);
+}
+
+void MainWindow::onUndo()
+
 
 
 

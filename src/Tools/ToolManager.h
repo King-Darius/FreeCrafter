@@ -10,6 +10,8 @@
 #include "RotateTool.h"
 #include "ScaleTool.h"
 #include "ExtrudeTool.h"
+#include "DrawingTools.h"
+#include "ModificationTools.h"
 #include "SectionTool.h"
 #include "OrbitTool.h"
 #include "PanTool.h"

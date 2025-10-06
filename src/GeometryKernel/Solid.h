@@ -15,6 +15,7 @@ public:
     ObjectType getType() const override { return ObjectType::Solid; }
     const HalfEdgeMesh& getMesh() const override { return mesh; }
     HalfEdgeMesh& getMesh() override { return mesh; }
+    std::unique_ptr<GeometryObject> clone() const override;
 
     const std::vector<Vector3>& getBaseLoop() const { return baseLoop; }
     float getHeight() const { return height; }

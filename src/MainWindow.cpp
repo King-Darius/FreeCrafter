@@ -1,3 +1,4 @@
+#include "Scene/Document.h"
 #include "MainWindow.h"
 
 

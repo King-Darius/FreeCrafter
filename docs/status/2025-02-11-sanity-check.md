@@ -23,7 +23,7 @@ All tests passed. For raw output, see the execution transcript captured during t
   - UI Polish (F): ☐
   - Performance & Stability (G): ☐
   - QA & Release (H): ☐
-- Phase 4 and beyond (drawing, object management, advanced tools, etc.) are still open items.
+- Phase 4 and beyond (drawing, object management, advanced tools, etc.) are still open items, with the newly scheduled Phase 11 surface painting milestone yet to start.
 
 ## Dependency & Packaging Notes
 - `scripts/bootstrap.py` orchestrates dependency installation, Qt acquisition, CMake configuration, and bundling; it respects offline caches, CI-friendly flags, and installation prefixes.

@@ -54,4 +54,6 @@ milestones already have code backing them and which ones are still open.
 * Later phases (object management, advanced modeling, file I/O, performance,
   polish, QA) remain untouched in code and should be treated as open backlog
   items despite the UI placeholders.
+* The new Phase 11 surface painting & materials milestone is currently a
+  documentation plan only and has no engineering work underway.
 

@@ -2,9 +2,14 @@
 #include <vector>
 #include <unordered_map>
 #include "Vector3.h"
+#include "Vector2.h"
 
 struct HalfEdgeVertex {
     Vector3 position;
+    Vector3 normal;
+    Vector2 uv;
+    bool hasNormal = false;
+    bool hasUV = false;
     int halfEdge = -1;
 };
 
@@ -30,7 +35,8 @@ struct HalfEdgeTriangle {
 
 class HalfEdgeMesh {
 public:
-    int addVertex(const Vector3& position);
+    int addVertex(const Vector3& position, const Vector3& normal = Vector3(), const Vector2& uv = Vector2(),
+                  bool hasNormal = false, bool hasUV = false);
     int addFace(const std::vector<int>& loop);
     void clear();
 
@@ -38,6 +44,9 @@ public:
 
     const std::vector<HalfEdgeVertex>& getVertices() const { return vertices; }
     std::vector<HalfEdgeVertex>& getVertices() { return vertices; }
+
+    void setVertexNormal(int index, const Vector3& normal);
+    void setVertexUV(int index, const Vector2& uv);
 
     const std::vector<HalfEdgeRecord>& getHalfEdges() const { return halfEdges; }
     const std::vector<HalfEdgeFace>& getFaces() const { return faces; }

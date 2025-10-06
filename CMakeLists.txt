@@ -5,7 +5,30 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+option(FREECRAFTER_ENABLE_ASSIMP "Enable Assimp importer integration" ON)
+option(FREECRAFTER_ENABLE_ODA "Enable ODA/Teigha DXF/DWG importer integration" ON)
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets Svg)
+
+set(FREECRAFTER_HAS_ASSIMP FALSE)
+if(FREECRAFTER_ENABLE_ASSIMP)
+  find_package(assimp CONFIG QUIET)
+  if(NOT assimp_FOUND)
+    find_package(Assimp QUIET)
+  endif()
+  if(TARGET assimp::assimp OR ASSIMP_LIBRARIES)
+    set(FREECRAFTER_HAS_ASSIMP TRUE)
+  endif()
+endif()
+
+set(FREECRAFTER_HAS_ODA FALSE)
+if(FREECRAFTER_ENABLE_ODA)
+  find_package(ODA QUIET)
+  find_package(Teigha QUIET)
+  if(ODA_FOUND OR Teigha_FOUND)
+    set(FREECRAFTER_HAS_ODA TRUE)
+  endif()
+endif()
 
 add_library(freecrafter_lib
     src/MainWindow.cpp
@@ -29,6 +52,7 @@ add_library(freecrafter_lib
     src/Scene/Document.cpp
     src/Scene/SceneSettings.cpp
     src/Scene/SectionPlane.cpp
+    src/FileIO/Importers/FileImporter.cpp
     src/Tools/Tool.cpp
     src/Tools/ToolGeometryUtils.cpp
     src/Tools/LineTool.cpp
@@ -67,6 +91,22 @@ target_include_directories(freecrafter_lib
         src/Phase6
         src/FileIO)
 target_link_libraries(freecrafter_lib PUBLIC Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+
+if(FREECRAFTER_HAS_ASSIMP)
+  if(TARGET assimp::assimp)
+    target_link_libraries(freecrafter_lib PRIVATE assimp::assimp)
+  elseif(ASSIMP_LIBRARIES)
+    target_link_libraries(freecrafter_lib PRIVATE ${ASSIMP_LIBRARIES})
+    if(ASSIMP_INCLUDE_DIRS)
+      target_include_directories(freecrafter_lib PRIVATE ${ASSIMP_INCLUDE_DIRS})
+    endif()
+  endif()
+  target_compile_definitions(freecrafter_lib PRIVATE FREECRAFTER_USE_ASSIMP)
+endif()
+
+if(FREECRAFTER_HAS_ODA)
+  target_compile_definitions(freecrafter_lib PRIVATE FREECRAFTER_USE_ODA)
+endif()
 
 add_executable(${PROJECT_NAME}
     src/main.cpp

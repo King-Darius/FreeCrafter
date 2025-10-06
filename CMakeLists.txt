@@ -45,6 +45,7 @@ add_library(freecrafter_lib
     src/Tools/PanTool.cpp
     src/Tools/ZoomTool.cpp
     src/Tools/ToolManager.cpp
+    src/Phase6/AdvancedModeling.cpp
     src/Interaction/InferenceEngine.cpp
     src/ui/MeasurementWidget.cpp
     src/ui/ViewSettingsDialog.cpp
@@ -52,7 +53,7 @@ add_library(freecrafter_lib
     resources.qrc
 )
 
-target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui src/Scene)
+target_include_directories(freecrafter_lib PRIVATE src src/GeometryKernel src/Tools src/Interaction src/ui src/Scene src/Phase6)
 target_link_libraries(freecrafter_lib PUBLIC Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
 add_executable(${PROJECT_NAME}
@@ -106,6 +107,11 @@ add_executable(test_phase5 tests/test_phase5.cpp)
 target_include_directories(test_phase5 PRIVATE src)
 target_link_libraries(test_phase5 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME phase5_object_management COMMAND $<TARGET_FILE:test_phase5>)
+
+add_executable(test_phase6 tests/test_phase6.cpp)
+target_include_directories(test_phase6 PRIVATE src)
+target_link_libraries(test_phase6 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME phase6_advanced_tools COMMAND $<TARGET_FILE:test_phase6>)
 
 # Include Windows redistributable if present
 

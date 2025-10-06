@@ -11,6 +11,7 @@ class Solid : public GeometryObject {
 public:
     static std::unique_ptr<Solid> createFromProfile(const std::vector<Vector3>& baseProfile, float height);
     static std::unique_ptr<Solid> createFromCurve(const Curve& curve, float height);
+    static std::unique_ptr<Solid> createFromMesh(HalfEdgeMesh mesh);
 
     ObjectType getType() const override { return ObjectType::Solid; }
     const HalfEdgeMesh& getMesh() const override { return mesh; }
@@ -24,6 +25,8 @@ public:
     void translate(const Vector3& delta);
     void rotate(const Vector3& pivot, const Vector3& axis, float angleRadians);
     void scale(const Vector3& pivot, const Vector3& factors);
+    void setMesh(HalfEdgeMesh meshData);
+    void setBaseMetadata(std::vector<Vector3> base, float newHeight);
 
 private:
     Solid(std::vector<Vector3> baseLoop, float height, HalfEdgeMesh mesh);

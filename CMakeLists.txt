@@ -37,6 +37,9 @@ add_library(freecrafter_lib
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
+    src/Tools/GroundProjection.cpp
+    src/Tools/DrawingTools.cpp
+    src/Tools/ModificationTools.cpp
     src/Tools/SectionTool.cpp
     src/Tools/OrbitTool.cpp
     src/Tools/PanTool.cpp
@@ -93,6 +96,11 @@ if(EXISTS "${_qt_bin_dir}")
 endif()
 
 add_test(NAME scene_settings COMMAND $<TARGET_FILE:test_scene_settings>)
+
+add_executable(test_phase4 tests/test_phase4.cpp)
+target_include_directories(test_phase4 PRIVATE src)
+target_link_libraries(test_phase4 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME phase4_tools COMMAND $<TARGET_FILE:test_phase4>)
 
 # Include Windows redistributable if present
 

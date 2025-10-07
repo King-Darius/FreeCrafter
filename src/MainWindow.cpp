@@ -4045,12 +4045,6 @@ void MainWindow::createMenus()
 
 
 
-    if (palettePrefs)
-
-        settings.setValue(QStringLiteral("paletteId"), palettePrefs->activePaletteId());
-
-
-
 
 
     });
@@ -4302,17 +4296,6 @@ void MainWindow::createMenus()
 
 
     connect(actionViewTop, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Top); });
-
-
-
-
-    if (palettePrefs)
-
-        palettePrefs->refreshFromDocument();
-
-    if (palettePrefs)
-
-        palettePrefs->refreshFromDocument();
 
 
 

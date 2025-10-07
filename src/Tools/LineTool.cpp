@@ -1,4 +1,4 @@
-#include "LineTool.h"
+﻿#include "LineTool.h"
 
 #include "GroundProjection.h"
 
@@ -7,19 +7,9 @@
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
 
-void axisSnap(Vector3& point)
-{
-    const float grid = 0.25f;
-    const float epsilon = 0.08f;
-    float gx = std::round(point.x / grid) * grid;
-    float gz = std::round(point.z / grid) * grid;
-    if (std::fabs(point.x - gx) < epsilon)
-        point.x = gx;
-    if (std::fabs(point.z - gz) < epsilon)
-        point.z = gz;
-}
 
-}
+
+
 
 LineTool::LineTool(GeometryKernel* g, CameraController* c)
     : Tool(g, c)

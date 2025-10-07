@@ -71,13 +71,10 @@ SunModel::Result SunModel::computeSunDirection(const QDate& date,
 
     QDateTime local(date, effectiveTime, zone);
 
-    if (!local.isValid()) {
-
-        local = QDateTime(date, effectiveTime, Qt::UTC);
-
-        local = local.addSecs(-timezoneMinutes * 60);
-
-    }
+    if (!local.isValid()) {
+        local = QDateTime(date, effectiveTime, QTimeZone::utc());
+        local = local.addSecs(-timezoneMinutes * 60);
+    }
 
 
 

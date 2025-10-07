@@ -1,5 +1,9 @@
 #include "ToolManager.h"
 
+#ifdef _MSC_VER
+#pragma execution_character_set("utf-8")
+#endif
+
 #include <QtCore/Qt>
 
 #include <algorithm>
@@ -32,6 +36,7 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
     GeometryKernel* gPtr = geometry;
     tools.push_back(std::make_unique<SmartSelectTool>(gPtr, c));
     tools.push_back(std::make_unique<LineTool>(gPtr, c));
+    tools.push_back(std::make_unique<RectangleTool>(gPtr, c));
     tools.push_back(std::make_unique<ArcTool>(gPtr, c));
     tools.push_back(std::make_unique<CircleTool>(gPtr, c));
     tools.push_back(std::make_unique<PolygonTool>(gPtr, c));

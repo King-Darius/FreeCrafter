@@ -1,5 +1,9 @@
 #include "EnvironmentPanel.h"
 
+#ifdef _MSC_VER
+#pragma execution_character_set("utf-8")
+#endif
+
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QFormLayout>

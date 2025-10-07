@@ -1,3 +1,4 @@
+﻿#include <QDir>
 #include "SceneImporter.h"
 
 #include <algorithm>
@@ -749,3 +750,4 @@ bool importScene(Scene::Document& document, const std::string& filePath, SceneFo
 }
 
 }
+

@@ -102,4 +102,44 @@ std::optional<SceneFormat> sceneFormatFromExtension(const std::string& extension
     return std::nullopt;
 }
 
+bool hasAssimpRuntimeSupport()
+{
+#ifdef FREECRAFTER_HAS_ASSIMP
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool hasSkpRuntimeSupport()
+{
+#ifdef FREECRAFTER_HAS_SKP_SDK
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool isSceneFormatAvailable(SceneFormat format)
+{
+    if (formatRequiresAssimp(format) && !hasAssimpRuntimeSupport()) {
+        return false;
+    }
+    if (formatRequiresSkp(format) && !hasSkpRuntimeSupport()) {
+        return false;
+    }
+    return true;
+}
+
+std::vector<SceneFormat> availableSceneFormats()
+{
+    std::vector<SceneFormat> formats;
+    for (auto format : allSceneFormats()) {
+        if (isSceneFormatAvailable(format)) {
+            formats.push_back(format);
+        }
+    }
+    return formats;
+}
+
 }

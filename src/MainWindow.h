@@ -9,6 +9,7 @@ class QAction;
 class QLabel;
 class QDockWidget;
 class QToolBar;
+class QToolButton;
 class QTabWidget;
 class QTabBar;
 class QActionGroup;

@@ -19,4 +19,5 @@ public:
     Vector3& operator-=(const Vector3& o) { x -= o.x; y -= o.y; z -= o.z; return *this; }
     Vector3& operator*=(float s) { x *= s; y *= s; z *= s; return *this; }
     Vector3& operator/=(float s) { x /= s; y /= s; z /= s; return *this; }
+    Vector3 operator-() const { return Vector3(-x, -y, -z); }
 };

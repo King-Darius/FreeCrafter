@@ -1,5 +1,9 @@
 #include "DrawingTools.h"
 
+#ifdef _MSC_VER
+#pragma execution_character_set("utf-8")
+#endif
+
 #include "GroundProjection.h"
 
 #include <algorithm>
@@ -168,6 +172,21 @@ std::vector<Vector3> buildRotatedRectangle(const Vector3& first, const Vector3& 
     Vec2 c = b + offset;
     Vec2 d = a + offset;
     return { toVec3(a), toVec3(b), toVec3(c), toVec3(d) };
+}
+
+std::vector<Vector3> buildAxisAlignedRectangle(const Vector3& first, const Vector3& opposite)
+{
+    float width = std::fabs(opposite.x - first.x);
+    float depth = std::fabs(opposite.z - first.z);
+    if (width <= 1e-6f || depth <= 1e-6f)
+        return {};
+
+    const float y = first.y;
+    Vector3 a = first;
+    Vector3 b(opposite.x, y, first.z);
+    Vector3 c(opposite.x, y, opposite.z);
+    Vector3 d(first.x, y, opposite.z);
+    return { a, b, c, d };
 }
 
 bool maybeAddPoint(std::vector<Vector3>& stroke, const Vector3& point)
@@ -460,6 +479,143 @@ void CircleTool::finalizeCircle(const Vector3& radiusPoint)
         geometry->addCurve(points);
     }
     hasCenter = false;
+    previewValid = false;
+}
+
+RectangleTool::RectangleTool(GeometryKernel* g, CameraController* c)
+    : Tool(g, c)
+{
+}
+
+void RectangleTool::onPointerDown(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+
+    if (!hasFirstCorner) {
+        firstCorner = point;
+        hasFirstCorner = true;
+        previewPoint = point;
+        previewValid = true;
+        setState(State::Active);
+    } else {
+        finalizeRectangle(point);
+        setState(State::Idle);
+    }
+}
+
+void RectangleTool::onPointerMove(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (!hasFirstCorner)
+        return;
+
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+    previewPoint = point;
+    previewValid = true;
+}
+
+void RectangleTool::onPointerHover(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (hasFirstCorner) {
+        onPointerMove(input);
+        return;
+    }
+
+    Vector3 point;
+    if (resolvePoint(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else if (resolveFallback(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else {
+        previewValid = false;
+    }
+}
+
+void RectangleTool::onCancel()
+{
+    hasFirstCorner = false;
+    previewValid = false;
+}
+
+void RectangleTool::onStateChanged(State, State next)
+{
+    if (next == State::Idle) {
+        hasFirstCorner = false;
+        previewValid = false;
+    }
+}
+
+void RectangleTool::onInferenceResultChanged(const Interaction::InferenceResult& result)
+{
+    if (!result.isValid())
+        return;
+
+    previewPoint = result.position;
+    previewValid = true;
+}
+
+Tool::PreviewState RectangleTool::buildPreview() const
+{
+    PreviewState state;
+    if (hasFirstCorner && previewValid) {
+        PreviewPolyline polyline;
+        polyline.points = buildAxisAlignedRectangle(firstCorner, previewPoint);
+        polyline.closed = true;
+        if (!polyline.points.empty())
+            state.polylines.push_back(polyline);
+    } else if (previewValid) {
+        PreviewPolyline dot;
+        dot.points.push_back(previewPoint);
+        state.polylines.push_back(dot);
+    }
+    return state;
+}
+
+bool RectangleTool::resolvePoint(const PointerInput& input, Vector3& out) const
+{
+    const auto& snap = getInferenceResult();
+    if (snap.isValid()) {
+        out = snap.position;
+        return true;
+    }
+    return resolveFallback(input, out);
+}
+
+bool RectangleTool::resolveFallback(const PointerInput& input, Vector3& out) const
+{
+    Vector3 ground;
+    if (!screenToGround(camera, input.x, input.y, viewportWidth, viewportHeight, ground))
+        return false;
+    axisSnap(ground);
+    out = Vector3(ground.x, 0.0f, ground.z);
+    return true;
+}
+
+void RectangleTool::finalizeRectangle(const Vector3& oppositeCorner)
+{
+    if (!geometry || !hasFirstCorner)
+        return;
+
+    std::vector<Vector3> polyline = buildAxisAlignedRectangle(firstCorner, oppositeCorner);
+    if (!polyline.empty())
+        geometry->addCurve(polyline);
+
+    hasFirstCorner = false;
     previewValid = false;
 }
 

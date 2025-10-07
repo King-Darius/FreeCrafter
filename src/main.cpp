@@ -1,9 +1,14 @@
-#include <QApplication>
-#include <QCoreApplication>
-#include <QSurfaceFormat>
 #include "MainWindow.h"
 
-int main(int argc, char *argv[]) {
+#include <QApplication>
+#include <QCoreApplication>
+#include <QFont>
+#include <QFontDatabase>
+#include <QStringList>
+#include <QSurfaceFormat>
+
+int main(int argc, char* argv[])
+{
     // Request a modern OpenGL context compatible with the renderer's shaders
     QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
     fmt.setProfile(QSurfaceFormat::CoreProfile);
@@ -11,6 +16,17 @@ int main(int argc, char *argv[]) {
     QSurfaceFormat::setDefaultFormat(fmt);
 
     QApplication app(argc, argv);
+
+    const int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/DejaVuSans.ttf"));
+    if (fontId >= 0) {
+        const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+        if (!families.isEmpty()) {
+            QFont uiFont(families.front());
+            uiFont.setStyleStrategy(QFont::PreferAntialias);
+            app.setFont(uiFont);
+        }
+    }
+
     QCoreApplication::setOrganizationName("FreeCrafter");
     QCoreApplication::setOrganizationDomain("freecrafter.io");
     QCoreApplication::setApplicationName("FreeCrafter");

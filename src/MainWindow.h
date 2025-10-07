@@ -52,6 +52,8 @@ private slots:
     void showKeyboardShortcuts();
     void activateSelect();
     void activateLine();
+    void activateRectangle();
+    void activateCircle();
     void activateMove();
     void activateRotate();
     void activateScale();
@@ -79,6 +81,7 @@ private:
     void setActiveTool(QAction* action, const QString& toolId, const QString& hint);
     QString navigationHintForTool(const QString& toolName) const;
     void refreshNavigationActionHints();
+    void updateSelectionStatus();
     void updateThemeActionIcon();
     void setRenderStyle(Renderer::RenderStyle style);
     void applyStandardView(ViewPresetManager::StandardView view);
@@ -98,11 +101,13 @@ private:
     QLabel* hintLabel = nullptr;
     QLabel* coordLabel = nullptr;
     QLabel* selectionLabel = nullptr;
+    QLabel* frameLabel = nullptr;
     QLabel* taskLabel = nullptr;
 
     QPointer<QToolBar> primaryToolbar;
     QPointer<QToolBar> toolRibbon;
     QPointer<QDockWidget> rightDock;
+    QPointer<QDockWidget> environmentDock;
     QPointer<QTabWidget> rightTabs;
     QPointer<QTabBar> documentTabs;
     QPointer<QToolButton> renderStyleButton;
@@ -142,6 +147,8 @@ private:
 
     QAction* selectAction = nullptr;
     QAction* lineAction = nullptr;
+    QAction* rectangleAction = nullptr;
+    QAction* circleAction = nullptr;
     QAction* moveAction = nullptr;
     QAction* rotateAction = nullptr;
     QAction* scaleAction = nullptr;

@@ -24,6 +24,7 @@
 #include <optional>
 
 class ToolManager;
+class Tool;
 class NavigationPreferences;
 
 class QPainter;
@@ -96,6 +97,7 @@ private:
     void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
     bool computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const;
     bool applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds);
+    void refreshCursorShape();
 
     Scene::Document document;
     CameraController camera;
@@ -123,6 +125,7 @@ private:
     SunSettings environmentSettings;
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");
+    Qt::CursorShape currentCursorShape = Qt::ArrowCursor;
 
     QOpenGLShaderProgram horizonProgram;
     QOpenGLBuffer horizonVbo { QOpenGLBuffer::VertexBuffer };

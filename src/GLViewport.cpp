@@ -8,6 +8,7 @@
 #include <QOpenGLShader>
 
 #include <QOpenGLContext>
+#include <QCursor>
 
 #include <QByteArray>
 #include <QFont>
@@ -59,6 +60,66 @@ void main() {
 }
 )";
 
+Qt::CursorShape cursorShapeForTool(const Tool* tool)
+{
+    if (!tool)
+        return Qt::ArrowCursor;
+
+    const QString name = QString::fromLatin1(tool->getName());
+
+    if (name == QLatin1String("PanTool")) {
+        return tool->getState() == Tool::State::Active ? Qt::ClosedHandCursor : Qt::OpenHandCursor;
+    }
+    if (name == QLatin1String("OrbitTool")) {
+        return Qt::SizeAllCursor;
+    }
+    if (name == QLatin1String("ZoomTool")) {
+        return Qt::PointingHandCursor;
+    }
+    if (name == QLatin1String("MoveTool")) {
+        return Qt::SizeAllCursor;
+    }
+    if (name == QLatin1String("RotateTool")) {
+        return Qt::SizeBDiagCursor;
+    }
+    if (name == QLatin1String("ScaleTool")) {
+        return Qt::SizeFDiagCursor;
+    }
+    if (name == QLatin1String("PaintBucket")) {
+        return Qt::PointingHandCursor;
+    }
+    if (name == QLatin1String("Text")) {
+        return Qt::IBeamCursor;
+    }
+    if (name == QLatin1String("SmartSelectTool")) {
+        return Qt::ArrowCursor;
+    }
+
+    static const auto isCrosshairTool = [](const QString& toolName) {
+        return toolName == QLatin1String("LineTool")
+            || toolName == QLatin1String("Arc")
+            || toolName == QLatin1String("Circle")
+            || toolName == QLatin1String("Polygon")
+            || toolName == QLatin1String("RotatedRectangle")
+            || toolName == QLatin1String("Freehand")
+            || toolName == QLatin1String("Offset")
+            || toolName == QLatin1String("PushPull")
+            || toolName == QLatin1String("FollowMe")
+            || toolName == QLatin1String("ExtrudeTool")
+            || toolName == QLatin1String("Dimension")
+            || toolName == QLatin1String("TapeMeasure")
+            || toolName == QLatin1String("Protractor")
+            || toolName == QLatin1String("Axes")
+            || toolName == QLatin1String("SectionTool");
+    };
+
+    if (isCrosshairTool(name)) {
+        return Qt::CrossCursor;
+    }
+
+    return Qt::ArrowCursor;
+}
+
 }
 
 GLViewport::GLViewport(QWidget* parent)
@@ -71,6 +132,7 @@ GLViewport::GLViewport(QWidget* parent)
     repaintTimer.start();
     frameTimer.start();
     paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
+    setCursor(currentCursorShape);
 }
 
 void GLViewport::initializeGL()
@@ -313,6 +375,8 @@ void GLViewport::paintGL()
                          .arg(smoothedFps, 0, 'f', 1)
                          .arg(smoothedFrameMs, 0, 'f', 2)
                          .arg(lastDrawCalls));
+
+    refreshCursorShape();
 }
 
 void GLViewport::drawAxes()
@@ -1255,6 +1319,27 @@ bool GLViewport::applyZoomToBounds(const Vector3& minBounds, const Vector3& maxB
     return true;
 }
 
+void GLViewport::refreshCursorShape()
+{
+    if (!underMouse()) {
+        return;
+    }
+
+    Qt::CursorShape desired = Qt::ArrowCursor;
+    if (activeNavigationBinding) {
+        desired = Qt::ClosedHandCursor;
+    } else if (toolManager) {
+        if (Tool* tool = toolManager->getActiveTool()) {
+            desired = cursorShapeForTool(tool);
+        }
+    }
+
+    if (desired != currentCursorShape) {
+        setCursor(desired);
+        currentCursorShape = desired;
+    }
+}
+
 void GLViewport::zoomInStep()
 {
     camera.zoomCamera(1.0f);
@@ -1314,6 +1399,7 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
                 tool->handleMouseDown(input);
             }
             update();
+            refreshCursorShape();
             return;
         }
     }
@@ -1329,6 +1415,8 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
             t->handleMouseDown(input);
         }
     }
+
+    refreshCursorShape();
 }
 
 void GLViewport::mouseMoveEvent(QMouseEvent* e)
@@ -1382,6 +1470,8 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
 
     if (navigationHandled)
         update();
+
+    refreshCursorShape();
 }
 
 void GLViewport::mouseReleaseEvent(QMouseEvent* e)
@@ -1411,6 +1501,7 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
         activeNavigationBinding.reset();
         navigationButton = Qt::NoButton;
         update();
+        refreshCursorShape();
         return;
     }
 
@@ -1420,6 +1511,8 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
             t->handleMouseUp(input);
         }
     }
+
+    refreshCursorShape();
 }
 
 void GLViewport::wheelEvent(QWheelEvent* e)
@@ -1453,6 +1546,7 @@ void GLViewport::wheelEvent(QWheelEvent* e)
     CameraNavigation::zoomAboutCursor(camera, static_cast<float>(delta), lastDeviceMouse.x(), lastDeviceMouse.y(), pixelW,
                                       pixelH, navigationConfig.zoomToCursor);
     update();
+    refreshCursorShape();
 }
 
 void GLViewport::keyPressEvent(QKeyEvent* e)
@@ -1476,6 +1570,7 @@ void GLViewport::keyPressEvent(QKeyEvent* e)
         QOpenGLWidget::keyPressEvent(e);
     }
     update();
+    refreshCursorShape();
 }
 
 void GLViewport::keyReleaseEvent(QKeyEvent* e)
@@ -1485,6 +1580,7 @@ void GLViewport::keyReleaseEvent(QKeyEvent* e)
     }
     QOpenGLWidget::keyReleaseEvent(e);
     update();
+    refreshCursorShape();
 }
 
 void GLViewport::leaveEvent(QEvent* event)
@@ -1500,6 +1596,8 @@ void GLViewport::leaveEvent(QEvent* event)
     if (toolManager) {
         toolManager->clearInference();
     }
+    unsetCursor();
+    currentCursorShape = Qt::ArrowCursor;
     emit cursorPositionChanged(std::numeric_limits<double>::quiet_NaN(),
                                std::numeric_limits<double>::quiet_NaN(),
                                std::numeric_limits<double>::quiet_NaN());

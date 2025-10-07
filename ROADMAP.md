@@ -76,6 +76,7 @@ The following tracked milestones correspond to major roadmap items A–H:
 - [x] Styles: Wireframe/Shaded/Shaded+Edges/HiddenLine/Monochrome; hidden geometry
 - [x] Sections: multiple planes; active cut; fills; per‑scene state
 - [x] Shadows: solar model; date/time sliders; lat/long; basic projected → shadow‑map upgrade later
+- [ ] Dynamic cursor system with context-sensitive crosshair, pickbox, pointer, and pencil visuals that reflect tool state
 
 ---
 

@@ -4297,6 +4297,10 @@ void MainWindow::createMenus()
 
     connect(actionViewTop, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Top); });
 
+}
+
+
+
 
 
 

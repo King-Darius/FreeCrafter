@@ -1784,685 +1784,94 @@ MeasurementParseResult parseMetricDistance(const QString& raw)
 
 
 MeasurementParseResult parseDistanceMeasurement(const QString& raw, const QString& unitSystem)
-
-
-
-
-
-
-
 {
-
-    
-
-
-
-
-
-
-
     if (unitSystem == QLatin1String("imperial")) {
-
-
-
-
-
-
-
         return parseImperialDistance(raw);
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
     return parseMetricDistance(raw);
-
-
-
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 MeasurementParseResult parseAngleMeasurement(const QString& raw)
-
-
-
-
-
-
-
 {
-
-
-
-
-
-
-
     MeasurementParseResult result;
-
-
-
-
-
-
-
     QString sanitized = removeWhitespace(raw.trimmed());
-
-
-
-
-
-
-
     if (sanitized.isEmpty()) {
-
-
-
-
-
-
-
         result.error = QObject::tr("empty angle");
-
-
-
-
-
-
-
         return result;
-
-    QString storedPaletteId;
-
-        storedPaletteId = settings.value(QStringLiteral("%1/paletteId").arg(kSettingsGroup), storedPaletteId).toString();
-
-    if (palettePrefs) {
-
-        if (!storedPaletteId.isEmpty())
-
-            palettePrefs->setActivePalette(storedPaletteId);
-
-        viewport->setPalettePreferences(palettePrefs.get());
-
     }
-
-
-
-
-
-
-
-
-
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     QString lower = sanitized.toLower();
-
-
-
-
-
-
-
     double multiplier = kPi / 180.0;
-
-
-
-
-
-
-
     if (lower.endsWith(QStringLiteral("rad"))) {
-
-
-
-
-
-
-
         multiplier = 1.0;
-
-
-
-
-
-
-
         sanitized.chop(3);
-
-
-
-
-
-
-
     } else if (lower.endsWith(QStringLiteral("deg"))) {
-
-
-
-
-
-
-
         sanitized.chop(3);
-
-
-
-
-
-
-
     } else if (sanitized.endsWith(QChar(0x00B0))) {
-
-
-
-
-
-
-
         sanitized.chop(1);
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     if (sanitized.isEmpty()) {
-
-
-
-
-
-
-
         result.error = QObject::tr("invalid angle");
-
-
-
-
-
-
-
         return result;
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     bool ok = false;
-
-
-
-
-
-
-
     double magnitude = sanitized.toDouble(&ok);
-
-
-
-
-
-
-
     if (!ok) {
-
-
-
-
-
-
-
         result.error = QObject::tr("invalid angle");
-
-
-
-
-
-
-
         return result;
-
-
-
-
-
-
-
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     result.ok = true;
-
-
-
-
-
-
-
     result.value = magnitude * multiplier;
-
-
-
-
-
-
-
     result.display = raw.trimmed();
-
-
-
-
-
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1°").arg(magnitude, 0, 'f', 2);
+    }
     return result;
-
-
-
-
-
-
-
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 MeasurementParseResult parseScaleMeasurement(const QString& raw)
-
-
-
-
-
-
-
 {
-
-
-
-
-
-
-
     MeasurementParseResult result;
-
-
-
-
-
-
-
     QString sanitized = removeWhitespace(raw.trimmed());
-
-
-
-
-
-
-
     if (sanitized.isEmpty()) {
-
-
-
-
-
-
-
         result.error = QObject::tr("empty scale");
-
-
-
-
-
-
-
         return result;
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     bool percent = sanitized.endsWith(QLatin1Char('%'));
-
-
-
-
-
-
-
     if (percent) {
-
-
-
-
-
-
-
         sanitized.chop(1);
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     bool ok = false;
-
-
-
-
-
-
-
     double magnitude = sanitized.toDouble(&ok);
-
-
-
-
-
-
-
     if (!ok) {
-
-
-
-
-
-
-
         result.error = QObject::tr("invalid scale");
-
-
-
-
-
-
-
         return result;
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     if (percent) {
-
-
-
-
-
-
-
         magnitude /= 100.0;
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     if (magnitude <= 0.0) {
-
-
-
-
-
-
-
         result.error = QObject::tr("scale must be positive");
-
-
-
-
-
-
-
         return result;
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     result.ok = true;
-
-
-
-
-
-
-
     result.value = magnitude;
-
-
-
-
-
-
-
     result.display = raw.trimmed();
-
-
-
-
-
-
-
-    if (result.display.isEmpty()) {
-
-
-
-
-
-
-
-        result.display = QObject::tr("%1x").arg(magnitude, 0, 'f', 2);
-
-
-
-
-
-
-
+    if (percent && !result.display.endsWith(QLatin1Char('%'))) {
+        result.display.append(QLatin1Char('%'));
     }
-
-
-
-
-
-
-
+    if (result.display.isEmpty()) {
+        result.display = QObject::tr("%1x").arg(magnitude, 0, 'f', 3);
+    }
     return result;
-
-
-
-
-
-
-
 }
 
 

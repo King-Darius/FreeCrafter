@@ -2596,13 +2596,13 @@ void MainWindow::activateLine()
 
 void MainWindow::activateRectangle()
 {
-    setActiveTool(rectangleAction, QStringLiteral("RectangleTool"),
+    setActiveTool(rectangleAction, QStringLiteral("Rectangle"),
         tr("Rectangle: Click the first corner, then click the opposite corner to finish."));
 }
 
 void MainWindow::activateCircle()
 {
-    setActiveTool(circleAction, QStringLiteral("CircleTool"),
+    setActiveTool(circleAction, QStringLiteral("Circle"),
         tr("Circle: Click to set the center, then click again to define the radius."));
 }
 

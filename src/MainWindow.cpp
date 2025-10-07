@@ -1,4 +1,4 @@
-#include "Scene/Document.h"
+﻿#include "Scene/Document.h"
 #include "MainWindow.h"
 
 
@@ -228,13 +228,6 @@ constexpr double kPi = 3.14159265358979323846;
 
 
 #include <QVBoxLayout>
-
-
-
-    if (palettePrefs)
-
-        palettePrefs->setActivePalette(palettePrefs->activePaletteId());
-
 
 
 
@@ -1800,31 +1793,7 @@ MeasurementParseResult parseDistanceMeasurement(const QString& raw, const QStrin
 
 {
 
-    palettePrefs = std::make_unique<PalettePreferences>(this);
-
-    palettePrefs->attachDocument(viewport->getDocument());
-
-    connect(palettePrefs.get(),
-
-            &PalettePreferences::paletteChanged,
-
-            this,
-
-            [this](const PalettePreferences::ColorSet&) {
-
-                syncViewSettingsUI();
-
-                if (paletteActionGroup) {
-
-                    if (statusBar())
-
-                        statusBar()->showMessage(tr("Palette set to %1").arg(palettePrefs->activePaletteLabel()), 1500);
-
-                    persistViewSettings();
-
-                }
-
-            });
+    
 
 
 
@@ -2169,46 +2138,6 @@ MeasurementParseResult parseAngleMeasurement(const QString& raw)
 
 
     result.display = raw.trimmed();
-
-
-
-
-
-    QMenu* recentMenu = fileMenu->addMenu(tr("Recent"));
-
-    QAction* recentPlaceholder = recentMenu->addAction(tr("No recent files yet"));
-
-    recentPlaceholder->setEnabled(false);
-
-    fileMenu->addSeparator();
-
-    actionImport = fileMenu->addAction(tr("Import…"), this, &MainWindow::importExternalModel);
-
-    actionImport->setStatusTip(tr("Import geometry from external formats"));
-
-    fileMenu->addSeparator();
-
-    actionSave = fileMenu->addAction(tr("Save"), this, &MainWindow::saveFile);
-
-    actionSave->setIcon(QIcon(QStringLiteral(":/icons/save.svg")));
-
-    actionSave->setStatusTip(tr("Save the active document"));
-
-    actionSaveAs = fileMenu->addAction(tr("Save As…"), this, &MainWindow::saveFileAs);
-
-    actionSaveAs->setStatusTip(tr("Save the active document to a new file"))
-
-        result.display = QObject::tr("%1°").arg(magnitude, 0, 'f', 2);
-
-
-
-
-
-
-
-    }
-
-
 
 
 
@@ -12680,6 +12609,7 @@ void MainWindow::handleMeasurementCommit(const QString& value, const QString& un
 
 
 }
+
 
 
 

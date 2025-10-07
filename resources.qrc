@@ -12,8 +12,11 @@
     <file>resources/icons/paintbucket.png</file>
     <file>resources/icons/tapemeasure.png</file>
     <file>resources/icons/protractor.png</file>
+    <file>resources/icons/circle.png</file>
     <file>resources/icons/orbit.png</file>
+    <file>resources/icons/orbit.svg</file>
     <file>resources/icons/pan.png</file>
+    <file>resources/icons/pan.svg</file>
     <file>resources/icons/zoom.png</file>
     <file>resources/icons/zoom_extents.png</file>
     <file>resources/icons/section.png</file>
@@ -53,6 +56,9 @@
   <qresource prefix="/styles">
     <file>styles/app.qss</file>
     <file>styles/app_light.qss</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <file>resources/fonts/DejaVuSans.ttf</file>
   </qresource>
   <qresource prefix="/config">
     <file>resources/config/hotkeys_default.json</file>

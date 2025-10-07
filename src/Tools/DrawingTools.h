@@ -62,6 +62,34 @@ private:
     int lastY = 0;
 };
 
+class RectangleTool : public Tool {
+public:
+    RectangleTool(GeometryKernel* g, CameraController* c);
+
+    const char* getName() const override { return "Rectangle"; }
+
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput& input) override;
+    void onPointerHover(const PointerInput& input) override;
+    void onCancel() override;
+    void onStateChanged(State previous, State next) override;
+    void onInferenceResultChanged(const Interaction::InferenceResult& result) override;
+    PreviewState buildPreview() const override;
+
+private:
+    bool resolvePoint(const PointerInput& input, Vector3& out) const;
+    bool resolveFallback(const PointerInput& input, Vector3& out) const;
+    void finalizeRectangle(const Vector3& oppositeCorner);
+
+    Vector3 firstCorner{};
+    Vector3 previewPoint{};
+    bool hasFirstCorner = false;
+    bool previewValid = false;
+    int lastX = 0;
+    int lastY = 0;
+};
+
 class PolygonTool : public Tool {
 public:
     PolygonTool(GeometryKernel* g, CameraController* c);

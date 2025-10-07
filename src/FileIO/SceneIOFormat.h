@@ -22,5 +22,9 @@ bool formatRequiresAssimp(SceneFormat format);
 bool formatRequiresSkp(SceneFormat format);
 std::vector<SceneFormat> allSceneFormats();
 std::optional<SceneFormat> sceneFormatFromExtension(const std::string& extension);
+bool hasAssimpRuntimeSupport();
+bool hasSkpRuntimeSupport();
+bool isSceneFormatAvailable(SceneFormat format);
+std::vector<SceneFormat> availableSceneFormats();
 
 }

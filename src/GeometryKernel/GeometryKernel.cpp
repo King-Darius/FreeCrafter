@@ -63,6 +63,7 @@ GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
 
 void GeometryKernel::deleteObject(GeometryObject* obj) {
     if (!obj) return;
+    materialAssignments.erase(obj);
     for (auto it = objects.begin(); it != objects.end(); ++it) {
         if (it->get() == obj) { objects.erase(it); return; }
     }

@@ -24,35 +24,6 @@
 namespace FileIO::Exporters {
 namespace {
 
-bool hasAssimpSupport()
-{
-#ifdef FREECRAFTER_HAS_ASSIMP
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool hasSkpSupport()
-{
-#ifdef FREECRAFTER_HAS_SKP_SDK
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool formatEnabled(SceneFormat format)
-{
-    if (formatRequiresAssimp(format) && !hasAssimpSupport()) {
-        return false;
-    }
-    if (formatRequiresSkp(format) && !hasSkpSupport()) {
-        return false;
-    }
-    return true;
-}
-
 struct SceneInstance {
     std::string name;
     GeometryKernel::MeshBuffer mesh;
@@ -489,18 +460,12 @@ bool writeGltf(const std::filesystem::path& output,
 
 bool isFormatAvailable(SceneFormat format)
 {
-    return formatEnabled(format);
+    return isSceneFormatAvailable(format);
 }
 
 std::vector<SceneFormat> supportedFormats()
 {
-    std::vector<SceneFormat> available;
-    for (auto format : allSceneFormats()) {
-        if (isFormatAvailable(format)) {
-            available.push_back(format);
-        }
-    }
-    return available;
+    return availableSceneFormats();
 }
 
 std::vector<std::string> supportedFormatFilters()

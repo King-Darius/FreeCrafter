@@ -2726,60 +2726,7 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 
 
 
-    QMenu* paletteMenu = viewMenu->addMenu(tr("Surface Palette"));
-
-    paletteActionGroup = new QActionGroup(this);
-
-    paletteActionGroup->setExclusive(true);
-
-    paletteActions.clear();
-
-    QList<PalettePreferences::PaletteInfo> palettes = palettePrefs ? palettePrefs->availablePalettes() : QList<PalettePreferences::PaletteInfo>{};
-
-    QString activePaletteId = palettePrefs ? palettePrefs->activePaletteId() : QString();
-
-    for (const auto& info : palettes) {
-
-        QAction* paletteAction = paletteMenu->addAction(info.label);
-
-        paletteAction->setCheckable(true);
-
-        paletteAction->setData(info.id);
-
-        paletteAction->setToolTip(info.description);
-
-        paletteActionGroup->addAction(paletteAction);
-
-        paletteActions.insert(info.id, paletteAction);
-
-        if (info.id == activePaletteId)
-
-            paletteAction->setChecked(true);
-
-        connect(paletteAction, &QAction::triggered, this, [this, id = info.id]() {
-
-            if (palettePrefs)
-
-                palettePrefs->setActivePalette(id);
-
-        });
-
-    }
-
-    if (paletteMenu->actions().isEmpty())
-
-        paletteMenu->setEnabled(false);
-
-
-
-
-
-
-
-
-
-
-QString MainWindow::navigationHintForTool(const QString& toolName) const
+    QString MainWindow::navigationHintForTool(const QString& toolName) const
 
 
 

@@ -12,6 +12,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <functional>
 
 #include <QByteArray>
 #include <QFile>
@@ -27,35 +28,6 @@
 namespace FileIO::Importers {
 namespace {
 
-bool hasAssimpSupport()
-{
-#ifdef FREECRAFTER_HAS_ASSIMP
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool hasSkpSupport()
-{
-#ifdef FREECRAFTER_HAS_SKP_SDK
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool formatEnabled(SceneFormat format)
-{
-    if (formatRequiresAssimp(format) && !hasAssimpSupport()) {
-        return false;
-    }
-    if (formatRequiresSkp(format) && !hasSkpSupport()) {
-        return false;
-    }
-    return true;
-}
-
 std::string trim(const std::string& input)
 {
     const auto first = std::find_if_not(input.begin(), input.end(), [](unsigned char c) { return std::isspace(c); });
@@ -68,11 +40,209 @@ std::string trim(const std::string& input)
 
 struct ImportedMesh {
     std::string name;
-    std::vector<Vector3> positions;
+   std::vector<Vector3> positions;
     std::vector<std::uint32_t> indices;
     std::string material;
     std::array<float, 16> transform = GeometryKernel::identityTransform();
 };
+
+std::array<float, 16> readMatrix(const QJsonObject& node);
+
+std::array<float, 16> multiplyMatrices(const std::array<float, 16>& a, const std::array<float, 16>& b)
+{
+    std::array<float, 16> result{};
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                sum += a[k * 4 + row] * b[column * 4 + k];
+            }
+            result[column * 4 + row] = sum;
+        }
+    }
+    return result;
+}
+
+bool isIdentityTransform(const std::array<float, 16>& matrix)
+{
+    static const auto identity = GeometryKernel::identityTransform();
+    for (size_t i = 0; i < matrix.size(); ++i) {
+        if (std::fabs(matrix[i] - identity[i]) > 1e-6f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::array<float, 16> composeTrs(const QJsonObject& node)
+{
+    std::array<float, 16> translation = GeometryKernel::identityTransform();
+    QJsonArray t = node.value("translation").toArray();
+    if (t.size() == 3) {
+        translation[12] = static_cast<float>(t[0].toDouble());
+        translation[13] = static_cast<float>(t[1].toDouble());
+        translation[14] = static_cast<float>(t[2].toDouble());
+    }
+
+    std::array<float, 16> scale = GeometryKernel::identityTransform();
+    QJsonArray s = node.value("scale").toArray();
+    if (s.size() == 3) {
+        scale[0] = static_cast<float>(s[0].toDouble());
+        scale[5] = static_cast<float>(s[1].toDouble());
+        scale[10] = static_cast<float>(s[2].toDouble());
+    }
+
+    std::array<float, 16> rotation = GeometryKernel::identityTransform();
+    QJsonArray r = node.value("rotation").toArray();
+    if (r.size() == 4) {
+        double x = r[0].toDouble();
+        double y = r[1].toDouble();
+        double z = r[2].toDouble();
+        double w = r[3].toDouble();
+        double length = std::sqrt(x * x + y * y + z * z + w * w);
+        if (length > 1e-8) {
+            x /= length;
+            y /= length;
+            z /= length;
+            w /= length;
+        }
+        double xx = x * x;
+        double yy = y * y;
+        double zz = z * z;
+        double xy = x * y;
+        double xz = x * z;
+        double yz = y * z;
+        double wx = w * x;
+        double wy = w * y;
+        double wz = w * z;
+
+        rotation[0] = static_cast<float>(1.0 - 2.0 * (yy + zz));
+        rotation[1] = static_cast<float>(2.0 * (xy + wz));
+        rotation[2] = static_cast<float>(2.0 * (xz - wy));
+        rotation[4] = static_cast<float>(2.0 * (xy - wz));
+        rotation[5] = static_cast<float>(1.0 - 2.0 * (xx + zz));
+        rotation[6] = static_cast<float>(2.0 * (yz + wx));
+        rotation[8] = static_cast<float>(2.0 * (xz + wy));
+        rotation[9] = static_cast<float>(2.0 * (yz - wx));
+        rotation[10] = static_cast<float>(1.0 - 2.0 * (xx + yy));
+    }
+
+    // glTF specifies TRS order as Translation * Rotation * Scale
+    return multiplyMatrices(translation, multiplyMatrices(rotation, scale));
+}
+
+std::array<float, 16> readNodeTransform(const QJsonObject& node)
+{
+    if (node.contains("matrix")) {
+        return readMatrix(node);
+    }
+    return composeTrs(node);
+}
+
+bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
+{
+    std::ifstream file(path);
+    if (!file) {
+        if (error) {
+            *error = "Unable to open STL file";
+        }
+        return false;
+    }
+
+    ImportedMesh mesh;
+    mesh.name = path.stem().string();
+    mesh.transform = GeometryKernel::identityTransform();
+
+    std::string token;
+    while (file >> token) {
+        if (token == "vertex") {
+            float x = 0.0f, y = 0.0f, z = 0.0f;
+            file >> x >> y >> z;
+            mesh.positions.emplace_back(x, y, z);
+            mesh.indices.push_back(static_cast<std::uint32_t>(mesh.positions.size() - 1));
+        }
+    }
+
+    if (mesh.indices.empty()) {
+        if (error) {
+            *error = "STL file did not contain any facets";
+        }
+        return false;
+    }
+    meshes.push_back(std::move(mesh));
+    return true;
+}
+
+bool parseBinaryStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        if (error) {
+            *error = "Unable to open STL file";
+        }
+        return false;
+    }
+
+    std::array<char, 80> header{};
+    file.read(header.data(), header.size());
+    if (!file) {
+        if (error) {
+            *error = "Failed to read STL header";
+        }
+        return false;
+    }
+
+    std::uint32_t triangleCount = 0;
+    file.read(reinterpret_cast<char*>(&triangleCount), sizeof(triangleCount));
+    if (!file) {
+        if (error) {
+            *error = "Failed to read STL triangle count";
+        }
+        return false;
+    }
+
+    ImportedMesh mesh;
+    mesh.name = path.stem().string();
+    mesh.transform = GeometryKernel::identityTransform();
+    mesh.positions.reserve(static_cast<std::size_t>(triangleCount) * 3);
+    mesh.indices.reserve(static_cast<std::size_t>(triangleCount) * 3);
+
+    for (std::uint32_t i = 0; i < triangleCount; ++i) {
+        float normal[3];
+        file.read(reinterpret_cast<char*>(normal), sizeof(normal));
+        if (!file) {
+            if (error) {
+                *error = "Failed to read STL normal";
+            }
+            return false;
+        }
+
+        for (int v = 0; v < 3; ++v) {
+            float vertex[3];
+            file.read(reinterpret_cast<char*>(vertex), sizeof(vertex));
+            if (!file) {
+                if (error) {
+                    *error = "Failed to read STL vertex";
+                }
+                return false;
+            }
+            mesh.positions.emplace_back(vertex[0], vertex[1], vertex[2]);
+            mesh.indices.push_back(static_cast<std::uint32_t>(mesh.positions.size() - 1));
+        }
+
+        std::uint16_t attributeByteCount = 0;
+        file.read(reinterpret_cast<char*>(&attributeByteCount), sizeof(attributeByteCount));
+        if (!file) {
+            if (error) {
+                *error = "Failed to read STL attribute data";
+            }
+            return false;
+        }
+    }
+
+    meshes.push_back(std::move(mesh));
+    return true;
+}
 
 bool parseObj(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
 {
@@ -182,36 +352,31 @@ bool parseObj(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
 
 bool parseStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
 {
-    std::ifstream file(path);
-    if (!file) {
+    std::error_code ec;
+    std::uintmax_t fileSize = std::filesystem::file_size(path, ec);
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) {
         if (error) {
             *error = "Unable to open STL file";
         }
         return false;
     }
 
-    ImportedMesh mesh;
-    mesh.name = path.stem().string();
-    mesh.transform = GeometryKernel::identityTransform();
-
-    std::string token;
-    while (file >> token) {
-        if (token == "vertex") {
-            float x = 0.0f, y = 0.0f, z = 0.0f;
-            file >> x >> y >> z;
-            mesh.positions.emplace_back(x, y, z);
-            mesh.indices.push_back(static_cast<std::uint32_t>(mesh.positions.size() - 1));
+    std::array<char, 80> header{};
+    stream.read(header.data(), header.size());
+    std::uint32_t triangleCount = 0;
+    stream.read(reinterpret_cast<char*>(&triangleCount), sizeof(triangleCount));
+    bool binaryCandidate = stream.good() && !ec && fileSize >= 84;
+    if (binaryCandidate) {
+        const std::uintmax_t expectedSize = 84 + static_cast<std::uintmax_t>(triangleCount) * 50;
+        if (fileSize == expectedSize) {
+            stream.close();
+            return parseBinaryStl(path, meshes, error);
         }
     }
 
-    if (mesh.indices.empty()) {
-        if (error) {
-            *error = "STL file did not contain any facets";
-        }
-        return false;
-    }
-    meshes.push_back(std::move(mesh));
-    return true;
+    stream.close();
+    return parseAsciiStl(path, meshes, error);
 }
 
 int componentWidth(int componentType)
@@ -415,46 +580,87 @@ bool parseGltf(const std::filesystem::path& path, std::vector<ImportedMesh>& mes
 
     const auto identity = GeometryKernel::identityTransform();
 
-    for (const auto& nodeValue : nodes) {
-        QJsonObject nodeObj = nodeValue.toObject();
-        int meshIndex = nodeObj.value("mesh").toInt(-1);
-        if (meshIndex < 0 || meshIndex >= meshesArray.size()) {
-            continue;
-        }
-        QJsonObject meshObj = meshesArray[meshIndex].toObject();
-        QJsonArray primitives = meshObj.value("primitives").toArray();
-        if (primitives.isEmpty()) {
-            continue;
-        }
-        QJsonObject primitive = primitives[0].toObject();
-        QJsonObject attributes = primitive.value("attributes").toObject();
-        int positionAccessor = attributes.value("POSITION").toInt(-1);
-        int indexAccessor = primitive.value("indices").toInt(-1);
-        if (positionAccessor < 0 || indexAccessor < 0) {
-            continue;
-        }
-        auto positions = readVec3Accessor(bufferViews, accessors, positionAccessor, binary);
-        auto indices = readIndexAccessor(bufferViews, accessors, indexAccessor, binary);
-        if (positions.empty() || indices.empty()) {
-            continue;
-        }
-        ImportedMesh mesh;
-        QString defaultName = meshObj.value("name").toString(QStringLiteral("Mesh"));
-        mesh.name = nodeObj.value("name").toString(defaultName).toStdString();
-        mesh.positions = std::move(positions);
-        mesh.indices = std::move(indices);
-        mesh.transform = readMatrix(nodeObj);
-        int materialIndex = primitive.value("material").toInt(-1);
-        if (materialIndex >= 0 && materialIndex < materials.size()) {
-            mesh.material = materials[materialIndex].toObject().value("name").toString().toStdString();
-        }
-        if (mesh.transform != identity) {
-            for (auto& v : mesh.positions) {
-                v = applyTransform(mesh.transform, v);
+    std::function<void(int, const std::array<float, 16>&)> processNode =
+        [&](int nodeIndex, const std::array<float, 16>& parentTransform) {
+            if (nodeIndex < 0 || nodeIndex >= nodes.size()) {
+                return;
             }
-            mesh.transform = identity;
+            QJsonObject nodeObj = nodes[nodeIndex].toObject();
+            auto localTransform = readNodeTransform(nodeObj);
+            auto worldTransform = multiplyMatrices(parentTransform, localTransform);
+
+            int meshIndex = nodeObj.value("mesh").toInt(-1);
+            if (meshIndex >= 0 && meshIndex < meshesArray.size()) {
+                QJsonObject meshObj = meshesArray[meshIndex].toObject();
+                QJsonArray primitives = meshObj.value("primitives").toArray();
+                if (!primitives.isEmpty()) {
+                    QString baseName = nodeObj.value("name").toString(meshObj.value("name").toString(QStringLiteral("Mesh")));
+                    for (int primitiveIndex = 0; primitiveIndex < primitives.size(); ++primitiveIndex) {
+                        QJsonObject primitive = primitives[primitiveIndex].toObject();
+                        QJsonObject attributes = primitive.value("attributes").toObject();
+                        int positionAccessor = attributes.value("POSITION").toInt(-1);
+                        int indexAccessor = primitive.value("indices").toInt(-1);
+                        if (positionAccessor < 0 || indexAccessor < 0) {
+                            continue;
+                        }
+                        auto positions = readVec3Accessor(bufferViews, accessors, positionAccessor, binary);
+                        auto indices = readIndexAccessor(bufferViews, accessors, indexAccessor, binary);
+                        if (positions.empty() || indices.empty()) {
+                            continue;
+                        }
+                        ImportedMesh mesh;
+                        QString primitiveName = baseName;
+                        if (primitives.size() > 1) {
+                            primitiveName += QStringLiteral("_primitive%1").arg(primitiveIndex);
+                        }
+                        mesh.name = primitiveName.toStdString();
+                        mesh.positions = std::move(positions);
+                        mesh.indices = std::move(indices);
+                        mesh.transform = worldTransform;
+                        int materialIndex = primitive.value("material").toInt(-1);
+                        if (materialIndex >= 0 && materialIndex < materials.size()) {
+                            mesh.material = materials[materialIndex].toObject().value("name").toString().toStdString();
+                        }
+                        if (!isIdentityTransform(mesh.transform)) {
+                            for (auto& v : mesh.positions) {
+                                v = applyTransform(mesh.transform, v);
+                            }
+                            mesh.transform = identity;
+                        }
+                        meshes.push_back(std::move(mesh));
+                    }
+                }
+            }
+
+            QJsonArray children = nodeObj.value("children").toArray();
+            for (const auto& childValue : children) {
+                int childIndex = childValue.toInt(-1);
+                if (childIndex >= 0) {
+                    processNode(childIndex, worldTransform);
+                }
+            }
+        };
+
+    std::vector<int> rootNodes;
+    QJsonArray scenes = root.value("scenes").toArray();
+    int defaultScene = root.value("scene").toInt(-1);
+    if (defaultScene >= 0 && defaultScene < scenes.size()) {
+        QJsonArray sceneRoots = scenes[defaultScene].toObject().value("nodes").toArray();
+        for (const auto& value : sceneRoots) {
+            int index = value.toInt(-1);
+            if (index >= 0) {
+                rootNodes.push_back(index);
+            }
         }
-        meshes.push_back(std::move(mesh));
+    }
+    if (rootNodes.empty()) {
+        for (int i = 0; i < nodes.size(); ++i) {
+            rootNodes.push_back(i);
+        }
+    }
+
+    for (int rootIndex : rootNodes) {
+        processNode(rootIndex, identity);
     }
 
     if (meshes.empty()) {
@@ -496,7 +702,7 @@ bool buildDocument(Scene::Document& document, std::vector<ImportedMesh>& meshes,
 
 bool isFormatAvailable(SceneFormat format)
 {
-    return formatEnabled(format);
+    return isSceneFormatAvailable(format);
 }
 
 bool importScene(Scene::Document& document, const std::string& filePath, SceneFormat format, std::string* errorMessage)

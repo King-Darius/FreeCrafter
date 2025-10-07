@@ -1063,7 +1063,7 @@ Curve* Surface::drawPolylineOnSolid(const Solid& solid, const std::vector<Vector
     }
 
     GeometryObject* object = geometry.addCurve(projected);
-    if (!object || object->getType() != GeometryObject::ObjectType::Curve)
+    if (!object || object->getType() != ObjectType::Curve)
         return nullptr;
     return static_cast<Curve*>(object);
 }
@@ -1191,7 +1191,7 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
         imprint.push_back(imprint.front());
 
     GeometryObject* object = geometry.addCurve(imprint);
-    if (!object || object->getType() != GeometryObject::ObjectType::Curve)
+    if (!object || object->getType() != ObjectType::Curve)
         return nullptr;
     updateSolidMetadata(writableSolid);
     return static_cast<Curve*>(object);
@@ -1868,7 +1868,7 @@ Solid* CADDesigner::mirror(const Solid& solid, const Vector3& planePoint, const 
 Solid* CADDesigner::shell(const Solid& solid, const ShellOptions& options) const
 {
     GeometryObject* copy = geometry.cloneObject(solid);
-    if (!copy || copy->getType() != GeometryObject::ObjectType::Solid)
+    if (!copy || copy->getType() != ObjectType::Solid)
         return nullptr;
     Solid* shellSolid = static_cast<Solid*>(copy);
     PushAndPull thickener;
@@ -1890,7 +1890,7 @@ std::vector<Solid*> CADDesigner::pattern(const Solid& solid, const PatternOption
         return instances;
     for (int i = 0; i < options.count; ++i) {
         GeometryObject* copy = geometry.cloneObject(solid);
-        if (!copy || copy->getType() != GeometryObject::ObjectType::Solid)
+        if (!copy || copy->getType() != ObjectType::Solid)
             continue;
         Solid* inst = static_cast<Solid*>(copy);
         Vector3 offset = options.translationStep * static_cast<float>(i);
@@ -1907,7 +1907,7 @@ std::vector<Solid*> CADDesigner::pattern(const Solid& solid, const PatternOption
 Solid* CADDesigner::split(const Solid& solid, const SplitOptions& options) const
 {
     GeometryObject* copy = geometry.cloneObject(solid);
-    if (!copy || copy->getType() != GeometryObject::ObjectType::Solid)
+    if (!copy || copy->getType() != ObjectType::Solid)
         return nullptr;
     Solid* splitSolid = static_cast<Solid*>(copy);
     auto& mesh = splitSolid->getMesh();

@@ -32,6 +32,68 @@ private:
     int lastY = 0;
 };
 
+class CenterArcTool : public Tool {
+public:
+    CenterArcTool(GeometryKernel* g, CameraController* c);
+
+    const char* getName() const override { return "CenterArc"; }
+
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput& input) override;
+    void onPointerHover(const PointerInput& input) override;
+    void onCancel() override;
+    void onStateChanged(State previous, State next) override;
+    void onInferenceResultChanged(const Interaction::InferenceResult& result) override;
+    PreviewState buildPreview() const override;
+
+private:
+    bool resolvePoint(const PointerInput& input, Vector3& out) const;
+    bool resolveFallback(const PointerInput& input, Vector3& out) const;
+    void finalizeArc(const Vector3& endPoint);
+
+    enum class Stage { Center, Start, End };
+
+    Stage stage = Stage::Center;
+    Vector3 center{};
+    Vector3 startPoint{};
+    Vector3 previewPoint{};
+    bool previewValid = false;
+    int lastX = 0;
+    int lastY = 0;
+};
+
+class TangentArcTool : public Tool {
+public:
+    TangentArcTool(GeometryKernel* g, CameraController* c);
+
+    const char* getName() const override { return "TangentArc"; }
+
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput& input) override;
+    void onPointerHover(const PointerInput& input) override;
+    void onCancel() override;
+    void onStateChanged(State previous, State next) override;
+    void onInferenceResultChanged(const Interaction::InferenceResult& result) override;
+    PreviewState buildPreview() const override;
+
+private:
+    bool resolvePoint(const PointerInput& input, Vector3& out) const;
+    bool resolveFallback(const PointerInput& input, Vector3& out) const;
+    void finalizeArc(const Vector3& endPoint);
+
+    enum class Stage { Start, Tangent, End };
+
+    Stage stage = Stage::Start;
+    Vector3 startPoint{};
+    Vector3 tangentReference{};
+    Vector3 previewPoint{};
+    bool previewValid = false;
+    int lastX = 0;
+    int lastY = 0;
+};
+
 class CircleTool : public Tool {
 public:
     CircleTool(GeometryKernel* g, CameraController* c);
@@ -96,6 +158,8 @@ public:
 
     const char* getName() const override { return "Polygon"; }
     void setSides(int count) { sides = std::max(3, count); }
+    MeasurementKind getMeasurementKind() const override;
+    OverrideResult applyMeasurementOverride(double value) override;
 
 protected:
     void onPointerDown(const PointerInput& input) override;
@@ -167,5 +231,40 @@ private:
 
     std::vector<Vector3> stroke;
     bool drawing = false;
+};
+
+class BezierTool : public Tool {
+public:
+    BezierTool(GeometryKernel* g, CameraController* c);
+
+    const char* getName() const override { return "Bezier"; }
+
+protected:
+    void onPointerDown(const PointerInput& input) override;
+    void onPointerMove(const PointerInput& input) override;
+    void onPointerHover(const PointerInput& input) override;
+    void onCancel() override;
+    void onStateChanged(State previous, State next) override;
+    void onInferenceResultChanged(const Interaction::InferenceResult& result) override;
+    PreviewState buildPreview() const override;
+
+private:
+    bool resolvePoint(const PointerInput& input, Vector3& out) const;
+    bool resolveFallback(const PointerInput& input, Vector3& out) const;
+    void finalizeCurve(const Vector3& handle);
+
+    enum class Stage { FirstAnchor, SecondAnchor, FirstHandle, SecondHandle };
+
+    Stage stage = Stage::FirstAnchor;
+    Vector3 firstAnchor{};
+    Vector3 secondAnchor{};
+    Vector3 firstHandle{};
+    Vector3 previewPoint{};
+    bool hasFirstAnchor = false;
+    bool hasSecondAnchor = false;
+    bool hasFirstHandle = false;
+    bool previewValid = false;
+    int lastX = 0;
+    int lastY = 0;
 };
 

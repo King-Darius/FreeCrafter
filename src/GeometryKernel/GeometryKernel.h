@@ -3,12 +3,14 @@
 #include <cstdint>
 #include <iosfwd>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "GeometryObject.h"
 #include "Curve.h"
 #include "Solid.h"
+#include "ShapeBuilder.h"
 
 class GeometryKernel {
 public:
@@ -28,6 +30,48 @@ public:
     void assignMaterial(const GeometryObject* object, const std::string& materialName);
     std::string getMaterial(const GeometryObject* object) const;
     const std::unordered_map<const GeometryObject*, std::string>& getMaterials() const { return materialAssignments; }
+
+    struct ShapeMetadata {
+        enum class Type {
+            None,
+            Circle,
+            Polygon,
+            Arc,
+            Bezier
+        };
+
+        struct CircleData {
+            Vector3 center{ 0.0f, 0.0f, 0.0f };
+            Vector3 direction{ 1.0f, 0.0f, 0.0f };
+            float radius = 0.0f;
+            int segments = 32;
+        };
+
+        struct PolygonData {
+            Vector3 center{ 0.0f, 0.0f, 0.0f };
+            Vector3 direction{ 1.0f, 0.0f, 0.0f };
+            float radius = 0.0f;
+            int sides = 6;
+        };
+
+        struct ArcData {
+            ShapeBuilder::ArcDefinition definition;
+        };
+
+        struct BezierData {
+            ShapeBuilder::BezierDefinition definition;
+        };
+
+        Type type = Type::None;
+        CircleData circle;
+        PolygonData polygon;
+        ArcData arc;
+        BezierData bezier;
+    };
+
+    void setShapeMetadata(const GeometryObject* object, const ShapeMetadata& metadata);
+    std::optional<ShapeMetadata> shapeMetadata(const GeometryObject* object) const;
+    bool rebuildShapeFromMetadata(GeometryObject* object, const ShapeMetadata& metadata);
 
     struct TextAnnotation {
         Vector3 position;
@@ -99,6 +143,7 @@ public:
 private:
     std::vector<std::unique_ptr<GeometryObject>> objects;
     std::unordered_map<const GeometryObject*, std::string> materialAssignments;
+    std::unordered_map<const GeometryObject*, ShapeMetadata> metadataMap;
     std::vector<TextAnnotation> textAnnotations;
     std::vector<LinearDimension> dimensions;
     GuideState guides;

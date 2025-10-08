@@ -47,6 +47,8 @@ public:
     void beginFrame(const QMatrix4x4& projection, const QMatrix4x4& view, RenderStyle style);
     void setLightingOptions(const LightingOptions& options);
     void setClipPlanes(const std::vector<QVector4D>& planes);
+    void setShowGrid(bool visible);
+    bool isGridVisible() const;
 
     void addLineSegments(const std::vector<QVector3D>& segments,
                          const QVector4D& color,
@@ -151,6 +153,7 @@ private:
     QVector3D lightDir;
     RenderStyle currentStyle = RenderStyle::ShadedWithEdges;
     bool programsReady = false;
+    bool gridVisible = true;
 };
 
 

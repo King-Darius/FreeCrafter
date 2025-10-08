@@ -1222,6 +1222,16 @@ void MainWindow::onUndo()
 
     });
 
+    gridAction = viewMenu->addAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Show Grid"));
+
+    gridAction->setCheckable(true);
+
+    gridAction->setChecked(viewport->isGridVisible());
+
+    gridAction->setStatusTip(tr("Show or hide the ground grid"));
+
+    connect(gridAction, &QAction::toggled, this, &MainWindow::toggleGrid);
+
     actionViewSettings = viewMenu->addAction(tr("Camera Settings…"), this, &MainWindow::showViewSettingsDialog);
 
     actionViewSettings->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
@@ -1594,11 +1604,15 @@ void MainWindow::createToolbars()
 
     toolActionGroup->addAction(measureAction);
 
-    gridAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Toggle Grid"), this, &MainWindow::toggleGrid);
+    if (gridAction) {
 
-    gridAction->setCheckable(true);
+        gridAction->setIcon(QIcon(QStringLiteral(":/icons/grid.svg")));
 
-    gridAction->setChecked(true);
+        gridAction->setToolTip(tr("Toggle Grid"));
+
+        toolRibbon->addAction(gridAction);
+
+    }
 
     addToolBar(Qt::LeftToolBarArea, toolRibbon);
 
@@ -2682,15 +2696,17 @@ void MainWindow::activateMeasure()
 
 }
 
-void MainWindow::toggleGrid()
+void MainWindow::toggleGrid(bool enabled)
 
 {
 
+    if (viewport)
+
+        viewport->setGridVisible(enabled);
+
     if (hintLabel)
 
-        hintLabel->setText(gridAction->isChecked() ? tr("Grid enabled") : tr("Grid hidden"));
-
-    viewport->update();
+        hintLabel->setText(enabled ? tr("Grid enabled") : tr("Grid hidden"));
 
 }
 

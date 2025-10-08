@@ -217,6 +217,14 @@ void GLViewport::setRenderStyle(Renderer::RenderStyle style)
     update();
 }
 
+void GLViewport::setGridVisible(bool visible)
+{
+    if (renderer.isGridVisible() == visible)
+        return;
+    renderer.setShowGrid(visible);
+    update();
+}
+
 void GLViewport::setShowHiddenGeometry(bool show)
 {
     if (showHiddenGeometry == show) {
@@ -419,42 +427,79 @@ void GLViewport::drawAxes()
 
 void GLViewport::drawGrid()
 {
-    const int divisions = 40;
-    const float spacing = 1.0f;
-    const float fadeScale = 0.075f;
-    const float width = 1.35f;
-    const QVector3D extent(divisions * spacing, 0.0f, divisions * spacing);
-    const QVector3D baseColor(0.74f, 0.78f, 0.82f);
+    constexpr int kGridExtent = 50;
+    constexpr float kSpacing = 1.0f;
+    constexpr int kMajorInterval = 5;
+    constexpr float kFade = 0.03f;
+    constexpr float planeY = 0.0f;
 
-    auto addLine = [&](const QVector3D& a, const QVector3D& b, float distance) {
-        float fade = std::exp(-std::abs(distance) * fadeScale);
-        float alpha = 0.55f * fade;
-        if (alpha < 0.02f)
-            return;
-        QVector4D color(baseColor.x(), baseColor.y(), baseColor.z(), alpha);
-        renderer.addLineSegments(std::vector<QVector3D>{ a, b },
-                                 color,
-                                 width,
-                                 true,
-                                 true,
-                                 Renderer::LineCategory::Generic,
-                                 true,
-                                 14.0f);
-    };
+    const float minCoord = -kGridExtent * kSpacing;
+    const float maxCoord = kGridExtent * kSpacing;
 
-    for (int i = -divisions; i <= divisions; ++i) {
-        float coord = i * spacing;
-        QVector3D start(coord, 0.0f, -extent.z());
-        QVector3D end(coord, 0.0f, extent.z());
-        addLine(start, end, coord);
+    const QVector4D majorColor(0.68f, 0.72f, 0.78f, 1.0f);
+    const QVector4D minorColor(0.75f, 0.78f, 0.82f, 1.0f);
+    const QVector4D axisXColor(0.93f, 0.18f, 0.18f, 1.0f);
+    const QVector4D axisZColor(0.16f, 0.44f, 0.91f, 1.0f);
+
+    if (renderer.isGridVisible()) {
+        auto addGridLine = [&](const QVector3D& a, const QVector3D& b, float distance, bool major) {
+            const float fade = std::exp(-std::abs(distance) * kFade);
+            const float baseAlpha = major ? 0.42f : 0.18f;
+            const float alpha = baseAlpha * fade;
+            if (alpha < 0.015f)
+                return;
+            QVector4D color = major ? majorColor : minorColor;
+            QVector4D finalColor(color.x(), color.y(), color.z(), alpha);
+            renderer.addLineSegments(std::vector<QVector3D>{ a, b },
+                                     finalColor,
+                                     major ? 1.65f : 1.0f,
+                                     true,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
+        };
+
+        for (int i = -kGridExtent; i <= kGridExtent; ++i) {
+            const float coord = static_cast<float>(i) * kSpacing;
+            if (std::abs(coord) < 1e-4f)
+                continue;
+            const bool major = (i % kMajorInterval) == 0;
+            const QVector3D start(coord, planeY, minCoord);
+            const QVector3D end(coord, planeY, maxCoord);
+            addGridLine(start, end, coord, major);
+        }
+
+        for (int i = -kGridExtent; i <= kGridExtent; ++i) {
+            const float coord = static_cast<float>(i) * kSpacing;
+            if (std::abs(coord) < 1e-4f)
+                continue;
+            const bool major = (i % kMajorInterval) == 0;
+            const QVector3D start(minCoord, planeY, coord);
+            const QVector3D end(maxCoord, planeY, coord);
+            addGridLine(start, end, coord, major);
+        }
     }
 
-    for (int i = -divisions; i <= divisions; ++i) {
-        float coord = i * spacing;
-        QVector3D start(-extent.x(), 0.0f, coord);
-        QVector3D end(extent.x(), 0.0f, coord);
-        addLine(start, end, coord);
-    }
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(minCoord, planeY, 0.0f),
+                                                     QVector3D(maxCoord, planeY, 0.0f) },
+                             axisXColor,
+                             2.5f,
+                             true,
+                             false,
+                             Renderer::LineCategory::Generic,
+                             false,
+                             8.0f);
+
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0.0f, planeY, minCoord),
+                                                     QVector3D(0.0f, planeY, maxCoord) },
+                             axisZColor,
+                             2.5f,
+                             true,
+                             false,
+                             Renderer::LineCategory::Generic,
+                             false,
+                             8.0f);
 }
 
 void GLViewport::initializeHorizonBand()

@@ -40,6 +40,8 @@ public:
     void setPalettePreferences(PalettePreferences* prefs);
     void setRenderStyle(Renderer::RenderStyle style);
     Renderer::RenderStyle getRenderStyle() const { return renderStyle; }
+    void setGridVisible(bool visible);
+    bool isGridVisible() const { return renderer.isGridVisible(); }
     void setShowHiddenGeometry(bool show);
     bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
     void setSunSettings(const SunSettings& settings);

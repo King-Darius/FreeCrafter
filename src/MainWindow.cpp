@@ -13,6 +13,7 @@
 #include "SunModel.h"
 #include "Tools/ToolManager.h"
 #include "ui/EnvironmentPanel.h"
+#include "ui/InspectorPanel.h"
 #include "ui/MeasurementWidget.h"
 #include "ui/ViewSettingsDialog.h"
 
@@ -39,23 +40,24 @@
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTabBar>
-#include <QTabWidget>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidgetAction>
 #include <QStringList>
+#include <QColor>
+#include <initializer_list>
+#include <Qt>
 
 #include <cmath>
+#include <vector>
 
 constexpr double kPi = 3.14159265358979323846;
 
 namespace {
 
 constexpr int kToolbarHeight = 48;
-
-constexpr int kRibbonWidth = 56;
 
 constexpr int kStatusHeight = 28;
 
@@ -468,6 +470,47 @@ MeasurementParseResult parseScaleMeasurement(const QString& raw)
     return result;
 }
 
+MeasurementParseResult parseCountMeasurement(const QString& raw)
+{
+    MeasurementParseResult result;
+    QString sanitized = removeWhitespace(raw.trimmed());
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("empty count");
+        return result;
+    }
+
+    QString lower = sanitized.toLower();
+    if (lower.endsWith(QStringLiteral("sides"))) {
+        sanitized.chop(5);
+    } else if (lower.endsWith(QStringLiteral("side"))) {
+        sanitized.chop(4);
+    } else if (sanitized.endsWith(QLatin1Char('s')) || sanitized.endsWith(QLatin1Char('S'))) {
+        sanitized.chop(1);
+    }
+
+    if (sanitized.isEmpty()) {
+        result.error = QObject::tr("invalid count");
+        return result;
+    }
+
+    bool ok = false;
+    int count = sanitized.toInt(&ok);
+    if (!ok) {
+        result.error = QObject::tr("invalid count");
+        return result;
+    }
+
+    if (count < 3) {
+        result.error = QObject::tr("sides must be at least 3");
+        return result;
+    }
+
+    result.ok = true;
+    result.value = static_cast<double>(count);
+    result.display = QObject::tr("%1 sides").arg(count);
+    return result;
+}
+
 MeasurementParseResult parseMeasurementValue(const QString& raw, const QString& unitSystem, Tool::MeasurementKind kind)
 
 {
@@ -481,6 +524,10 @@ MeasurementParseResult parseMeasurementValue(const QString& raw, const QString& 
     case Tool::MeasurementKind::Angle:
 
         return parseAngleMeasurement(raw);
+
+    case Tool::MeasurementKind::Count:
+
+        return parseCountMeasurement(raw);
 
     case Tool::MeasurementKind::Scale:
 
@@ -513,6 +560,10 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
     case Tool::MeasurementKind::Angle:
 
         return QObject::tr("Angle (e.g. 45° or 0.79rad)");
+
+    case Tool::MeasurementKind::Count:
+
+        return QObject::tr("Sides (e.g. 6 or 12s)");
 
     case Tool::MeasurementKind::Scale:
 
@@ -732,6 +783,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     centralLayout->addWidget(documentTabs);
 
     viewport = new GLViewport(central);
+    viewportWidget_ = viewport;
 
     centralLayout->addWidget(viewport, 1);
 
@@ -1490,117 +1542,127 @@ void MainWindow::createToolbars()
 
     updateViewPresetButtonLabel();
 
-    toolRibbon = new QToolBar(tr("Tools"), this);
-
-    toolRibbon->setOrientation(Qt::Vertical);
-
-    toolRibbon->setMovable(false);
-
-    toolRibbon->setIconSize(QSize(24, 24));
-
-    toolRibbon->setFixedWidth(kRibbonWidth);
-
-    toolRibbon->setToolButtonStyle(Qt::ToolButtonIconOnly);
-
     toolActionGroup = new QActionGroup(this);
-
     toolActionGroup->setExclusive(true);
 
-    selectAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/select.png")), tr("Select"), this, &MainWindow::activateSelect);
+    auto createToolAction = [this](QAction*& target,
+                                   const QString& iconPath,
+                                   const QString& label,
+                                   void (MainWindow::*slot)(),
+                                   const QString& statusTip) {
+        target = new QAction(QIcon(iconPath), label, this);
+        target->setCheckable(true);
+        target->setStatusTip(statusTip);
+        connect(target, &QAction::triggered, this, slot);
+        toolActionGroup->addAction(target);
+    };
 
-    selectAction->setCheckable(true);
+    createToolAction(selectAction,
+                     QStringLiteral(":/icons/select.png"),
+                     tr("Select"),
+                     &MainWindow::activateSelect,
+                     tr("Select and edit existing geometry."));
+    createToolAction(lineAction,
+                     QStringLiteral(":/icons/line.png"),
+                     tr("Line"),
+                     &MainWindow::activateLine,
+                     tr("Draw connected line segments."));
+    createToolAction(rectangleAction,
+                     QStringLiteral(":/icons/rectangle.png"),
+                     tr("Rectangle"),
+                     &MainWindow::activateRectangle,
+                     tr("Create rectangles aligned to the axes."));
+    createToolAction(rotatedRectangleAction,
+                     QStringLiteral(":/icons/rotated_rectangle.svg"),
+                     tr("Rotated Rectangle"),
+                     &MainWindow::activateRotatedRectangle,
+                     tr("Draw rectangles by edge, rotation, and height."));
+    createToolAction(circleAction,
+                     QStringLiteral(":/icons/circle.png"),
+                     tr("Circle"),
+                     &MainWindow::activateCircle,
+                     tr("Draw circles by center and radius."));
+    createToolAction(arcAction,
+                     QStringLiteral(":/icons/arc.png"),
+                     tr("3-Point Arc"),
+                     &MainWindow::activateArc,
+                     tr("Draw arcs using three points."));
+    createToolAction(centerArcAction,
+                     QStringLiteral(":/icons/center_arc.svg"),
+                     tr("Center Arc"),
+                     &MainWindow::activateCenterArc,
+                     tr("Draw arcs from a center, start, and end angle."));
+    createToolAction(tangentArcAction,
+                     QStringLiteral(":/icons/tangent_arc.svg"),
+                     tr("Tangent Arc"),
+                     &MainWindow::activateTangentArc,
+                     tr("Draw arcs tangent to a direction at the first point."));
+    createToolAction(polygonAction,
+                     QStringLiteral(":/icons/polygon.svg"),
+                     tr("Polygon"),
+                     &MainWindow::activatePolygon,
+                     tr("Draw regular polygons by center and radius. Enter a side count to adjust."));
+    createToolAction(bezierAction,
+                     QStringLiteral(":/icons/bezier.svg"),
+                     tr("Bezier"),
+                     &MainWindow::activateBezier,
+                     tr("Create cubic Bezier curves with adjustable handles."));
+    createToolAction(freehandAction,
+                     QStringLiteral(":/icons/freehand.svg"),
+                     tr("Freehand"),
+                     &MainWindow::activateFreehand,
+                     tr("Sketch loose strokes that become polylines."));
+    createToolAction(moveAction,
+                     QStringLiteral(":/icons/move.png"),
+                     tr("Move"),
+                     &MainWindow::activateMove,
+                     tr("Translate geometry to a new location."));
+    createToolAction(rotateAction,
+                     QStringLiteral(":/icons/rotate.png"),
+                     tr("Rotate"),
+                     &MainWindow::activateRotate,
+                     tr("Rotate entities around a pivot."));
+    createToolAction(scaleAction,
+                     QStringLiteral(":/icons/scale.png"),
+                     tr("Scale"),
+                     &MainWindow::activateScale,
+                     tr("Scale geometry about a point."));
+    createToolAction(extrudeAction,
+                     QStringLiteral(":/icons/pushpull.png"),
+                     tr("Extrude"),
+                     &MainWindow::activateExtrude,
+                     tr("Push or pull faces to add volume."));
+    createToolAction(sectionAction,
+                     QStringLiteral(":/icons/section.png"),
+                     tr("Section"),
+                     &MainWindow::activateSection,
+                     tr("Create section planes through the model."));
+    createToolAction(panAction,
+                     QStringLiteral(":/icons/pan.svg"),
+                     tr("Pan"),
+                     &MainWindow::activatePan,
+                     tr("Pan the camera view."));
+    createToolAction(orbitAction,
+                     QStringLiteral(":/icons/orbit.svg"),
+                     tr("Orbit"),
+                     &MainWindow::activateOrbit,
+                     tr("Orbit around the scene."));
+    createToolAction(zoomAction,
+                     QStringLiteral(":/icons/zoom.png"),
+                     tr("Zoom"),
+                     &MainWindow::activateZoom,
+                     tr("Zoom the camera view."));
+    createToolAction(measureAction,
+                     QStringLiteral(":/icons/measure.svg"),
+                     tr("Measure"),
+                     &MainWindow::activateMeasure,
+                     tr("Measure distances in the model."));
 
-    selectAction->setStatusTip(tr("Select and edit existing geometry."));
-
-    toolActionGroup->addAction(selectAction);
-
-    lineAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/line.png")), tr("Line"), this, &MainWindow::activateLine);
-
-    lineAction->setCheckable(true);
-
-    lineAction->setStatusTip(tr("Draw connected line segments."));
-
-    toolActionGroup->addAction(lineAction);
-
-    rectangleAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/rectangle.png")), tr("Rectangle"), this, &MainWindow::activateRectangle);
-
-    rectangleAction->setCheckable(true);
-
-    rectangleAction->setStatusTip(tr("Create rectangles aligned to the axes."));
-
-    toolActionGroup->addAction(rectangleAction);
-
-    circleAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/circle.png")), tr("Circle"), this, &MainWindow::activateCircle);
-
-    circleAction->setCheckable(true);
-
-    circleAction->setStatusTip(tr("Draw circles by center and radius."));
-
-    toolActionGroup->addAction(circleAction);
-
-    moveAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/move.png")), tr("Move"), this, &MainWindow::activateMove);
-
-    moveAction->setCheckable(true);
-
-    toolActionGroup->addAction(moveAction);
-
-    rotateAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/rotate.png")), tr("Rotate"), this, &MainWindow::activateRotate);
-
-    rotateAction->setCheckable(true);
-
-    toolActionGroup->addAction(rotateAction);
-
-    scaleAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/scale.png")), tr("Scale"), this, &MainWindow::activateScale);
-
-    scaleAction->setCheckable(true);
-
-    toolActionGroup->addAction(scaleAction);
-
-    extrudeAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pushpull.png")), tr("Extrude"), this, &MainWindow::activateExtrude);
-
-    extrudeAction->setCheckable(true);
-
-    toolActionGroup->addAction(extrudeAction);
-
-    sectionAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/section.png")), tr("Section"), this, &MainWindow::activateSection);
-
-    sectionAction->setCheckable(true);
-
-    toolActionGroup->addAction(sectionAction);
-
-    toolRibbon->addSeparator();
-
-    panAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/pan.svg")), tr("Pan"), this, &MainWindow::activatePan);
-
-    panAction->setCheckable(true);
-
-    toolActionGroup->addAction(panAction);
-
-    orbitAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/orbit.svg")), tr("Orbit"), this, &MainWindow::activateOrbit);
-
-    orbitAction->setCheckable(true);
-
-    toolActionGroup->addAction(orbitAction);
-
-    zoomAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/zoom.png")), tr("Zoom"), this, &MainWindow::activateZoom);
-
-    zoomAction->setCheckable(true);
-
-    toolActionGroup->addAction(zoomAction);
-
-    measureAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/measure.svg")), tr("Measure"), this, &MainWindow::activateMeasure);
-
-    measureAction->setCheckable(true);
-
-    toolActionGroup->addAction(measureAction);
-
-    gridAction = toolRibbon->addAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Toggle Grid"), this, &MainWindow::toggleGrid);
-
+    gridAction = new QAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Toggle Grid"), this);
     gridAction->setCheckable(true);
-
     gridAction->setChecked(true);
-
-    addToolBar(Qt::LeftToolBarArea, toolRibbon);
+    gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
+    connect(gridAction, &QAction::triggered, this, &MainWindow::toggleGrid);
 
     selectAction->setChecked(true);
 
@@ -1614,49 +1676,139 @@ void MainWindow::createToolbars()
 
 void MainWindow::createDockPanels()
 {
-    rightDock = new QDockWidget(tr("Panels"), this);
-    rightDock->setObjectName(QStringLiteral("PanelsDock"));
-    rightDock->setAllowedAreas(Qt::RightDockWidgetArea);
-    rightDock->setMinimumWidth(280);
-    rightDock->setMaximumWidth(420);
-    rightDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    createLeftDock();
+    createRightDock();
+    customizeViewport();
+}
 
-    rightTabs = new QTabWidget(rightDock);
-    rightTabs->setDocumentMode(true);
+void MainWindow::createLeftDock()
+{
+    if (leftDock_) {
+        removeDockWidget(leftDock_);
+        leftDock_->deleteLater();
+    }
 
-    auto makePlaceholder = [](const QString& title) {
-        QWidget* page = new QWidget;
-        auto* layout = new QVBoxLayout(page);
-        layout->setContentsMargins(16, 16, 16, 16);
-        layout->addStretch();
-        auto* label = new QLabel(QObject::tr("%1 panel placeholder").arg(title));
-        label->setAlignment(Qt::AlignCenter);
-        layout->addWidget(label);
-        layout->addStretch();
-        return page;
+    auto collect = [](std::initializer_list<QAction*> list) {
+        QList<QAction*> actions;
+        for (QAction* action : list) {
+            if (action)
+                actions.append(action);
+        }
+        return actions;
     };
 
-    rightTabs->addTab(makePlaceholder(tr("Inspector")), tr("Inspector"));
-    rightTabs->addTab(makePlaceholder(tr("Explorer")), tr("Explorer"));
-    rightTabs->addTab(makePlaceholder(tr("History")), tr("History"));
+    QList<ToolGroup> groups;
 
-    rightDock->setWidget(rightTabs);
-    addDockWidget(Qt::RightDockWidgetArea, rightDock);
+    ToolGroup selectGroup;
+    selectGroup.label = tr("SELECT");
+    selectGroup.actions = collect({ selectAction });
+    if (!selectGroup.actions.isEmpty())
+        groups.append(selectGroup);
 
-    environmentPanel = new EnvironmentPanel(this);
-    environmentPanel->setSettings(sunSettings);
-    connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
+    ToolGroup drawGroup;
+    drawGroup.label = tr("DRAW");
+    drawGroup.actions = collect({ lineAction,
+                                  rectangleAction,
+                                  rotatedRectangleAction,
+                                  circleAction,
+                                  arcAction,
+                                  centerArcAction,
+                                  tangentArcAction,
+                                  polygonAction,
+                                  bezierAction,
+                                  freehandAction });
+    if (!drawGroup.actions.isEmpty())
+        groups.append(drawGroup);
 
-    environmentDock = new QDockWidget(tr("Environment"), this);
-    environmentDock->setObjectName(QStringLiteral("EnvironmentDock"));
-    environmentDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    environmentDock->setMinimumWidth(260);
-    environmentDock->setMaximumWidth(420);
-    environmentDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    environmentDock->setWidget(environmentPanel);
+    ToolGroup modifyGroup;
+    modifyGroup.label = tr("MODIFY");
+    modifyGroup.actions = collect({ moveAction,
+                                    rotateAction,
+                                    scaleAction,
+                                    extrudeAction,
+                                    sectionAction });
+    if (!modifyGroup.actions.isEmpty())
+        groups.append(modifyGroup);
 
-    addDockWidget(Qt::RightDockWidgetArea, environmentDock);
-    splitDockWidget(rightDock, environmentDock, Qt::Vertical);
+    ToolGroup navGroup;
+    navGroup.label = tr("NAV");
+    navGroup.actions = collect({ panAction,
+                                 orbitAction,
+                                 zoomAction,
+                                 measureAction,
+                                 gridAction });
+    if (!navGroup.actions.isEmpty())
+        groups.append(navGroup);
+
+    leftDock_ = new QDockWidget(tr("Tools"), this);
+    leftDock_->setObjectName(QStringLiteral("ToolsDock"));
+    leftDock_->setAllowedAreas(Qt::LeftDockWidgetArea);
+    leftDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    leftDock_->setMinimumWidth(LeftToolPalette::preferredWidth());
+    leftDock_->setMaximumWidth(LeftToolPalette::preferredWidth());
+
+    auto* palette = new LeftToolPalette(groups, leftDock_);
+    leftDock_->setWidget(palette);
+    addDockWidget(Qt::LeftDockWidgetArea, leftDock_);
+}
+
+void MainWindow::createRightDock()
+{
+    if (rightDock_) {
+        removeDockWidget(rightDock_);
+        rightDock_->deleteLater();
+    }
+
+    rightDock_ = new QDockWidget(tr("Panels"), this);
+    rightDock_->setObjectName(QStringLiteral("PanelsDock"));
+    rightDock_->setAllowedAreas(Qt::RightDockWidgetArea);
+    rightDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    rightDock_->setMinimumWidth(320);
+    rightDock_->setMaximumWidth(420);
+
+    rightTray_ = new RightTray(nullptr, rightDock_);
+    rightDock_->setWidget(rightTray_);
+    addDockWidget(Qt::RightDockWidgetArea, rightDock_);
+
+    inspectorPanel = rightTray_ ? rightTray_->inspectorPanel() : nullptr;
+    if (inspectorPanel) {
+        connect(inspectorPanel, &InspectorPanel::shapeModified, this, [this]() {
+            if (viewport)
+                viewport->update();
+            updateSelectionStatus();
+        });
+    }
+
+    environmentPanel = rightTray_ ? rightTray_->environmentPanel() : nullptr;
+    if (environmentPanel) {
+        environmentPanel->setSettings(sunSettings);
+        connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
+    }
+}
+
+void MainWindow::customizeViewport()
+{
+    if (!viewport)
+        return;
+
+    viewportWidget_ = viewport;
+    viewport->setBackgroundPalette(QColor(179, 210, 240),
+                                   QColor(188, 206, 188),
+                                   QColor(140, 158, 140));
+
+    if (!overlay_) {
+        overlay_ = new ViewportOverlay(viewportWidget_);
+        overlay_->setParent(viewportWidget_);
+    }
+
+    overlay_->raise();
+    overlay_->move(viewportWidget_->width() - overlay_->width() - 10, 10);
+    overlay_->show();
+
+    connect(viewport, &GLViewport::viewportResized, this, [this](const QSize& size) {
+        if (overlay_)
+            overlay_->move(size.width() - overlay_->width() - 10, 10);
+    }, Qt::UniqueConnection);
 }
 void MainWindow::createStatusBarWidgets()
 
@@ -1754,7 +1906,14 @@ void MainWindow::registerShortcuts()
 
     hotkeys.registerAction(QStringLiteral("tools.line"), lineAction);
     hotkeys.registerAction(QStringLiteral("tools.rectangle"), rectangleAction);
+    hotkeys.registerAction(QStringLiteral("tools.rotatedRectangle"), rotatedRectangleAction);
+    hotkeys.registerAction(QStringLiteral("tools.arc"), arcAction);
+    hotkeys.registerAction(QStringLiteral("tools.centerArc"), centerArcAction);
+    hotkeys.registerAction(QStringLiteral("tools.tangentArc"), tangentArcAction);
     hotkeys.registerAction(QStringLiteral("tools.circle"), circleAction);
+    hotkeys.registerAction(QStringLiteral("tools.polygon"), polygonAction);
+    hotkeys.registerAction(QStringLiteral("tools.bezier"), bezierAction);
+    hotkeys.registerAction(QStringLiteral("tools.freehand"), freehandAction);
 
     hotkeys.registerAction(QStringLiteral("tools.move"), moveAction);
 
@@ -1810,7 +1969,14 @@ void MainWindow::registerShortcuts()
 
         if (lineAction) lineAction->setToolTip(format(lineAction, tr("Line")));
         if (rectangleAction) rectangleAction->setToolTip(format(rectangleAction, tr("Rectangle")));
+        if (rotatedRectangleAction) rotatedRectangleAction->setToolTip(format(rotatedRectangleAction, tr("Rotated Rectangle")));
+        if (arcAction) arcAction->setToolTip(format(arcAction, tr("3-Point Arc")));
+        if (centerArcAction) centerArcAction->setToolTip(format(centerArcAction, tr("Center Arc")));
+        if (tangentArcAction) tangentArcAction->setToolTip(format(tangentArcAction, tr("Tangent Arc")));
         if (circleAction) circleAction->setToolTip(format(circleAction, tr("Circle")));
+        if (polygonAction) polygonAction->setToolTip(format(polygonAction, tr("Polygon")));
+        if (bezierAction) bezierAction->setToolTip(format(bezierAction, tr("Bezier")));
+        if (freehandAction) freehandAction->setToolTip(format(freehandAction, tr("Freehand")));
 
         if (moveAction) moveAction->setToolTip(format(moveAction, tr("Move")));
 
@@ -2522,13 +2688,10 @@ void MainWindow::showCommandPalette()
 
 void MainWindow::toggleRightDock()
 {
-    const bool anyVisible = (rightDock && rightDock->isVisible()) || (environmentDock && environmentDock->isVisible());
-    const bool target = !anyVisible;
+    if (!rightDock_)
+        return;
 
-    if (rightDock)
-        rightDock->setVisible(target);
-    if (environmentDock)
-        environmentDock->setVisible(target);
+    rightDock_->setVisible(!rightDock_->isVisible());
 }
 
 void MainWindow::toggleTheme()
@@ -2600,10 +2763,52 @@ void MainWindow::activateRectangle()
         tr("Rectangle: Click the first corner, then click the opposite corner to finish."));
 }
 
+void MainWindow::activateArc()
+{
+    setActiveTool(arcAction, QStringLiteral("Arc"),
+        tr("Arc: Click the first endpoint, click the second endpoint, then click to define the bulge."));
+}
+
+void MainWindow::activateCenterArc()
+{
+    setActiveTool(centerArcAction, QStringLiteral("CenterArc"),
+        tr("Center Arc: Click the center, click the start angle, then click to set the end angle."));
+}
+
+void MainWindow::activateTangentArc()
+{
+    setActiveTool(tangentArcAction, QStringLiteral("TangentArc"),
+        tr("Tangent Arc: Click the start point, click to set tangent direction, then click the end point."));
+}
+
 void MainWindow::activateCircle()
 {
     setActiveTool(circleAction, QStringLiteral("Circle"),
         tr("Circle: Click to set the center, then click again to define the radius."));
+}
+
+void MainWindow::activatePolygon()
+{
+    setActiveTool(polygonAction, QStringLiteral("Polygon"),
+        tr("Polygon: Click to set the center, then click again to set the radius. Type a side count to change segments."));
+}
+
+void MainWindow::activateRotatedRectangle()
+{
+    setActiveTool(rotatedRectangleAction, QStringLiteral("RotatedRectangle"),
+        tr("Rotated Rectangle: Click two corners for the base edge, then click to set height."));
+}
+
+void MainWindow::activateFreehand()
+{
+    setActiveTool(freehandAction, QStringLiteral("Freehand"),
+        tr("Freehand: Click and drag to sketch a polyline stroke."));
+}
+
+void MainWindow::activateBezier()
+{
+    setActiveTool(bezierAction, QStringLiteral("Bezier"),
+        tr("Bezier: Click start and end anchors, then place the two handles."));
 }
 
 void MainWindow::activateMove()
@@ -2756,23 +2961,34 @@ void MainWindow::updateCursor(double x, double y, double z)
 
 void MainWindow::updateSelectionStatus()
 {
-    if (!selectionLabel || !viewport)
+    if (!selectionLabel || !viewport) {
+        if (inspectorPanel)
+            inspectorPanel->updateSelection(nullptr, {});
         return;
+    }
     Scene::Document* doc = viewport->getDocument();
     if (!doc) {
         selectionLabel->setText(tr("Selection: none"));
+        if (inspectorPanel)
+            inspectorPanel->updateSelection(nullptr, {});
         return;
     }
     const auto& objects = doc->geometry().getObjects();
     int selectedCount = 0;
     int totalCount = 0;
+    std::vector<GeometryObject*> selectedObjects;
+    selectedObjects.reserve(objects.size());
     for (const auto& object : objects) {
         if (!object)
             continue;
         ++totalCount;
-        if (object->isSelected())
+        if (object->isSelected()) {
             ++selectedCount;
+            selectedObjects.push_back(object.get());
+        }
     }
+    if (inspectorPanel)
+        inspectorPanel->updateSelection(&doc->geometry(), selectedObjects);
     QString textValue;
     if (totalCount == 0) {
         textValue = tr("Selection: none");
@@ -2856,6 +3072,12 @@ void MainWindow::handleMeasurementCommit(const QString& value, const QString& un
 
             break;
 
+        case Tool::MeasurementKind::Count:
+
+            display = tr("%1 sides").arg(static_cast<int>(std::lround(parsed.value)));
+
+            break;
+
         case Tool::MeasurementKind::Scale:
 
             display = tr("%1x").arg(parsed.value, 0, 'f', 2);
@@ -2871,6 +3093,9 @@ void MainWindow::handleMeasurementCommit(const QString& value, const QString& un
     }
 
     statusBar()->showMessage(tr("Applied %1 override").arg(display), 2000);
+
+    if (viewport)
+        viewport->update();
 
 }
 

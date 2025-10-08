@@ -58,12 +58,17 @@ GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
     if (it != materialAssignments.end()) {
         materialAssignments[raw] = it->second;
     }
+    auto metaIt = metadataMap.find(&source);
+    if (metaIt != metadataMap.end()) {
+        metadataMap[raw] = metaIt->second;
+    }
     return raw;
 }
 
 void GeometryKernel::deleteObject(GeometryObject* obj) {
     if (!obj) return;
     materialAssignments.erase(obj);
+    metadataMap.erase(obj);
     for (auto it = objects.begin(); it != objects.end(); ++it) {
         if (it->get() == obj) { objects.erase(it); return; }
     }
@@ -73,6 +78,7 @@ void GeometryKernel::clear()
 {
     objects.clear();
     materialAssignments.clear();
+    metadataMap.clear();
     textAnnotations.clear();
     dimensions.clear();
     clearGuides();
@@ -170,6 +176,96 @@ std::string GeometryKernel::getMaterial(const GeometryObject* object) const
     if (it == materialAssignments.end())
         return {};
     return it->second;
+}
+
+void GeometryKernel::setShapeMetadata(const GeometryObject* object, const ShapeMetadata& metadata)
+{
+    if (!object)
+        return;
+    if (metadata.type == ShapeMetadata::Type::None) {
+        metadataMap.erase(object);
+    } else {
+        metadataMap[object] = metadata;
+    }
+}
+
+std::optional<GeometryKernel::ShapeMetadata> GeometryKernel::shapeMetadata(const GeometryObject* object) const
+{
+    if (!object)
+        return std::nullopt;
+    auto it = metadataMap.find(object);
+    if (it == metadataMap.end())
+        return std::nullopt;
+    return it->second;
+}
+
+bool GeometryKernel::rebuildShapeFromMetadata(GeometryObject* object, const ShapeMetadata& metadata)
+{
+    if (!object || object->getType() != ObjectType::Curve)
+        return false;
+
+    auto normalizeDirection = [](const Vector3& dir) {
+        Vector3 normalized = dir;
+        if (normalized.lengthSquared() <= 1e-6f)
+            normalized = Vector3(1.0f, 0.0f, 0.0f);
+        else
+            normalized = normalized.normalized();
+        return normalized;
+    };
+
+    std::vector<Vector3> points;
+    ShapeMetadata resolved = metadata;
+
+    switch (metadata.type) {
+    case ShapeMetadata::Type::Circle: {
+        Vector3 direction = normalizeDirection(metadata.circle.direction);
+        float radius = std::max(0.0f, metadata.circle.radius);
+        Vector3 radiusPoint = metadata.circle.center + direction * radius;
+        int segments = std::max(3, metadata.circle.segments);
+        points = ShapeBuilder::buildCircle(metadata.circle.center, radiusPoint, segments);
+        resolved.circle.direction = direction;
+        resolved.circle.radius = radius;
+        resolved.circle.segments = segments;
+        break;
+    }
+    case ShapeMetadata::Type::Polygon: {
+        Vector3 direction = normalizeDirection(metadata.polygon.direction);
+        float radius = std::max(0.0f, metadata.polygon.radius);
+        Vector3 radiusPoint = metadata.polygon.center + direction * radius;
+        int sides = std::max(3, metadata.polygon.sides);
+        points = ShapeBuilder::buildRegularPolygon(metadata.polygon.center, radiusPoint, sides);
+        resolved.polygon.direction = direction;
+        resolved.polygon.radius = radius;
+        resolved.polygon.sides = sides;
+        break;
+    }
+    case ShapeMetadata::Type::Arc: {
+        ShapeBuilder::ArcDefinition def = metadata.arc.definition;
+        points = ShapeBuilder::buildArc(def);
+        resolved.arc.definition = def;
+        break;
+    }
+    case ShapeMetadata::Type::Bezier: {
+        ShapeBuilder::BezierDefinition def = metadata.bezier.definition;
+        if (def.segments < 8)
+            def.segments = 8;
+        points = ShapeBuilder::buildBezier(def);
+        resolved.bezier.definition = def;
+        break;
+    }
+    default:
+        return false;
+    }
+
+    if (points.empty())
+        return false;
+
+    auto* curve = static_cast<Curve*>(object);
+    if (!curve->rebuildFromPoints(points))
+        return false;
+
+    metadataMap[object] = resolved;
+    return true;
 }
 
 void GeometryKernel::addTextAnnotation(const Vector3& position, std::string text, float height)

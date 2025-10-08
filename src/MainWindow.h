@@ -10,13 +10,13 @@ class QLabel;
 class QDockWidget;
 class QToolBar;
 class QToolButton;
-class QTabWidget;
 class QTabBar;
 class QActionGroup;
 class MeasurementWidget;
 class NavigationPreferences;
 class PalettePreferences;
 class EnvironmentPanel;
+class InspectorPanel;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -24,6 +24,9 @@ class EnvironmentPanel;
 #include "CameraController.h"
 #include "Navigation/ViewPresetManager.h"
 #include "SunSettings.h"
+#include "ui/LeftToolPalette.h"
+#include "ui/RightTray.h"
+#include "ui/ViewportOverlay.h"
 
 #include <QHash>
 
@@ -54,6 +57,13 @@ private slots:
     void activateLine();
     void activateRectangle();
     void activateCircle();
+    void activateArc();
+    void activateCenterArc();
+    void activateTangentArc();
+    void activatePolygon();
+    void activateRotatedRectangle();
+    void activateFreehand();
+    void activateBezier();
     void activateMove();
     void activateRotate();
     void activateScale();
@@ -73,6 +83,9 @@ private:
     void createMenus();
     void createToolbars();
     void createDockPanels();
+    void createLeftDock();
+    void createRightDock();
+    void customizeViewport();
     void createStatusBarWidgets();
     void registerShortcuts();
     void applyThemeStylesheet();
@@ -98,6 +111,7 @@ private:
     std::unique_ptr<NavigationPreferences> navigationPrefs;
     std::unique_ptr<PalettePreferences> palettePrefs;
     MeasurementWidget* measurementWidget = nullptr;
+    InspectorPanel* inspectorPanel = nullptr;
     QLabel* hintLabel = nullptr;
     QLabel* coordLabel = nullptr;
     QLabel* selectionLabel = nullptr;
@@ -105,13 +119,14 @@ private:
     QLabel* taskLabel = nullptr;
 
     QPointer<QToolBar> primaryToolbar;
-    QPointer<QToolBar> toolRibbon;
-    QPointer<QDockWidget> rightDock;
-    QPointer<QDockWidget> environmentDock;
-    QPointer<QTabWidget> rightTabs;
     QPointer<QTabBar> documentTabs;
     QPointer<QToolButton> renderStyleButton;
     QPointer<QToolButton> viewPresetToolButton;
+    QDockWidget* leftDock_ = nullptr;
+    QDockWidget* rightDock_ = nullptr;
+    QWidget* viewportWidget_ = nullptr;
+    ViewportOverlay* overlay_ = nullptr;
+    RightTray* rightTray_ = nullptr;
 
     QAction* actionNew = nullptr;
     QAction* actionOpen = nullptr;
@@ -149,6 +164,13 @@ private:
     QAction* lineAction = nullptr;
     QAction* rectangleAction = nullptr;
     QAction* circleAction = nullptr;
+    QAction* arcAction = nullptr;
+    QAction* centerArcAction = nullptr;
+    QAction* tangentArcAction = nullptr;
+    QAction* polygonAction = nullptr;
+    QAction* rotatedRectangleAction = nullptr;
+    QAction* freehandAction = nullptr;
+    QAction* bezierAction = nullptr;
     QAction* moveAction = nullptr;
     QAction* rotateAction = nullptr;
     QAction* scaleAction = nullptr;

@@ -257,6 +257,16 @@ void Renderer::setClipPlanes(const std::vector<QVector4D>& planes)
         clipPlanes[static_cast<size_t>(i)] = QVector4D();
 }
 
+void Renderer::setShowGrid(bool visible)
+{
+    gridVisible = visible;
+}
+
+bool Renderer::isGridVisible() const
+{
+    return gridVisible;
+}
+
 void Renderer::expandBounds(const QVector3D& point)
 {
     if (!boundsValid) {

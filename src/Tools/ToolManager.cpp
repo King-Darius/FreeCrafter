@@ -38,10 +38,13 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
     tools.push_back(std::make_unique<LineTool>(gPtr, c));
     tools.push_back(std::make_unique<RectangleTool>(gPtr, c));
     tools.push_back(std::make_unique<ArcTool>(gPtr, c));
+    tools.push_back(std::make_unique<CenterArcTool>(gPtr, c));
+    tools.push_back(std::make_unique<TangentArcTool>(gPtr, c));
     tools.push_back(std::make_unique<CircleTool>(gPtr, c));
     tools.push_back(std::make_unique<PolygonTool>(gPtr, c));
     tools.push_back(std::make_unique<RotatedRectangleTool>(gPtr, c));
     tools.push_back(std::make_unique<FreehandTool>(gPtr, c));
+    tools.push_back(std::make_unique<BezierTool>(gPtr, c));
     tools.push_back(std::make_unique<MoveTool>(gPtr, c));
     tools.push_back(std::make_unique<RotateTool>(gPtr, c));
     tools.push_back(std::make_unique<ScaleTool>(gPtr, c));

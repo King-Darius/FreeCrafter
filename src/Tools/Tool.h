@@ -59,6 +59,7 @@ public:
         None,
         Distance,
         Angle,
+        Count,
         Scale
     };
 

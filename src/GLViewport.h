@@ -11,6 +11,8 @@
 #include <QVector3D>
 #include <QString>
 #include <QMatrix4x4>
+#include <QColor>
+#include <QSize>
 
 #include "Scene/Document.h"
 #include "GeometryKernel/GeometryKernel.h"
@@ -43,6 +45,7 @@ public:
     void setShowHiddenGeometry(bool show);
     bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
     void setSunSettings(const SunSettings& settings);
+    void setBackgroundPalette(const QColor& sky, const QColor& ground, const QColor& horizonLine);
     const SunSettings& sunSettings() const { return environmentSettings; }
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &document.geometry(); }
@@ -67,11 +70,13 @@ public:
 signals:
     void cursorPositionChanged(double x, double y, double z);
     void frameStatsUpdated(double fps, double frameMs, int drawCalls);
+    void viewportResized(const QSize& size);
 
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
     void paintGL() override;
+    void resizeEvent(QResizeEvent* event) override;
 
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;
@@ -88,7 +93,6 @@ private:
     void drawHorizonBand();
     void drawSceneGeometry();
     void drawSceneOverlays();
-    void drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const;
     QMatrix4x4 buildProjectionMatrix(float aspect) const;
     QMatrix4x4 buildViewMatrix() const;
     bool projectCursorToGround(const QPointF& pos, QVector3D& world) const;
@@ -131,5 +135,9 @@ private:
     QOpenGLBuffer horizonVbo { QOpenGLBuffer::VertexBuffer };
     QOpenGLVertexArrayObject horizonVao;
     bool horizonReady = false;
+
+    QColor skyColor = QColor(179, 210, 240);
+    QColor groundColor = QColor(188, 206, 188);
+    QColor horizonLineColor = QColor(140, 158, 140);
 };
 

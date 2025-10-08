@@ -3,7 +3,10 @@
     <file>resources/icons/select.png</file>
     <file>resources/icons/line.png</file>
     <file>resources/icons/arc.png</file>
+    <file>resources/icons/center_arc.svg</file>
+    <file>resources/icons/tangent_arc.svg</file>
     <file>resources/icons/rectangle.png</file>
+    <file>resources/icons/rotated_rectangle.svg</file>
     <file>resources/icons/move.png</file>
     <file>resources/icons/rotate.png</file>
     <file>resources/icons/scale.png</file>
@@ -13,6 +16,9 @@
     <file>resources/icons/tapemeasure.png</file>
     <file>resources/icons/protractor.png</file>
     <file>resources/icons/circle.png</file>
+    <file>resources/icons/polygon.svg</file>
+    <file>resources/icons/bezier.svg</file>
+    <file>resources/icons/freehand.svg</file>
     <file>resources/icons/orbit.png</file>
     <file>resources/icons/orbit.svg</file>
     <file>resources/icons/pan.png</file>

@@ -47,6 +47,7 @@ add_library(freecrafter_lib
     src/GeometryKernel/MeshUtils.cpp
     src/GeometryKernel/Solid.cpp
     src/GeometryKernel/TransformUtils.cpp
+    src/GeometryKernel/ShapeBuilder.cpp
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp
     src/Scene/Document.cpp
@@ -75,8 +76,15 @@ add_library(freecrafter_lib
     src/FileIO/Exporters/SceneExporter.cpp
     src/FileIO/Importers/SceneImporter.cpp
     src/ui/MeasurementWidget.cpp
+    src/ui/InspectorPanel.cpp
     src/ui/ViewSettingsDialog.cpp
     src/ui/EnvironmentPanel.cpp
+    src/ui/LeftToolPalette.cpp
+    src/ui/CollapsibleSection.cpp
+    src/ui/ExplorerPanel.cpp
+    src/ui/HistoryPanel.cpp
+    src/ui/RightTray.cpp
+    src/ui/ViewportOverlay.cpp
     resources.qrc
 )
 

@@ -6,6 +6,7 @@
 #include <QVector4D>
 #include <QVector2D>
 #include <QOpenGLShader>
+#include <QResizeEvent>
 
 #include <QOpenGLContext>
 #include <QCursor>
@@ -139,7 +140,10 @@ void GLViewport::initializeGL()
 {
     initializeOpenGLFunctions();
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.82f, 0.90f, 0.97f, 1.0f);
+    glClearColor(static_cast<float>(skyColor.redF()),
+                 static_cast<float>(skyColor.greenF()),
+                 static_cast<float>(skyColor.blueF()),
+                 1.0f);
     renderer.initialize(context()->extraFunctions());
     initializeHorizonBand();
 }
@@ -153,6 +157,12 @@ void GLViewport::resizeGL(int w, int h)
         const int pixelH = std::max(1, static_cast<int>(std::lround(h * ratio)));
         toolManager->setViewportSize(pixelW, pixelH);
     }
+}
+
+void GLViewport::resizeEvent(QResizeEvent* event)
+{
+    QOpenGLWidget::resizeEvent(event);
+    emit viewportResized(event->size());
 }
 
 void GLViewport::setToolManager(ToolManager* manager)
@@ -229,6 +239,25 @@ void GLViewport::setShowHiddenGeometry(bool show)
 void GLViewport::setSunSettings(const SunSettings& settings)
 {
     environmentSettings = settings;
+    update();
+}
+
+void GLViewport::setBackgroundPalette(const QColor& sky, const QColor& ground, const QColor& horizonLine)
+{
+    skyColor = sky;
+    groundColor = ground;
+    horizonLineColor = horizonLine;
+
+    if (context()) {
+        makeCurrent();
+        glClearColor(static_cast<float>(skyColor.redF()),
+                     static_cast<float>(skyColor.greenF()),
+                     static_cast<float>(skyColor.blueF()),
+                     1.0f);
+        initializeHorizonBand();
+        doneCurrent();
+    }
+
     update();
 }
 
@@ -362,7 +391,6 @@ void GLViewport::paintGL()
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     drawInferenceOverlay(painter, projectionMatrix, viewMatrix);
-    drawAxisGizmo(painter, viewMatrix);
     painter.setPen(QColor(206, 214, 224));
     painter.setBrush(QColor(255, 255, 255, 225));
     QRect hudRect(12, 12, 200, 60);
@@ -473,12 +501,19 @@ void GLViewport::initializeHorizonBand()
         return;
 
     const float horizonHeight = -0.18f;
-    const QVector4D groundColor(0.94f, 0.90f, 0.83f, 1.0f);
+    const QVector4D horizonColor(static_cast<float>(horizonLineColor.redF()),
+                                 static_cast<float>(horizonLineColor.greenF()),
+                                 static_cast<float>(horizonLineColor.blueF()),
+                                 1.0f);
+    const QVector4D groundColorVec(static_cast<float>(groundColor.redF()),
+                                   static_cast<float>(groundColor.greenF()),
+                                   static_cast<float>(groundColor.blueF()),
+                                   1.0f);
     std::array<HorizonVertex, 4> vertices = {
-        HorizonVertex{ QVector2D(-1.0f, horizonHeight), groundColor },
-        HorizonVertex{ QVector2D(1.0f, horizonHeight), groundColor },
-        HorizonVertex{ QVector2D(-1.0f, -1.0f), groundColor },
-        HorizonVertex{ QVector2D(1.0f, -1.0f), groundColor }
+        HorizonVertex{ QVector2D(-1.0f, horizonHeight), horizonColor },
+        HorizonVertex{ QVector2D(1.0f, horizonHeight), horizonColor },
+        HorizonVertex{ QVector2D(-1.0f, -1.0f), groundColorVec },
+        HorizonVertex{ QVector2D(1.0f, -1.0f), groundColorVec }
     };
 
     horizonVbo.bind();
@@ -511,6 +546,8 @@ void GLViewport::drawHorizonBand()
     QOpenGLVertexArrayObject::Binder binder(&horizonVao);
     horizonProgram.bind();
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glLineWidth(1.5f);
+    glDrawArrays(GL_LINES, 0, 2);
     horizonProgram.release();
     glDepthMask(GL_TRUE);
     glEnable(GL_DEPTH_TEST);
@@ -1035,118 +1072,6 @@ QMatrix4x4 GLViewport::buildViewMatrix() const
     QMatrix4x4 viewMatrix;
     viewMatrix.lookAt(QVector3D(cx, cy, cz), QVector3D(tx, ty, tz), QVector3D(0.0f, 1.0f, 0.0f));
     return viewMatrix;
-}
-
-void GLViewport::drawAxisGizmo(QPainter& painter, const QMatrix4x4& viewMatrix) const
-{
-    if (width() <= 0 || height() <= 0)
-        return;
-
-    Q_UNUSED(viewMatrix);
-
-    float cx, cy, cz;
-    camera.getCameraPosition(cx, cy, cz);
-    float tx, ty, tz;
-    camera.getTarget(tx, ty, tz);
-
-    QVector3D forward(tx - cx, ty - cy, tz - cz);
-    if (forward.lengthSquared() < 1e-6f)
-        forward = QVector3D(0.0f, 0.0f, -1.0f);
-    forward.normalize();
-
-    QVector3D upVector(0.0f, 1.0f, 0.0f);
-    QVector3D right = QVector3D::crossProduct(forward, upVector);
-    if (right.lengthSquared() < 1e-6f) {
-        upVector = QVector3D(0.0f, 0.0f, 1.0f);
-        right = QVector3D::crossProduct(forward, upVector);
-    }
-    if (right.lengthSquared() < 1e-6f)
-        right = QVector3D(1.0f, 0.0f, 0.0f);
-    right.normalize();
-    QVector3D up = QVector3D::crossProduct(right, forward).normalized();
-
-    struct AxisInfo {
-        QVector3D dir;
-        QColor color;
-        QString label;
-    };
-
-    const std::array<AxisInfo, 3> axes = { {
-        { QVector3D(1.0f, 0.0f, 0.0f), QColor(215, 63, 63), tr("X") },
-        { QVector3D(0.0f, 1.0f, 0.0f), QColor(63, 176, 92), tr("Y") },
-        { QVector3D(0.0f, 0.0f, 1.0f), QColor(69, 112, 214), tr("Z") },
-    } };
-
-    int frontAxis = 0;
-    float bestFront = -1.0f;
-    int upAxis = 0;
-    float bestUp = -1.0f;
-
-    for (int i = 0; i < axes.size(); ++i) {
-        float dotForward = QVector3D::dotProduct(axes[i].dir, forward);
-        float absForward = std::fabs(dotForward);
-        if (absForward > bestFront) {
-            bestFront = absForward;
-            frontAxis = i;
-        }
-
-        float dotUp = QVector3D::dotProduct(axes[i].dir, up);
-        float absUp = std::fabs(dotUp);
-        if (absUp > bestUp) {
-            bestUp = absUp;
-            upAxis = i;
-        }
-    }
-
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing, true);
-
-    const float margin = 16.0f;
-    const float radius = 34.0f;
-    QPointF center(width() - margin - radius, margin + radius);
-    QRectF background(center.x() - radius, center.y() - radius, radius * 2.0f, radius * 2.0f);
-
-    painter.setPen(QPen(QColor(24, 26, 32, 200), 1.0f));
-    painter.setBrush(QColor(12, 14, 18, 180));
-    painter.drawEllipse(background);
-
-    for (int i = 0; i < axes.size(); ++i) {
-        const AxisInfo& axis = axes[i];
-        float x = QVector3D::dotProduct(axis.dir, right);
-        float y = QVector3D::dotProduct(axis.dir, up);
-        float z = QVector3D::dotProduct(axis.dir, forward);
-
-        QPointF direction2D(x, -y);
-        float length = radius - 10.0f;
-        QPointF endPoint = center + direction2D * length;
-        QPointF textPoint = center + direction2D * (radius - 2.0f);
-
-        QColor color = axis.color;
-        bool highlight = (i == frontAxis || i == upAxis);
-        if (highlight)
-            color = color.lighter(130);
-        int alpha = z >= 0.0f ? 255 : 160;
-        if (!highlight)
-            alpha = std::min(alpha, 210);
-        else
-            alpha = 255;
-        color.setAlpha(alpha);
-
-        QPen pen(color, highlight ? 3.0f : 2.0f, Qt::SolidLine, Qt::RoundCap);
-        painter.setPen(pen);
-        painter.drawLine(center, endPoint);
-
-        painter.setBrush(color);
-        painter.setPen(Qt::NoPen);
-        painter.drawEllipse(QRectF(endPoint.x() - 3.5f, endPoint.y() - 3.5f, 7.0f, 7.0f));
-
-        painter.setPen(QPen(Qt::white, 1.0f));
-        painter.setFont(QFont(painter.font().family(), 8, QFont::DemiBold));
-        QRectF textRect(textPoint.x() - 10.0f, textPoint.y() - 10.0f, 20.0f, 20.0f);
-        painter.drawText(textRect, Qt::AlignCenter, axis.label);
-    }
-
-    painter.restore();
 }
 
 bool GLViewport::computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const

@@ -5,6 +5,7 @@
 #endif
 
 #include "GroundProjection.h"
+#include "../GeometryKernel/ShapeBuilder.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,109 +55,6 @@ Vec2 perpendicular(const Vec2& v)
     return { -v.y, v.x };
 }
 
-void ensureArcAngles(float& start, float& mid, float& end, bool ccw)
-{
-    if (ccw) {
-        while (mid < start)
-            mid += 2.0f * kPi;
-        while (end < start)
-            end += 2.0f * kPi;
-        if (mid > end)
-            end += 2.0f * kPi;
-    } else {
-        while (mid > start)
-            mid -= 2.0f * kPi;
-        while (end > start)
-            end -= 2.0f * kPi;
-        if (mid < end)
-            end -= 2.0f * kPi;
-    }
-}
-
-std::vector<Vector3> approximateArc(const Vector3& start, const Vector3& mid, const Vector3& end)
-{
-    Vec2 a = toVec2(start);
-    Vec2 b = toVec2(mid);
-    Vec2 c = toVec2(end);
-
-    float d = 2.0f * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
-    if (std::fabs(d) < 1e-6f) {
-        return { start, mid, end };
-    }
-
-    float aa = a.x * a.x + a.y * a.y;
-    float bb = b.x * b.x + b.y * b.y;
-    float cc = c.x * c.x + c.y * c.y;
-    float ux = (aa * (b.y - c.y) + bb * (c.y - a.y) + cc * (a.y - b.y)) / d;
-    float uy = (aa * (c.x - b.x) + bb * (a.x - c.x) + cc * (b.x - a.x)) / d;
-    Vec2 center(ux, uy);
-    float radius = (a - center).length();
-    if (radius <= 1e-6f) {
-        return { start, mid, end };
-    }
-
-    bool ccw = ((b - a).cross(c - b)) > 0.0f;
-    float startAngle = std::atan2(a.y - uy, a.x - ux);
-    float midAngle = std::atan2(b.y - uy, b.x - ux);
-    float endAngle = std::atan2(c.y - uy, c.x - ux);
-    ensureArcAngles(startAngle, midAngle, endAngle, ccw);
-
-    int segments = std::max(8, static_cast<int>(radius * 16.0f));
-    std::vector<Vector3> points;
-    points.reserve(static_cast<size_t>(segments) + 1);
-
-    float totalAngle = endAngle - startAngle;
-    int steps = std::max(2, segments);
-    for (int i = 0; i <= steps; ++i) {
-        float t = static_cast<float>(i) / static_cast<float>(steps);
-        float angle = startAngle + totalAngle * t;
-        float x = ux + std::cos(angle) * radius;
-        float y = uy + std::sin(angle) * radius;
-        points.push_back(Vector3(x, start.y, y));
-    }
-    return points;
-}
-
-std::vector<Vector3> buildCircle(const Vector3& center, const Vector3& radiusPoint, int segments)
-{
-    Vec2 c = toVec2(center);
-    Vec2 r = toVec2(radiusPoint);
-    float radius = (r - c).length();
-    if (radius <= 1e-6f)
-        return {};
-    std::vector<Vector3> points;
-    points.reserve(static_cast<size_t>(segments));
-    for (int i = 0; i < segments; ++i) {
-        float angle = static_cast<float>(i) / static_cast<float>(segments) * 2.0f * kPi;
-        float x = c.x + std::cos(angle) * radius;
-        float y = c.y + std::sin(angle) * radius;
-        points.push_back(Vector3(x, center.y, y));
-    }
-    return points;
-}
-
-std::vector<Vector3> buildRegularPolygon(const Vector3& center, const Vector3& radiusPoint, int sides)
-{
-    if (sides < 3)
-        return {};
-    Vec2 c = toVec2(center);
-    Vec2 r = toVec2(radiusPoint);
-    Vec2 offset = r - c;
-    float radius = offset.length();
-    if (radius <= 1e-6f)
-        return {};
-    float startAngle = std::atan2(offset.y, offset.x);
-    std::vector<Vector3> points;
-    points.reserve(static_cast<size_t>(sides));
-    for (int i = 0; i < sides; ++i) {
-        float angle = startAngle + 2.0f * kPi * static_cast<float>(i) / static_cast<float>(sides);
-        float x = c.x + std::cos(angle) * radius;
-        float y = c.y + std::sin(angle) * radius;
-        points.push_back(Vector3(x, center.y, y));
-    }
-    return points;
-}
-
 std::vector<Vector3> buildRotatedRectangle(const Vector3& first, const Vector3& second, const Vector3& heightPoint)
 {
     Vec2 a = toVec2(first);
@@ -200,6 +98,41 @@ bool maybeAddPoint(std::vector<Vector3>& stroke, const Vector3& point)
         return false;
     stroke.push_back(point);
     return true;
+}
+
+bool solveTangentArc(const Vector3& start, const Vector3& tangentRef, const Vector3& end, ShapeBuilder::ArcDefinition& out)
+{
+    Vec2 s = toVec2(start);
+    Vec2 e = toVec2(end);
+    Vec2 tanPoint = toVec2(tangentRef);
+    Vec2 tangent = (tanPoint - s).normalized();
+    if (tangent.length() <= 1e-6f)
+        return false;
+
+    Vec2 normal(-tangent.y, tangent.x);
+    Vec2 diff = s - e;
+    float diffLenSq = diff.dot(diff);
+
+    auto trySolve = [&](const Vec2& n) -> bool {
+        float denom = 2.0f * n.dot(diff);
+        if (std::fabs(denom) <= 1e-6f)
+            return false;
+        float t = -diffLenSq / denom;
+        Vec2 center = s + n * t;
+        float radius = (center - s).length();
+        if (radius <= 1e-6f)
+            return false;
+        Vector3 center3(center.x, start.y, center.y);
+        float startAngle = std::atan2(s.y - center.y, s.x - center.x);
+        float endAngle = std::atan2(e.y - center.y, e.x - center.x);
+        bool ccw = ((s - center).cross(e - center) > 0.0f);
+        out = ShapeBuilder::makeArcFromCenter(center3, radius, startAngle, endAngle, ccw, 0);
+        return true;
+    };
+
+    if (trySolve(normal))
+        return true;
+    return trySolve(normal * -1.0f);
 }
 
 using ToolHelpers::axisSnap;
@@ -306,6 +239,16 @@ void ArcTool::onInferenceResultChanged(const Interaction::InferenceResult& resul
 Tool::PreviewState ArcTool::buildPreview() const
 {
     PreviewState state;
+    if (anchors.size() >= 2 && previewValid) {
+        ShapeBuilder::ArcDefinition def;
+        if (ShapeBuilder::solveArcThroughPoints(anchors[0], anchors[1], previewPoint, def)) {
+            PreviewPolyline polyline;
+            polyline.points = ShapeBuilder::buildArc(def);
+            state.polylines.push_back(polyline);
+            return state;
+        }
+    }
+
     if (!anchors.empty()) {
         PreviewPolyline polyline;
         polyline.points = anchors;
@@ -344,11 +287,354 @@ void ArcTool::finalizeArc(const Vector3& bulgePoint)
 {
     if (!geometry || anchors.size() < 2)
         return;
-    std::vector<Vector3> points = approximateArc(anchors[0], anchors[1], bulgePoint);
+    ShapeBuilder::ArcDefinition def;
+    std::vector<Vector3> points;
+    bool solved = ShapeBuilder::solveArcThroughPoints(anchors[0], anchors[1], bulgePoint, def);
+    if (solved)
+        points = ShapeBuilder::buildArc(def);
+    if (points.empty()) {
+        points = { anchors[0], anchors[1], bulgePoint };
+    }
     if (points.size() >= 2) {
-        geometry->addCurve(points);
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            if (solved) {
+                GeometryKernel::ShapeMetadata metadata;
+                metadata.type = GeometryKernel::ShapeMetadata::Type::Arc;
+                metadata.arc.definition = def;
+                geometry->setShapeMetadata(object, metadata);
+            }
+        }
     }
     anchors.clear();
+    previewValid = false;
+}
+
+CenterArcTool::CenterArcTool(GeometryKernel* g, CameraController* c)
+    : Tool(g, c)
+{
+}
+
+void CenterArcTool::onPointerDown(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+
+    switch (stage) {
+    case Stage::Center:
+        center = point;
+        stage = Stage::Start;
+        previewPoint = point;
+        previewValid = true;
+        setState(State::Active);
+        break;
+    case Stage::Start:
+        startPoint = point;
+        stage = Stage::End;
+        previewPoint = point;
+        previewValid = true;
+        break;
+    case Stage::End:
+        finalizeArc(point);
+        setState(State::Idle);
+        break;
+    }
+}
+
+void CenterArcTool::onPointerMove(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+    previewPoint = point;
+    previewValid = true;
+}
+
+void CenterArcTool::onPointerHover(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (stage != Stage::Center) {
+        onPointerMove(input);
+        return;
+    }
+    Vector3 point;
+    if (resolvePoint(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else if (resolveFallback(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else {
+        previewValid = false;
+    }
+}
+
+void CenterArcTool::onCancel()
+{
+    stage = Stage::Center;
+    previewValid = false;
+}
+
+void CenterArcTool::onStateChanged(State, State next)
+{
+    if (next == State::Idle) {
+        stage = Stage::Center;
+        previewValid = false;
+    }
+}
+
+void CenterArcTool::onInferenceResultChanged(const Interaction::InferenceResult& result)
+{
+    if (!result.isValid())
+        return;
+    previewPoint = result.position;
+    previewValid = true;
+}
+
+Tool::PreviewState CenterArcTool::buildPreview() const
+{
+    PreviewState state;
+    if (stage == Stage::Start) {
+        if (previewValid) {
+            PreviewPolyline line;
+            line.points = { center, previewPoint };
+            state.polylines.push_back(line);
+        }
+    } else if (stage == Stage::End && previewValid) {
+        Vector3 radiusVec = startPoint - center;
+        if (radiusVec.lengthSquared() > 1e-6f) {
+            Vec2 startVec = toVec2(startPoint) - toVec2(center);
+            Vec2 endVec = toVec2(previewPoint) - toVec2(center);
+            float radius = std::sqrt(radiusVec.lengthSquared());
+            bool ccw = (startVec.cross(endVec) > 0.0f);
+            float startAngle = std::atan2(startVec.y, startVec.x);
+            float endAngle = std::atan2(endVec.y, endVec.x);
+            ShapeBuilder::ArcDefinition def = ShapeBuilder::makeArcFromCenter(center, radius, startAngle, endAngle, ccw, 0);
+            PreviewPolyline arcPolyline;
+            arcPolyline.points = ShapeBuilder::buildArc(def);
+            state.polylines.push_back(arcPolyline);
+        }
+    } else if (previewValid) {
+        PreviewPolyline dot;
+        dot.points.push_back(previewPoint);
+        state.polylines.push_back(dot);
+    }
+    return state;
+}
+
+bool CenterArcTool::resolvePoint(const PointerInput& input, Vector3& out) const
+{
+    const auto& snap = getInferenceResult();
+    if (snap.isValid()) {
+        out = snap.position;
+        return true;
+    }
+    return resolveFallback(input, out);
+}
+
+bool CenterArcTool::resolveFallback(const PointerInput& input, Vector3& out) const
+{
+    Vector3 ground;
+    if (!screenToGround(camera, input.x, input.y, viewportWidth, viewportHeight, ground))
+        return false;
+    axisSnap(ground);
+    out = Vector3(ground.x, 0.0f, ground.z);
+    return true;
+}
+
+void CenterArcTool::finalizeArc(const Vector3& endPoint)
+{
+    if (!geometry || stage != Stage::End)
+        return;
+    Vector3 radiusVec = startPoint - center;
+    if (radiusVec.lengthSquared() <= 1e-6f)
+        return;
+    Vec2 startVec = toVec2(startPoint) - toVec2(center);
+    Vec2 endVec = toVec2(endPoint) - toVec2(center);
+    if (endVec.length() <= 1e-6f)
+        return;
+    float radius = std::sqrt(radiusVec.lengthSquared());
+    bool ccw = (startVec.cross(endVec) > 0.0f);
+    float startAngle = std::atan2(startVec.y, startVec.x);
+    float endAngle = std::atan2(endVec.y, endVec.x);
+    ShapeBuilder::ArcDefinition def = ShapeBuilder::makeArcFromCenter(center, radius, startAngle, endAngle, ccw, 0);
+    std::vector<Vector3> points = ShapeBuilder::buildArc(def);
+    if (points.size() >= 2) {
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            GeometryKernel::ShapeMetadata metadata;
+            metadata.type = GeometryKernel::ShapeMetadata::Type::Arc;
+            metadata.arc.definition = def;
+            geometry->setShapeMetadata(object, metadata);
+        }
+    }
+    stage = Stage::Center;
+    previewValid = false;
+}
+
+TangentArcTool::TangentArcTool(GeometryKernel* g, CameraController* c)
+    : Tool(g, c)
+{
+}
+
+void TangentArcTool::onPointerDown(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+
+    switch (stage) {
+    case Stage::Start:
+        startPoint = point;
+        stage = Stage::Tangent;
+        previewPoint = point;
+        previewValid = true;
+        setState(State::Active);
+        break;
+    case Stage::Tangent:
+        tangentReference = point;
+        stage = Stage::End;
+        previewPoint = point;
+        previewValid = true;
+        break;
+    case Stage::End:
+        finalizeArc(point);
+        setState(State::Idle);
+        break;
+    }
+}
+
+void TangentArcTool::onPointerMove(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+    previewPoint = point;
+    previewValid = true;
+}
+
+void TangentArcTool::onPointerHover(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (stage != Stage::Start) {
+        onPointerMove(input);
+        return;
+    }
+    Vector3 point;
+    if (resolvePoint(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else if (resolveFallback(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else {
+        previewValid = false;
+    }
+}
+
+void TangentArcTool::onCancel()
+{
+    stage = Stage::Start;
+    previewValid = false;
+}
+
+void TangentArcTool::onStateChanged(State, State next)
+{
+    if (next == State::Idle) {
+        stage = Stage::Start;
+        previewValid = false;
+    }
+}
+
+void TangentArcTool::onInferenceResultChanged(const Interaction::InferenceResult& result)
+{
+    if (!result.isValid())
+        return;
+    previewPoint = result.position;
+    previewValid = true;
+}
+
+Tool::PreviewState TangentArcTool::buildPreview() const
+{
+    PreviewState state;
+    if (stage == Stage::Tangent && previewValid) {
+        PreviewPolyline line;
+        line.points = { startPoint, previewPoint };
+        state.polylines.push_back(line);
+    } else if (stage == Stage::End && previewValid) {
+        ShapeBuilder::ArcDefinition def;
+        if (solveTangentArc(startPoint, tangentReference, previewPoint, def)) {
+            PreviewPolyline arcPolyline;
+            arcPolyline.points = ShapeBuilder::buildArc(def);
+            state.polylines.push_back(arcPolyline);
+        }
+    } else if (previewValid) {
+        PreviewPolyline dot;
+        dot.points.push_back(previewPoint);
+        state.polylines.push_back(dot);
+    }
+    return state;
+}
+
+bool TangentArcTool::resolvePoint(const PointerInput& input, Vector3& out) const
+{
+    const auto& snap = getInferenceResult();
+    if (snap.isValid()) {
+        out = snap.position;
+        return true;
+    }
+    return resolveFallback(input, out);
+}
+
+bool TangentArcTool::resolveFallback(const PointerInput& input, Vector3& out) const
+{
+    Vector3 ground;
+    if (!screenToGround(camera, input.x, input.y, viewportWidth, viewportHeight, ground))
+        return false;
+    axisSnap(ground);
+    out = Vector3(ground.x, 0.0f, ground.z);
+    return true;
+}
+
+void TangentArcTool::finalizeArc(const Vector3& endPoint)
+{
+    if (!geometry || stage != Stage::End)
+        return;
+    ShapeBuilder::ArcDefinition def;
+    bool solved = solveTangentArc(startPoint, tangentReference, endPoint, def);
+    std::vector<Vector3> points;
+    if (solved)
+        points = ShapeBuilder::buildArc(def);
+    if (points.empty())
+        points = { startPoint, endPoint };
+    if (points.size() >= 2) {
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            if (solved) {
+                GeometryKernel::ShapeMetadata metadata;
+                metadata.type = GeometryKernel::ShapeMetadata::Type::Arc;
+                metadata.arc.definition = def;
+                geometry->setShapeMetadata(object, metadata);
+            }
+        }
+    }
+    stage = Stage::Start;
     previewValid = false;
 }
 
@@ -439,7 +725,7 @@ Tool::PreviewState CircleTool::buildPreview() const
     PreviewState state;
     if (hasCenter && previewValid) {
         PreviewPolyline polyline;
-        polyline.points = buildCircle(center, previewPoint, segments);
+        polyline.points = ShapeBuilder::buildCircle(center, previewPoint, segments);
         polyline.closed = true;
         state.polylines.push_back(polyline);
     } else if (previewValid) {
@@ -474,9 +760,21 @@ void CircleTool::finalizeCircle(const Vector3& radiusPoint)
 {
     if (!geometry || !hasCenter)
         return;
-    std::vector<Vector3> points = buildCircle(center, radiusPoint, segments);
+    std::vector<Vector3> points = ShapeBuilder::buildCircle(center, radiusPoint, segments);
     if (!points.empty()) {
-        geometry->addCurve(points);
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            Vector3 direction = radiusPoint - center;
+            float radius = std::sqrt(std::max(0.0f, direction.lengthSquared()));
+            if (radius > 1e-6f) {
+                GeometryKernel::ShapeMetadata metadata;
+                metadata.type = GeometryKernel::ShapeMetadata::Type::Circle;
+                metadata.circle.center = center;
+                metadata.circle.direction = direction.normalized();
+                metadata.circle.radius = radius;
+                metadata.circle.segments = segments;
+                geometry->setShapeMetadata(object, metadata);
+            }
+        }
     }
     hasCenter = false;
     previewValid = false;
@@ -624,6 +922,24 @@ PolygonTool::PolygonTool(GeometryKernel* g, CameraController* c)
 {
 }
 
+Tool::MeasurementKind PolygonTool::getMeasurementKind() const
+{
+    return Tool::MeasurementKind::Count;
+}
+
+Tool::OverrideResult PolygonTool::applyMeasurementOverride(double value)
+{
+    int requested = static_cast<int>(std::lround(value));
+    if (requested < 3)
+        requested = 3;
+    if (requested > 128)
+        requested = 128;
+    if (requested == sides)
+        return Tool::OverrideResult::PreviewUpdated;
+    sides = requested;
+    return Tool::OverrideResult::PreviewUpdated;
+}
+
 void PolygonTool::onPointerDown(const PointerInput& input)
 {
     lastX = input.x;
@@ -705,7 +1021,7 @@ Tool::PreviewState PolygonTool::buildPreview() const
     PreviewState state;
     if (hasCenter && previewValid) {
         PreviewPolyline polyline;
-        polyline.points = buildRegularPolygon(center, previewPoint, sides);
+        polyline.points = ShapeBuilder::buildRegularPolygon(center, previewPoint, sides);
         polyline.closed = true;
         state.polylines.push_back(polyline);
     } else if (previewValid) {
@@ -740,9 +1056,21 @@ void PolygonTool::finalizePolygon(const Vector3& radiusPoint)
 {
     if (!geometry || !hasCenter)
         return;
-    std::vector<Vector3> points = buildRegularPolygon(center, radiusPoint, sides);
+    std::vector<Vector3> points = ShapeBuilder::buildRegularPolygon(center, radiusPoint, sides);
     if (!points.empty()) {
-        geometry->addCurve(points);
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            Vector3 direction = radiusPoint - center;
+            float radius = std::sqrt(std::max(0.0f, direction.lengthSquared()));
+            if (radius > 1e-6f) {
+                GeometryKernel::ShapeMetadata metadata;
+                metadata.type = GeometryKernel::ShapeMetadata::Type::Polygon;
+                metadata.polygon.center = center;
+                metadata.polygon.direction = direction.normalized();
+                metadata.polygon.radius = radius;
+                metadata.polygon.sides = sides;
+                geometry->setShapeMetadata(object, metadata);
+            }
+        }
     }
     hasCenter = false;
     previewValid = false;
@@ -966,5 +1294,197 @@ bool FreehandTool::resolveFallback(const PointerInput& input, Vector3& out) cons
     axisSnap(ground);
     out = Vector3(ground.x, 0.0f, ground.z);
     return true;
+}
+
+BezierTool::BezierTool(GeometryKernel* g, CameraController* c)
+    : Tool(g, c)
+{
+}
+
+void BezierTool::onPointerDown(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+
+    switch (stage) {
+    case Stage::FirstAnchor:
+        firstAnchor = point;
+        hasFirstAnchor = true;
+        stage = Stage::SecondAnchor;
+        previewPoint = point;
+        previewValid = true;
+        setState(State::Active);
+        break;
+    case Stage::SecondAnchor:
+        if (!hasFirstAnchor)
+            return;
+        secondAnchor = point;
+        hasSecondAnchor = true;
+        stage = Stage::FirstHandle;
+        previewPoint = point;
+        previewValid = true;
+        break;
+    case Stage::FirstHandle:
+        if (!hasFirstAnchor || !hasSecondAnchor)
+            return;
+        firstHandle = point;
+        hasFirstHandle = true;
+        stage = Stage::SecondHandle;
+        previewPoint = point;
+        previewValid = true;
+        break;
+    case Stage::SecondHandle:
+        finalizeCurve(point);
+        setState(State::Idle);
+        break;
+    }
+}
+
+void BezierTool::onPointerMove(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    Vector3 point;
+    if (!resolvePoint(input, point)) {
+        previewValid = false;
+        return;
+    }
+    previewPoint = point;
+    previewValid = true;
+}
+
+void BezierTool::onPointerHover(const PointerInput& input)
+{
+    lastX = input.x;
+    lastY = input.y;
+    if (stage != Stage::FirstAnchor && stage != Stage::SecondAnchor) {
+        onPointerMove(input);
+        return;
+    }
+    Vector3 point;
+    if (resolvePoint(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else if (resolveFallback(input, point)) {
+        previewPoint = point;
+        previewValid = true;
+    } else {
+        previewValid = false;
+    }
+}
+
+void BezierTool::onCancel()
+{
+    stage = Stage::FirstAnchor;
+    hasFirstAnchor = false;
+    hasSecondAnchor = false;
+    hasFirstHandle = false;
+    previewValid = false;
+}
+
+void BezierTool::onStateChanged(State, State next)
+{
+    if (next == State::Idle)
+        onCancel();
+}
+
+void BezierTool::onInferenceResultChanged(const Interaction::InferenceResult& result)
+{
+    if (!result.isValid())
+        return;
+    previewPoint = result.position;
+    previewValid = true;
+}
+
+Tool::PreviewState BezierTool::buildPreview() const
+{
+    PreviewState state;
+    if (!hasFirstAnchor) {
+        if (previewValid) {
+            PreviewPolyline dot;
+            dot.points.push_back(previewPoint);
+            state.polylines.push_back(dot);
+        }
+        return state;
+    }
+
+    PreviewPolyline control;
+    control.points.push_back(firstAnchor);
+    if (stage == Stage::FirstHandle && previewValid) {
+        control.points.push_back(previewPoint);
+    } else if (hasFirstHandle) {
+        control.points.push_back(firstHandle);
+    }
+    if (hasSecondAnchor)
+        control.points.push_back(secondAnchor);
+    else if (stage == Stage::SecondAnchor && previewValid)
+        control.points.push_back(previewPoint);
+    if (control.points.size() >= 2)
+        state.polylines.push_back(control);
+
+    if (stage == Stage::SecondHandle && previewValid && hasFirstHandle && hasSecondAnchor) {
+        ShapeBuilder::BezierDefinition def;
+        def.p0 = firstAnchor;
+        def.h0 = firstHandle;
+        def.h1 = previewPoint;
+        def.p1 = secondAnchor;
+        def.segments = std::max(16, static_cast<int>(std::ceil((secondAnchor - firstAnchor).length() * 8.0f)));
+        PreviewPolyline curve;
+        curve.points = ShapeBuilder::buildBezier(def);
+        state.polylines.push_back(curve);
+    }
+
+    return state;
+}
+
+bool BezierTool::resolvePoint(const PointerInput& input, Vector3& out) const
+{
+    const auto& snap = getInferenceResult();
+    if (snap.isValid()) {
+        out = snap.position;
+        return true;
+    }
+    return resolveFallback(input, out);
+}
+
+bool BezierTool::resolveFallback(const PointerInput& input, Vector3& out) const
+{
+    Vector3 ground;
+    if (!screenToGround(camera, input.x, input.y, viewportWidth, viewportHeight, ground))
+        return false;
+    axisSnap(ground);
+    out = Vector3(ground.x, 0.0f, ground.z);
+    return true;
+}
+
+void BezierTool::finalizeCurve(const Vector3& handle)
+{
+    if (!geometry || !hasFirstAnchor || !hasSecondAnchor || !hasFirstHandle)
+        return;
+    ShapeBuilder::BezierDefinition def;
+    def.p0 = firstAnchor;
+    def.h0 = firstHandle;
+    def.h1 = handle;
+    def.p1 = secondAnchor;
+    def.segments = std::max(16, static_cast<int>(std::ceil((secondAnchor - firstAnchor).length() * 8.0f)));
+    std::vector<Vector3> points = ShapeBuilder::buildBezier(def);
+    if (!points.empty()) {
+        if (GeometryObject* object = geometry->addCurve(points)) {
+            GeometryKernel::ShapeMetadata metadata;
+            metadata.type = GeometryKernel::ShapeMetadata::Type::Bezier;
+            metadata.bezier.definition = def;
+            geometry->setShapeMetadata(object, metadata);
+        }
+    }
+    stage = Stage::FirstAnchor;
+    hasFirstAnchor = false;
+    hasSecondAnchor = false;
+    hasFirstHandle = false;
+    previewValid = false;
 }
 

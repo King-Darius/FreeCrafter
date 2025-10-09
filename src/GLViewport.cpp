@@ -236,6 +236,15 @@ void GLViewport::setShowHiddenGeometry(bool show)
     update();
 }
 
+void GLViewport::setShowGrid(bool show)
+{
+    if (gridVisible == show) {
+        return;
+    }
+    gridVisible = show;
+    update();
+}
+
 void GLViewport::setSunSettings(const SunSettings& settings)
 {
     environmentSettings = settings;
@@ -447,41 +456,64 @@ void GLViewport::drawAxes()
 
 void GLViewport::drawGrid()
 {
-    const int divisions = 40;
-    const float spacing = 1.0f;
-    const float fadeScale = 0.075f;
-    const float width = 1.35f;
-    const QVector3D extent(divisions * spacing, 0.0f, divisions * spacing);
-    const QVector3D baseColor(0.74f, 0.78f, 0.82f);
+    const float majorSpacing = 1.0f;
+    const float minorSpacing = 0.25f;
+    const int majorExtent = 50;
+    const float gridExtent = majorSpacing * majorExtent;
+    const float fadeScale = 0.035f;
 
-    auto addLine = [&](const QVector3D& a, const QVector3D& b, float distance) {
-        float fade = std::exp(-std::abs(distance) * fadeScale);
-        float alpha = 0.55f * fade;
+    const QVector4D axisXColor(0.93f, 0.18f, 0.18f, 1.0f);
+    const QVector4D axisZColor(0.16f, 0.44f, 0.91f, 1.0f);
+
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(-gridExtent, 0.0f, 0.0f), QVector3D(gridExtent, 0.0f, 0.0f) },
+                             axisXColor,
+                             2.4f,
+                             true,
+                             false,
+                             Renderer::LineCategory::Generic);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0.0f, 0.0f, -gridExtent), QVector3D(0.0f, 0.0f, gridExtent) },
+                             axisZColor,
+                             2.4f,
+                             true,
+                             false,
+                             Renderer::LineCategory::Generic);
+
+    if (!gridVisible)
+        return;
+
+    const QVector3D majorColor(0.70f, 0.74f, 0.78f);
+    const QVector3D minorColor(0.70f, 0.74f, 0.78f);
+    const float majorAlpha = 0.55f;
+    const float minorAlpha = 0.25f;
+    const float majorWidth = 1.35f;
+    const float minorWidth = 1.05f;
+
+    const int minorSteps = std::max(1, static_cast<int>(std::round(majorSpacing / minorSpacing)));
+    const int totalSteps = majorExtent * minorSteps;
+
+    auto addLine = [&](const QVector3D& a, const QVector3D& b, float distance, bool major) {
+        const QVector3D& rgb = major ? majorColor : minorColor;
+        float alpha = (major ? majorAlpha : minorAlpha) * std::exp(-std::abs(distance) * fadeScale);
         if (alpha < 0.02f)
             return;
-        QVector4D color(baseColor.x(), baseColor.y(), baseColor.z(), alpha);
         renderer.addLineSegments(std::vector<QVector3D>{ a, b },
-                                 color,
-                                 width,
+                                 QVector4D(rgb.x(), rgb.y(), rgb.z(), alpha),
+                                 major ? majorWidth : minorWidth,
                                  true,
                                  true,
                                  Renderer::LineCategory::Generic,
-                                 true,
-                                 14.0f);
+                                 false,
+                                 12.0f);
     };
 
-    for (int i = -divisions; i <= divisions; ++i) {
-        float coord = i * spacing;
-        QVector3D start(coord, 0.0f, -extent.z());
-        QVector3D end(coord, 0.0f, extent.z());
-        addLine(start, end, coord);
-    }
+    for (int i = -totalSteps; i <= totalSteps; ++i) {
+        if (i == 0)
+            continue;
+        const bool major = (i % minorSteps) == 0;
+        const float coord = i * minorSpacing;
 
-    for (int i = -divisions; i <= divisions; ++i) {
-        float coord = i * spacing;
-        QVector3D start(-extent.x(), 0.0f, coord);
-        QVector3D end(extent.x(), 0.0f, coord);
-        addLine(start, end, coord);
+        addLine(QVector3D(coord, 0.0f, -gridExtent), QVector3D(coord, 0.0f, gridExtent), coord, major);
+        addLine(QVector3D(-gridExtent, 0.0f, coord), QVector3D(gridExtent, 0.0f, coord), coord, major);
     }
 }
 

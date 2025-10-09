@@ -62,11 +62,11 @@ milestones already have code backing them and which ones are still open.
 
 ### Upcoming Gaps
 
-* Phases 3–4 still need the expanded drawing and modification tools outlined in
-  the roadmap (arcs, follow-me, push/pull pre-pick, etc.).
-* Later phases (object management, advanced modeling, file I/O, performance,
-  polish, QA) remain untouched in code and should be treated as open backlog
-  items despite the UI placeholders.
-* The new Phase 11 surface painting & materials milestone is currently a
-  documentation plan only and has no engineering work underway.
+* **Phase 3 cursor system:** The dynamic cursor/pickbox visuals are the lone
+  holdout from Phase 3 and still need to land so tool states are reflected in
+  the pointer artwork.
+* **Later-phase backlog:** Phases 8–10 (performance/stability, polish, QA &
+  release) are still tracked as open initiatives with no shipped code yet.
+* **Surface painting (Phase 11):** Remains a documentation-only plan awaiting
+  engineering capacity.
 

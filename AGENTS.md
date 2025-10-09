@@ -136,6 +136,7 @@ Keep diffs small and local to target modules. Avoid sweeping refactors.
 - Repro steps (bug) or acceptance criteria (feature).
 - Build + test transcript (or CI green).
 - Before/after screenshots for UI changes.
+- Do **not** include links to agent conversations or chat logs in the PR message summary or description.
 
 **Definition of Done:**
 - Clean build; tests pass for non‑trivial changes.

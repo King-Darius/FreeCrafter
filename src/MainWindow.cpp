@@ -836,6 +836,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     float storedFov = 60.0f;
 
     QString storedProjection = QStringLiteral("perspective");
+    bool storedGridVisible = true;
 
     {
 
@@ -852,6 +853,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         storedFov = settings.value(QStringLiteral("%1/viewFov").arg(kSettingsGroup), storedFov).toFloat();
 
         storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
+        storedGridVisible = settings.value(QStringLiteral("%1/showGrid").arg(kSettingsGroup), storedGridVisible).toBool();
 
         sunSettings.load(settings, QStringLiteral("Environment"));
 
@@ -860,6 +862,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     viewport->setRenderStyle(renderStyleChoice);
 
     viewport->setShowHiddenGeometry(showHiddenGeometry);
+    viewport->setShowGrid(storedGridVisible);
 
     viewport->setSunSettings(sunSettings);
 
@@ -1390,6 +1393,22 @@ void MainWindow::onUndo()
 
     });
 
+    gridAction = viewMenu->addAction(tr("Show Grid"));
+
+    gridAction->setCheckable(true);
+
+    gridAction->setIcon(QIcon(QStringLiteral(":/icons/grid.svg")));
+
+    gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
+
+    if (viewport) {
+
+        gridAction->setChecked(viewport->showGrid());
+
+    }
+
+    connect(gridAction, &QAction::toggled, this, &MainWindow::toggleGrid);
+
     QMenu* insertMenu = menuBar()->addMenu(tr("&Insert"));
 
     insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
@@ -1657,12 +1676,6 @@ void MainWindow::createToolbars()
                      tr("Measure"),
                      &MainWindow::activateMeasure,
                      tr("Measure distances in the model."));
-
-    gridAction = new QAction(QIcon(QStringLiteral(":/icons/grid.svg")), tr("Toggle Grid"), this);
-    gridAction->setCheckable(true);
-    gridAction->setChecked(true);
-    gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
-    connect(gridAction, &QAction::triggered, this, &MainWindow::toggleGrid);
 
     selectAction->setChecked(true);
 
@@ -1994,7 +2007,7 @@ void MainWindow::registerShortcuts()
 
         if (measureAction) measureAction->setToolTip(format(measureAction, tr("Measure")));
 
-        if (gridAction) gridAction->setToolTip(format(gridAction, tr("Toggle Grid")));
+        if (gridAction) gridAction->setToolTip(format(gridAction, tr("Show Grid")));
 
     };
 
@@ -2336,6 +2349,8 @@ void MainWindow::persistViewSettings() const
 
     settings.setValue(QStringLiteral("showHiddenGeometry"), viewport->isHiddenGeometryVisible());
 
+    settings.setValue(QStringLiteral("showGrid"), viewport->showGrid());
+
     settings.endGroup();
 
 }
@@ -2357,6 +2372,14 @@ void MainWindow::syncViewSettingsUI()
         QSignalBlocker blocker(actionViewHiddenGeometry);
 
         actionViewHiddenGeometry->setChecked(viewport->isHiddenGeometryVisible());
+
+    }
+
+    if (gridAction && viewport) {
+
+        QSignalBlocker blocker(gridAction);
+
+        gridAction->setChecked(viewport->showGrid());
 
     }
 
@@ -2887,15 +2910,25 @@ void MainWindow::activateMeasure()
 
 }
 
-void MainWindow::toggleGrid()
+void MainWindow::toggleGrid(bool enabled)
 
 {
 
+    if (!viewport)
+
+        return;
+
+    viewport->setShowGrid(enabled);
+
     if (hintLabel)
 
-        hintLabel->setText(gridAction->isChecked() ? tr("Grid enabled") : tr("Grid hidden"));
+        hintLabel->setText(enabled ? tr("Grid enabled") : tr("Grid hidden"));
 
-    viewport->update();
+    if (statusBar())
+
+        statusBar()->showMessage(enabled ? tr("Grid enabled") : tr("Grid hidden"), 2000);
+
+    persistViewSettings();
 
 }
 

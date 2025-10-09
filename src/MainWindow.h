@@ -73,7 +73,7 @@ private slots:
     void activateOrbit();
     void activateZoom();
     void activateMeasure();
-    void toggleGrid();
+    void toggleGrid(bool enabled);
     void updateCursor(double x, double y, double z);
     void updateFrameStats(double fps, double frameMs, int drawCalls);
     void handleMeasurementCommit(const QString& value, const QString& unitSystem);

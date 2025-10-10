@@ -6,13 +6,10 @@
 
 ## Findings
 ### UI & Tooling
-- `MainWindow::createMenus()` terminates prematurely, leaving `actionViewBottom` … `gridAction` outside the function. Undo/redo slot definitions and the remainder of the View menu never compile.
-- `View ▸ Toggle Theme` diverges from the spec:
-  * Label should be `Toggle Dark Mode`.
-  * Action is not checkable and does not reuse a shared QAction for toolbar/menu sync.
-  * Stylesheet swap uses `:/styles/app.qss` and `app_light.qss` instead of the contract’s `dark.qss`/`light.qss`.
-- `RightTray` is instantiated with a `nullptr` `QUndoStack`, so the History panel can never surface undo data.
-- `EnvPanel` forward declaration in `RightTray.h` collides with the `using EnvPanel = EnvironmentPanel;` alias in `EnvPanel.h`, preventing compilation and blocking dynamic casts.
+- Fixed: `MainWindow::createMenus()` now owns the entire View menu (actions no longer leak into global scope or break compilation).
+- `View > Toggle Dark Mode` now matches the spec (checkable shared action, dark/light theme swap through `:/styles/dark.qss` and `:/styles/light.qss`).
+- `RightTray` now receives the live `QUndoStack`, so the History panel surfaces undo data.
+- `RightTray` includes `EnvironmentPanel` directly (alias removed), eliminating the forward declaration collision.
 
 ### Undo/Redo, Autosave, Recovery
 - No `QUndoStack`, `QUndoCommand`, or equivalent command objects exist in the project outside the UI stubs.
@@ -25,9 +22,9 @@
 - Existing CMake test targets (`test_render`, `test_phase4`, `test_phase5`, etc.) remain unverified on this commit due to the build failure.
 
 ## Recommended Actions
-1. Repair `MainWindow.cpp` by moving the full `View` menu construction (Bottom/Front/Back/Left/Right, projection toggle, theme toggle, render style menu) back inside `createMenus()` and reintroduce concrete slot definitions for undo/redo.
-2. Replace the `View ▸ Toggle Theme` action with a single shared QAction labelled `Toggle Dark Mode`, mark it checkable, persist its state, and wire it to `applyThemeStylesheet()` with the Light/Dark QSS pair.
-3. Instantiate a real `QUndoStack` in `MainWindow`, pass it to `RightTray`, and verify the History panel updates on command pushes.
+1. [x] Repair `MainWindow.cpp` so the entire `View` menu (Bottom/Front/Back/Left/Right, projection toggle, theme toggle, render style menu) lives inside `createMenus()` with working undo/redo slots.
+2. [x] Replace the `View > Toggle Theme` action with a shared `Toggle Dark Mode` QAction; make it checkable and reuse it for toolbar/menu sync while swapping the dark/light QSS pair.
+3. [x] Instantiate a real `QUndoStack` in `MainWindow`, pass it to `RightTray`, and verify the History panel updates on command pushes.
 4. Introduce an autosave manager per the contract: timer-based saves to `autosave/`, crash detection, and restore prompt on launch.
 5. After the build is green, execute `ctest --output-on-failure` via `scripts/run_tests_with_qt_env.ps1 -UseCTest` and capture the transcript for this milestone.
 

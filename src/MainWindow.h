@@ -17,6 +17,7 @@ class NavigationPreferences;
 class PalettePreferences;
 class EnvironmentPanel;
 class InspectorPanel;
+class QUndoStack;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -48,7 +49,7 @@ private slots:
     void showPreferences();
     void showCommandPalette();
     void toggleRightDock();
-    void toggleTheme();
+    void setDarkTheme(bool enabled);
     void runTask();
     void toggleTerminalDock();
     void showGitPopover();
@@ -100,6 +101,7 @@ private:
     void applyStandardView(ViewPresetManager::StandardView view);
     void setProjectionMode(CameraController::ProjectionMode mode, bool showStatus = true);
     void updateViewPresetButtonLabel();
+    void updateUndoRedoActionText();
     void persistViewSettings() const;
     void syncViewSettingsUI();
     void handleSunSettingsChanged(const SunSettings& settings);
@@ -159,6 +161,7 @@ private:
     QAction* actionGit = nullptr;
     QAction* actionSettings = nullptr;
     QAction* actionShortcuts = nullptr;
+    QUndoStack* undoStack = nullptr;
 
     QAction* selectAction = nullptr;
     QAction* lineAction = nullptr;

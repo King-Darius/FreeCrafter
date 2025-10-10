@@ -18,6 +18,7 @@ class PalettePreferences;
 class EnvironmentPanel;
 class InspectorPanel;
 class QUndoStack;
+class QSize;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -102,6 +103,7 @@ private:
     void setProjectionMode(CameraController::ProjectionMode mode, bool showStatus = true);
     void updateViewPresetButtonLabel();
     void updateUndoRedoActionText();
+    void handleViewportResize(const QSize& size);
     void persistViewSettings() const;
     void syncViewSettingsUI();
     void handleSunSettingsChanged(const SunSettings& settings);

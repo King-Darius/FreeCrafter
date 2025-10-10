@@ -60,8 +60,8 @@
     <file>resources/icons/zoom_out.svg</file>
   </qresource>
   <qresource prefix="/styles">
-    <file>styles/app.qss</file>
-    <file>styles/app_light.qss</file>
+    <file>styles/dark.qss</file>
+    <file>styles/light.qss</file>
   </qresource>
   <qresource prefix="/fonts">
     <file>resources/fonts/DejaVuSans.ttf</file>

@@ -31,7 +31,7 @@
 - **Shadows:** Panels cast `0 6px 24px rgba(0,0,0,0.24)` in dark theme, `0 12px 24px rgba(17,24,39,0.12)` in light.
 
 ## Deliverables
-1. Application stylesheet (`:/styles/app.qss`) encoding tokens above.
+1. Application stylesheet (`:/styles/dark.qss` / `:/styles/light.qss`) encoding tokens above.
 2. Toolbar/ribbon construction instructions (implemented in Phase 1 code scaffold).
 3. Persistent dock/tab state stored in `QSettings` for consistent reopening.
 4. Theme toggle action to swap dark/light palettes in under 50ms.

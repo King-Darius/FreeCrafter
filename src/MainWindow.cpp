@@ -40,6 +40,7 @@
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QUndoStack>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -792,6 +793,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     navigationPrefs = std::make_unique<NavigationPreferences>(this);
 
     toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera());
+    undoStack = new QUndoStack(this);
 
     toolManager->setNavigationConfig(navigationPrefs->config());
 
@@ -842,7 +844,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
         QSettings settings("FreeCrafter", "FreeCrafter");
 
-        darkTheme = settings.value(QStringLiteral("%1/darkTheme").arg(kSettingsGroup), true).toBool();
+        const QVariant storedTheme = settings.value(QStringLiteral("ui/darkMode"));
+        if (storedTheme.isValid())
+            darkTheme = storedTheme.toBool();
+        else
+            darkTheme = settings.value(QStringLiteral("%1/darkTheme").arg(kSettingsGroup), true).toBool();
 
         renderStyleChoice = renderStyleFromSetting(settings.value(QStringLiteral("%1/renderStyle").arg(kSettingsGroup), QStringLiteral("shadedEdges")).toString());
 
@@ -918,60 +924,48 @@ void MainWindow::closeEvent(QCloseEvent* event)
 }
 
 void MainWindow::createMenus()
-
 {
-
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
     actionNew = fileMenu->addAction(tr("New"), this, &MainWindow::newFile);
-
     actionNew->setIcon(QIcon(QStringLiteral(":/icons/newfile.svg")));
-
     actionNew->setStatusTip(tr("Create a blank FreeCrafter document"));
 
-    actionOpen = fileMenu->addAction(tr("Open…"), this, &MainWindow::openFile);
-
+    actionOpen = fileMenu->addAction(tr("Open..."), this, &MainWindow::openFile);
     actionOpen->setIcon(QIcon(QStringLiteral(":/icons/open.svg")));
-
     actionOpen->setStatusTip(tr("Open an existing FreeCrafter document"));
 
     actionSave = fileMenu->addAction(tr("Save"), this, &MainWindow::saveFile);
-
     actionSave->setIcon(QIcon(QStringLiteral(":/icons/save.svg")));
-
     actionSave->setStatusTip(tr("Save the active document"));
 
-    actionSaveAs = fileMenu->addAction(tr("Save As…"), this, &MainWindow::saveFileAs);
-
+    actionSaveAs = fileMenu->addAction(tr("Save As..."), this, &MainWindow::saveFileAs);
     actionSaveAs->setStatusTip(tr("Save the active document to a new file"));
 
     QMenu* recentMenu = fileMenu->addMenu(tr("Recent"));
-
     QAction* recentPlaceholder = recentMenu->addAction(tr("No recent files yet"));
-
     recentPlaceholder->setEnabled(false);
 
-    actionExport = fileMenu->addAction(tr("Export…"), this, &MainWindow::exportFile);
-
+    actionExport = fileMenu->addAction(tr("Export..."), this, &MainWindow::exportFile);
     actionExport->setIcon(QIcon(QStringLiteral(":/icons/export.svg")));
-
     actionExport->setStatusTip(tr("Export geometry to an interchange format"));
 
     fileMenu->addSeparator();
 
     actionExit = fileMenu->addAction(tr("Exit"), this, &QWidget::close);
-
     actionExit->setStatusTip(tr("Close FreeCrafter"));
 
     QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
 
     actionUndo = editMenu->addAction(tr("Undo"), this, &MainWindow::onUndo);
-
     actionUndo->setIcon(QIcon(QStringLiteral(":/icons/undo.svg")));
+    actionUndo->setShortcut(QKeySequence::Undo);
+    actionUndo->setStatusTip(tr("Undo the previous action"));
 
     actionRedo = editMenu->addAction(tr("Redo"), this, &MainWindow::onRedo);
-
     actionRedo->setIcon(QIcon(QStringLiteral(":/icons/redo.svg")));
+    actionRedo->setShortcut(QKeySequence::Redo);
+    actionRedo->setStatusTip(tr("Redo the next action"));
 
     editMenu->addSeparator();
 
@@ -980,189 +974,262 @@ void MainWindow::createMenus()
     QMenu* viewMenu = menuBar()->addMenu(tr("&View"));
 
     actionZoomIn = viewMenu->addAction(tr("Zoom In"));
-
     actionZoomIn->setIcon(QIcon(QStringLiteral(":/icons/zoom_in.svg")));
-
     connect(actionZoomIn, &QAction::triggered, this, [this]() {
-
         if (!viewport)
-
             return;
-
         viewport->zoomInStep();
-
         statusBar()->showMessage(tr("Zoomed in"), 600);
-
     });
 
     actionZoomOut = viewMenu->addAction(tr("Zoom Out"));
-
     actionZoomOut->setIcon(QIcon(QStringLiteral(":/icons/zoom_out.svg")));
-
     connect(actionZoomOut, &QAction::triggered, this, [this]() {
-
         if (!viewport)
-
             return;
-
         viewport->zoomOutStep();
-
         statusBar()->showMessage(tr("Zoomed out"), 600);
-
     });
 
     actionZoomExtents = viewMenu->addAction(tr("Zoom Extents"));
-
     connect(actionZoomExtents, &QAction::triggered, this, [this]() {
-
         if (!viewport)
-
             return;
-
         if (viewport->zoomExtents()) {
-
             statusBar()->showMessage(tr("Zoomed to extents"), 1500);
-
         } else {
-
             statusBar()->showMessage(tr("No geometry to frame"), 1500);
-
         }
-
     });
 
     actionZoomSelection = viewMenu->addAction(tr("Zoom Selection"));
-
     actionZoomSelection->setIcon(QIcon(QStringLiteral(":/icons/zoom.png")));
-
     connect(actionZoomSelection, &QAction::triggered, this, [this]() {
-
         if (!viewport)
-
             return;
-
         if (viewport->zoomSelection()) {
-
             statusBar()->showMessage(tr("Zoomed to selection"), 1500);
-
         } else {
-
             statusBar()->showMessage(tr("Select objects to zoom"), 1500);
-
         }
-
     });
 
     viewMenu->addSeparator();
 
     actionViewIso = viewMenu->addAction(tr("Iso View"));
-
     actionViewIso->setShortcut(QKeySequence(QStringLiteral("Ctrl+1")));
-
     actionViewIso->setStatusTip(tr("Align the camera to an isometric three-quarter view"));
-
     connect(actionViewIso, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Iso); });
 
     actionViewTop = viewMenu->addAction(tr("Top View"));
-
     actionViewTop->setShortcut(QKeySequence(QStringLiteral("Ctrl+2")));
-
     actionViewTop->setStatusTip(tr("Look straight down from the top"));
-
     connect(actionViewTop, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Top); });
 
-}
-
-void MainWindow::importExternalModel()
-
-{
-
-    const QString filter = tr("3D Models (*.obj *.stl *.fbx *.dxf *.dwg);;Wavefront OBJ (*.obj);;STL (*.stl);;FBX (*.fbx);;DXF (*.dxf);;DWG (*.dwg)");
-
-    const QString fn = QFileDialog::getOpenFileName(this, tr("Import Model"), QString(), filter);
-
-    if (fn.isEmpty())
-
-        return;
-
-    Scene::Document::FileFormat format = Scene::Document::FileFormat::Auto;
-
-    const QString suffix = QFileInfo(fn).suffix().toLower();
-
-    if (suffix == QLatin1String("obj")) {
-
-        format = Scene::Document::FileFormat::Obj;
-
-    } else if (suffix == QLatin1String("stl")) {
-
-        format = Scene::Document::FileFormat::Stl;
-
-    } else if (suffix == QLatin1String("fbx")) {
-
-        format = Scene::Document::FileFormat::Fbx;
-
-    } else if (suffix == QLatin1String("dxf")) {
-
-        format = Scene::Document::FileFormat::Dxf;
-
-    } else if (suffix == QLatin1String("dwg")) {
-
-        format = Scene::Document::FileFormat::Dwg;
-
-    }
-
-    Scene::Document* doc = viewport ? viewport->getDocument() : nullptr;
-
-    if (!doc) {
-
-        statusBar()->showMessage(tr("No active document for import"), 2000);
-
-        return;
-
-    }
-
-    bool ok = doc->importExternalModel(fn.toStdString(), format);
-
-    if (ok) {
-
-        statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fn).fileName()), 1500);
-
-        viewport->update();
-
-    } else {
-
-        QString reason = QString::fromStdString(doc->lastImportError());
-
-        if (reason.isEmpty())
-
-            reason = tr("Unknown import error");
-
-        statusBar()->showMessage(tr("Failed to import %1: %2").arg(QFileInfo(fn).fileName(), reason), 4000);
-
-    }
-
-}
-
     actionViewBottom = viewMenu->addAction(tr("Bottom View"));
-
     actionViewBottom->setShortcut(QKeySequence(QStringLiteral("Ctrl+3")));
-
     actionViewBottom->setStatusTip(tr("Look straight up from beneath the model"));
-
     connect(actionViewBottom, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Bottom); });
 
     actionViewFront = viewMenu->addAction(tr("Front View"));
-
     actionViewFront->setShortcut(QKeySequence(QStringLiteral("Ctrl+4")));
-
     actionViewFront->setStatusTip(tr("Look directly at the front elevation"));
-
     connect(actionViewFront, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Front); });
 
-void MainWindow::exportFile()
+    actionViewBack = viewMenu->addAction(tr("Back View"));
+    actionViewBack->setShortcut(QKeySequence(QStringLiteral("Ctrl+5")));
+    actionViewBack->setStatusTip(tr("Look directly at the back elevation"));
+    connect(actionViewBack, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Back); });
 
+    actionViewLeft = viewMenu->addAction(tr("Left View"));
+    actionViewLeft->setShortcut(QKeySequence(QStringLiteral("Ctrl+6")));
+    actionViewLeft->setStatusTip(tr("Look from the model's left side"));
+    connect(actionViewLeft, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Left); });
+
+    actionViewRight = viewMenu->addAction(tr("Right View"));
+    actionViewRight->setShortcut(QKeySequence(QStringLiteral("Ctrl+7")));
+    actionViewRight->setStatusTip(tr("Look from the model's right side"));
+    connect(actionViewRight, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Right); });
+
+    actionToggleProjection = viewMenu->addAction(tr("Parallel Projection"));
+    actionToggleProjection->setCheckable(true);
+    actionToggleProjection->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+O")));
+    actionToggleProjection->setStatusTip(tr("Toggle between perspective and parallel projections"));
+    if (viewport) {
+        QSignalBlocker blocker(actionToggleProjection);
+        actionToggleProjection->setChecked(viewport->projectionMode() == CameraController::ProjectionMode::Parallel);
+    }
+    connect(actionToggleProjection, &QAction::toggled, this, [this](bool checked) {
+        setProjectionMode(checked ? CameraController::ProjectionMode::Parallel : CameraController::ProjectionMode::Perspective);
+    });
+
+    actionViewSettings = viewMenu->addAction(tr("Camera Settings..."), this, &MainWindow::showViewSettingsDialog);
+    actionViewSettings->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
+    actionViewSettings->setStatusTip(tr("Adjust field of view and projection settings"));
+
+    QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
+        statusBar()->showMessage(tr("Split view is coming soon"), 2000);
+    });
+    actionSplitView->setEnabled(false);
+
+    actionToggleRightDock = viewMenu->addAction(tr("Toggle Right Panel"), this, &MainWindow::toggleRightDock);
+    actionToggleRightDock->setStatusTip(tr("Show or hide the panels dock"));
+
+    actionToggleTheme = viewMenu->addAction(tr("Toggle Dark Mode"));
+    actionToggleTheme->setCheckable(true);
+    actionToggleTheme->setStatusTip(tr("Switch between light and dark interface themes"));
+    {
+        QSignalBlocker blocker(actionToggleTheme);
+        actionToggleTheme->setChecked(darkTheme);
+    }
+    connect(actionToggleTheme, &QAction::toggled, this, &MainWindow::setDarkTheme);
+    updateThemeActionIcon();
+
+    renderStyleGroup = new QActionGroup(this);
+    renderStyleGroup->setExclusive(true);
+
+    QMenu* renderStyleMenu = viewMenu->addMenu(tr("Render Style"));
+
+    renderWireframeAction = renderStyleMenu->addAction(tr("Wireframe"));
+    renderWireframeAction->setCheckable(true);
+    renderWireframeAction->setStatusTip(tr("Display geometry as wireframe"));
+    renderStyleGroup->addAction(renderWireframeAction);
+
+    renderHiddenLineAction = renderStyleMenu->addAction(tr("Hidden Line"));
+    renderHiddenLineAction->setCheckable(true);
+    renderHiddenLineAction->setStatusTip(tr("Display visible edges with dashed hidden lines"));
+    renderStyleGroup->addAction(renderHiddenLineAction);
+
+    renderShadedAction = renderStyleMenu->addAction(tr("Shaded"));
+    renderShadedAction->setCheckable(true);
+    renderShadedAction->setStatusTip(tr("Display solid shading without edge overlays"));
+    renderStyleGroup->addAction(renderShadedAction);
+
+    renderShadedEdgesAction = renderStyleMenu->addAction(tr("Shaded + Edges"));
+    renderShadedEdgesAction->setCheckable(true);
+    renderShadedEdgesAction->setStatusTip(tr("Display shading with edge overlays"));
+    renderStyleGroup->addAction(renderShadedEdgesAction);
+
+    renderMonochromeAction = renderStyleMenu->addAction(tr("Monochrome"));
+    renderMonochromeAction->setCheckable(true);
+    renderMonochromeAction->setStatusTip(tr("Display flat gray shading with edge outlines"));
+    renderStyleGroup->addAction(renderMonochromeAction);
+
+    connect(renderWireframeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Wireframe); });
+    connect(renderHiddenLineAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::HiddenLine); });
+    connect(renderShadedAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Shaded); });
+    connect(renderShadedEdgesAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::ShadedWithEdges); });
+    connect(renderMonochromeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Monochrome); });
+
+    renderWireframeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Wireframe);
+    renderHiddenLineAction->setChecked(renderStyleChoice == Renderer::RenderStyle::HiddenLine);
+    renderShadedAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Shaded);
+    renderShadedEdgesAction->setChecked(renderStyleChoice == Renderer::RenderStyle::ShadedWithEdges);
+    renderMonochromeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Monochrome);
+
+    viewMenu->addSeparator();
+
+    actionViewHiddenGeometry = viewMenu->addAction(tr("View Hidden Geometry"));
+    actionViewHiddenGeometry->setCheckable(true);
+    actionViewHiddenGeometry->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+H")));
+    actionViewHiddenGeometry->setStatusTip(tr("Toggle visibility of objects marked as hidden"));
+    actionViewHiddenGeometry->setChecked(showHiddenGeometry);
+    connect(actionViewHiddenGeometry, &QAction::toggled, this, [this](bool checked) {
+        showHiddenGeometry = checked;
+        if (viewport) {
+            viewport->setShowHiddenGeometry(checked);
+        }
+        if (statusBar()) {
+            statusBar()->showMessage(checked ? tr("Hidden geometry shown") : tr("Hidden geometry hidden"), 2000);
+        }
+        persistViewSettings();
+    });
+
+    gridAction = viewMenu->addAction(tr("Show Grid"));
+    gridAction->setCheckable(true);
+    gridAction->setIcon(QIcon(QStringLiteral(":/icons/grid.svg")));
+    gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
+    if (viewport) {
+        gridAction->setChecked(viewport->showGrid());
+    }
+    connect(gridAction, &QAction::toggled, this, &MainWindow::toggleGrid);
+
+    QMenu* insertMenu = menuBar()->addMenu(tr("&Insert"));
+    insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
+    insertMenu->addAction(tr("Guides"), this, [this]() { statusBar()->showMessage(tr("Insert Guides not implemented"), 2000); });
+    insertMenu->addAction(tr("Images"), this, [this]() { statusBar()->showMessage(tr("Insert Images not implemented"), 2000); });
+    insertMenu->addAction(tr("External Reference"), this, [this]() { statusBar()->showMessage(tr("External references not implemented"), 2000); });
+
+    QMenu* toolsMenu = menuBar()->addMenu(tr("&Tools"));
+    toolsMenu->addAction(tr("Plugins..."), this, [this]() { statusBar()->showMessage(tr("Plugin manager not implemented"), 2000); });
+    actionPalette = toolsMenu->addAction(tr("Command Palette..."), this, &MainWindow::showCommandPalette);
+    actionPalette->setIcon(QIcon(QStringLiteral(":/icons/search.svg")));
+
+    QMenu* windowMenu = menuBar()->addMenu(tr("&Window"));
+    windowMenu->addAction(tr("New Window"), this, [this]() { statusBar()->showMessage(tr("New window not implemented"), 2000); });
+
+    QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
+    actionShortcuts = helpMenu->addAction(tr("Keyboard Shortcuts"), this, &MainWindow::showKeyboardShortcuts);
+    actionShortcuts->setIcon(QIcon(QStringLiteral(":/icons/help.svg")));
+    helpMenu->addAction(tr("About"), this, [this]() {
+        QMessageBox::about(this, tr("About FreeCrafter"), tr("FreeCrafter - MIT Licensed CAD shell prototype."));
+    });
+
+    if (undoStack) {
+        actionUndo->setEnabled(undoStack->canUndo());
+        actionRedo->setEnabled(undoStack->canRedo());
+        connect(undoStack, &QUndoStack::canUndoChanged, actionUndo, &QAction::setEnabled);
+        connect(undoStack, &QUndoStack::canRedoChanged, actionRedo, &QAction::setEnabled);
+        connect(undoStack, &QUndoStack::undoTextChanged, this, &MainWindow::updateUndoRedoActionText);
+        connect(undoStack, &QUndoStack::redoTextChanged, this, &MainWindow::updateUndoRedoActionText);
+        updateUndoRedoActionText();
+    } else {
+        actionUndo->setEnabled(false);
+        actionRedo->setEnabled(false);
+    }
+}
+
+void MainWindow::importExternalModel()
 {
+    const QString filter = tr("3D Models (*.obj *.stl *.fbx *.dxf *.dwg);;Wavefront OBJ (*.obj);;STL (*.stl);;FBX (*.fbx);;DXF (*.dxf);;DWG (*.dwg)");
+    const QString fileName = QFileDialog::getOpenFileName(this, tr("Import Model"), QString(), filter);
+    if (fileName.isEmpty())
+        return;
 
+    Scene::Document::FileFormat format = Scene::Document::FileFormat::Auto;
+    const QString suffix = QFileInfo(fileName).suffix().toLower();
+    if (suffix == QLatin1String("obj")) {
+        format = Scene::Document::FileFormat::Obj;
+    } else if (suffix == QLatin1String("stl")) {
+        format = Scene::Document::FileFormat::Stl;
+    } else if (suffix == QLatin1String("fbx")) {
+        format = Scene::Document::FileFormat::Fbx;
+    } else if (suffix == QLatin1String("dxf")) {
+        format = Scene::Document::FileFormat::Dxf;
+    } else if (suffix == QLatin1String("dwg")) {
+        format = Scene::Document::FileFormat::Dwg;
+    }
+
+    Scene::Document* doc = viewport ? viewport->getDocument() : nullptr;
+    if (!doc) {
+        statusBar()->showMessage(tr("No active document for import"), 2000);
+        return;
+    }
+
+    const bool ok = doc->importExternalModel(fileName.toStdString(), format);
+    if (ok) {
+        statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fileName).fileName()), 1500);
+        viewport->update();
+    } else {
+        QString reason = QString::fromStdString(doc->lastImportError());
+        if (reason.isEmpty())
+            reason = tr("Unknown import error");
+        statusBar()->showMessage(tr("Failed to import %1: %2").arg(QFileInfo(fileName).fileName(), reason), 4000);
+    }
+}
+
+void MainWindow::exportFile()
+{
     if (!viewport) {
         statusBar()->showMessage(tr("No active viewport to export"), 4000);
         return;
@@ -1170,15 +1237,14 @@ void MainWindow::exportFile()
 
     Scene::Document* document = viewport->getDocument();
     if (!document) {
-        statusBar()->showMessage(tr("No document attached to viewport"), 4000);
+        statusBar()->showMessage(tr("No active document to export"), 4000);
         return;
     }
 
-    auto formats = FileIO::Exporters::supportedFormats();
+    const auto formats = FileIO::Exporters::supportedFormats();
     if (formats.empty()) {
-        const QString message = tr("Export workflow not implemented in this build");
-        QMessageBox::information(this, tr("Export Unavailable"), message);
-        statusBar()->showMessage(message, 2000);
+        QMessageBox::warning(this, tr("No Export Formats"),
+                             tr("No export formats are currently available. Enable plugins or features to export models."));
         return;
     }
 
@@ -1191,8 +1257,7 @@ void MainWindow::exportFile()
     dialog.setAcceptMode(QFileDialog::AcceptSave);
     dialog.setFileMode(QFileDialog::AnyFile);
     dialog.setNameFilters(filters);
-    if (!filters.isEmpty()) {
-        dialog.selectNameFilter(filters.first());
+    if (!formats.empty()) {
         const auto& defaultFormat = formats.front();
         const std::string extension = FileIO::formatExtension(defaultFormat);
         if (!extension.empty()) {
@@ -1200,18 +1265,16 @@ void MainWindow::exportFile()
         }
     }
 
-    if (dialog.exec() == QDialog::Rejected) {
+    if (dialog.exec() == QDialog::Rejected)
         return;
-    }
 
     const QStringList selected = dialog.selectedFiles();
-    if (selected.isEmpty()) {
+    if (selected.isEmpty())
         return;
-    }
 
     QString filePath = selected.first();
-    QString selectedFilter = dialog.selectedNameFilter();
     FileIO::SceneFormat chosenFormat = formats.front();
+    const QString selectedFilter = dialog.selectedNameFilter();
     for (auto format : formats) {
         if (selectedFilter == QString::fromStdString(FileIO::formatFilterString(format))) {
             chosenFormat = format;
@@ -1219,7 +1282,7 @@ void MainWindow::exportFile()
         }
     }
 
-    QString extension = QString::fromStdString(FileIO::formatExtension(chosenFormat));
+    const QString extension = QString::fromStdString(FileIO::formatExtension(chosenFormat));
     if (!extension.isEmpty() && !filePath.endsWith(extension, Qt::CaseInsensitive)) {
         filePath += extension;
     }
@@ -1229,11 +1292,10 @@ void MainWindow::exportFile()
     std::string errorMessage;
     if (!FileIO::Exporters::exportScene(*document, filePath.toStdString(), chosenFormat, &errorMessage)) {
         QString message = QString::fromStdString(errorMessage);
-        if (message.isEmpty()) {
+        if (message.isEmpty())
             message = tr("Unknown export error");
-        }
         QMessageBox::critical(this, tr("Export Failed"),
-                              tr("Could not export the scene:\n%1").arg(message));
+                              tr("Could not export the scene:\\n%1").arg(message));
         statusBar()->showMessage(tr("Export failed"), 5000);
         return;
     }
@@ -1242,208 +1304,41 @@ void MainWindow::exportFile()
 }
 
 void MainWindow::onUndo()
-
-    actionViewBack->setStatusTip(tr("Look directly at the back elevation"));
-
-    connect(actionViewBack, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Back); });
-
-    actionViewLeft = viewMenu->addAction(tr("Left View"));
-
-    actionViewLeft->setShortcut(QKeySequence(QStringLiteral("Ctrl+6")));
-
-    actionViewLeft->setStatusTip(tr("Look from the model's left side"));
-
-    connect(actionViewLeft, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Left); });
-
-    actionViewRight = viewMenu->addAction(tr("Right View"));
-
-    actionViewRight->setShortcut(QKeySequence(QStringLiteral("Ctrl+7")));
-
-    actionViewRight->setStatusTip(tr("Look from the model's right side"));
-
-    connect(actionViewRight, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Right); });
-
-    actionToggleProjection = viewMenu->addAction(tr("Parallel Projection"));
-
-    actionToggleProjection->setCheckable(true);
-
-    actionToggleProjection->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+O")));
-
-    actionToggleProjection->setStatusTip(tr("Toggle between perspective and parallel projections"));
-
-    connect(actionToggleProjection, &QAction::toggled, this, [this](bool checked) {
-
-        setProjectionMode(checked ? CameraController::ProjectionMode::Parallel : CameraController::ProjectionMode::Perspective);
-
-    });
-
-    actionViewSettings = viewMenu->addAction(tr("Camera Settings…"), this, &MainWindow::showViewSettingsDialog);
-
-    actionViewSettings->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
-
-    actionViewSettings->setStatusTip(tr("Adjust field of view and projection settings"));
-
-    QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
-
-        statusBar()->showMessage(tr("Split view is coming soon"), 2000);
-
-    });
-
-    actionSplitView->setEnabled(false);
-
-    actionToggleRightDock = viewMenu->addAction(tr("Toggle Right Panel"), this, &MainWindow::toggleRightDock);
-
-    actionToggleTheme = viewMenu->addAction(tr("Toggle Theme"), this, &MainWindow::toggleTheme);
-
-    renderStyleGroup = new QActionGroup(this);
-
-    renderStyleGroup->setExclusive(true);
-
-    QMenu* renderStyleMenu = viewMenu->addMenu(tr("Render Style"));
-
-    renderWireframeAction = renderStyleMenu->addAction(tr("Wireframe"));
-
-    renderWireframeAction->setCheckable(true);
-
-    renderWireframeAction->setStatusTip(tr("Display geometry as wireframe"));
-
-    renderStyleGroup->addAction(renderWireframeAction);
-
-    renderHiddenLineAction = renderStyleMenu->addAction(tr("Hidden Line"));
-
-    renderHiddenLineAction->setCheckable(true);
-
-    renderHiddenLineAction->setStatusTip(tr("Display visible edges with dashed hidden lines"));
-
-    renderStyleGroup->addAction(renderHiddenLineAction);
-
-    renderShadedAction = renderStyleMenu->addAction(tr("Shaded"));
-
-    renderShadedAction->setCheckable(true);
-
-    renderShadedAction->setStatusTip(tr("Display solid shading without edge overlays"));
-
-    renderStyleGroup->addAction(renderShadedAction);
-
-    renderShadedEdgesAction = renderStyleMenu->addAction(tr("Shaded + Edges"));
-
-    renderShadedEdgesAction->setCheckable(true);
-
-    renderShadedEdgesAction->setStatusTip(tr("Display shading with edge overlays"));
-
-    renderStyleGroup->addAction(renderShadedEdgesAction);
-
-    renderMonochromeAction = renderStyleMenu->addAction(tr("Monochrome"));
-
-    renderMonochromeAction->setCheckable(true);
-
-    renderMonochromeAction->setStatusTip(tr("Display flat gray shading with edge outlines"));
-
-    renderStyleGroup->addAction(renderMonochromeAction);
-
-    connect(renderWireframeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Wireframe); });
-
-    connect(renderHiddenLineAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::HiddenLine); });
-
-    connect(renderShadedAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Shaded); });
-
-    connect(renderShadedEdgesAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::ShadedWithEdges); });
-
-    connect(renderMonochromeAction, &QAction::triggered, this, [this]() { setRenderStyle(Renderer::RenderStyle::Monochrome); });
-
-    renderWireframeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Wireframe);
-
-    renderShadedAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Shaded);
-
-    renderShadedEdgesAction->setChecked(renderStyleChoice == Renderer::RenderStyle::ShadedWithEdges);
-
-    renderHiddenLineAction->setChecked(renderStyleChoice == Renderer::RenderStyle::HiddenLine);
-
-    renderMonochromeAction->setChecked(renderStyleChoice == Renderer::RenderStyle::Monochrome);
-
-    viewMenu->addSeparator();
-
-    actionViewHiddenGeometry = viewMenu->addAction(tr("View Hidden Geometry"));
-
-    actionViewHiddenGeometry->setCheckable(true);
-
-    actionViewHiddenGeometry->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+H")));
-
-    actionViewHiddenGeometry->setStatusTip(tr("Toggle visibility of objects marked as hidden"));
-
-    actionViewHiddenGeometry->setChecked(showHiddenGeometry);
-
-    connect(actionViewHiddenGeometry, &QAction::toggled, this, [this](bool checked) {
-
-        showHiddenGeometry = checked;
-
-        if (viewport) {
-
-            viewport->setShowHiddenGeometry(checked);
-
-        }
-
-        if (statusBar()) {
-
-            statusBar()->showMessage(checked ? tr("Hidden geometry shown") : tr("Hidden geometry hidden"), 2000);
-
-        }
-
-        persistViewSettings();
-
-    });
-
-    gridAction = viewMenu->addAction(tr("Show Grid"));
-
-    gridAction->setCheckable(true);
-
-    gridAction->setIcon(QIcon(QStringLiteral(":/icons/grid.svg")));
-
-    gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
-
-    if (viewport) {
-
-        gridAction->setChecked(viewport->showGrid());
-
+{
+    if (!undoStack) {
+        statusBar()->showMessage(tr("Undo stack unavailable"), 1500);
+        return;
     }
 
-    connect(gridAction, &QAction::toggled, this, &MainWindow::toggleGrid);
+    if (!undoStack->canUndo()) {
+        statusBar()->showMessage(tr("Nothing to undo"), 1500);
+        return;
+    }
 
-    QMenu* insertMenu = menuBar()->addMenu(tr("&Insert"));
-
-    insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
-
-    insertMenu->addAction(tr("Guides"), this, [this]() { statusBar()->showMessage(tr("Insert Guides not implemented"), 2000); });
-
-    insertMenu->addAction(tr("Images"), this, [this]() { statusBar()->showMessage(tr("Insert Images not implemented"), 2000); });
-
-    insertMenu->addAction(tr("External Reference"), this, [this]() { statusBar()->showMessage(tr("External references not implemented"), 2000); });
-
-    QMenu* toolsMenu = menuBar()->addMenu(tr("&Tools"));
-
-    toolsMenu->addAction(tr("Plugins…"), this, [this]() { statusBar()->showMessage(tr("Plugin manager not implemented"), 2000); });
-
-    actionPalette = toolsMenu->addAction(tr("Command Palette…"), this, &MainWindow::showCommandPalette);
-
-    actionPalette->setIcon(QIcon(QStringLiteral(":/icons/search.svg")));
-
-    QMenu* windowMenu = menuBar()->addMenu(tr("&Window"));
-
-    windowMenu->addAction(tr("New Window"), this, [this]() { statusBar()->showMessage(tr("New window not implemented"), 2000); });
-
-    QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
-
-    actionShortcuts = helpMenu->addAction(tr("Keyboard Shortcuts"), this, &MainWindow::showKeyboardShortcuts);
-
-    actionShortcuts->setIcon(QIcon(QStringLiteral(":/icons/help.svg")));
-
-    helpMenu->addAction(tr("About"), this, [this]() {
-
-        QMessageBox::about(this, tr("About FreeCrafter"), tr("FreeCrafter — MIT Licensed CAD shell prototype."));
-
-    });
-
+    const QString label = undoStack->undoText();
+    undoStack->undo();
+    updateUndoRedoActionText();
+    statusBar()->showMessage(label.isEmpty() ? tr("Undid last action") : tr("Undid %1").arg(label), 1500);
 }
+
+void MainWindow::onRedo()
+{
+    if (!undoStack) {
+        statusBar()->showMessage(tr("Undo stack unavailable"), 1500);
+        return;
+    }
+
+    if (!undoStack->canRedo()) {
+        statusBar()->showMessage(tr("Nothing to redo"), 1500);
+        return;
+    }
+
+    const QString label = undoStack->redoText();
+    undoStack->redo();
+    updateUndoRedoActionText();
+    statusBar()->showMessage(label.isEmpty() ? tr("Redid last action") : tr("Redid %1").arg(label), 1500);
+}
+
 
 void MainWindow::createToolbars()
 
@@ -1779,7 +1674,7 @@ void MainWindow::createRightDock()
     rightDock_->setMinimumWidth(320);
     rightDock_->setMaximumWidth(420);
 
-    rightTray_ = new RightTray(nullptr, rightDock_);
+    rightTray_ = new RightTray(undoStack, rightDock_);
     rightDock_->setWidget(rightTray_);
     addDockWidget(Qt::RightDockWidgetArea, rightDock_);
 
@@ -1976,7 +1871,7 @@ void MainWindow::registerShortcuts()
 
         if (actionPalette) actionPalette->setToolTip(format(actionPalette, tr("Command Palette")));
 
-        if (actionToggleTheme) actionToggleTheme->setToolTip(format(actionToggleTheme, tr("Toggle Theme")));
+        if (actionToggleTheme) actionToggleTheme->setToolTip(format(actionToggleTheme, tr("Toggle Dark Mode")));
 
         if (selectAction) selectAction->setToolTip(format(selectAction, tr("Select")));
 
@@ -2021,7 +1916,7 @@ void MainWindow::applyThemeStylesheet()
 
 {
 
-    const QString path = darkTheme ? QStringLiteral(":/styles/app.qss") : QStringLiteral(":/styles/app_light.qss");
+    const QString path = darkTheme ? QStringLiteral(":/styles/dark.qss") : QStringLiteral(":/styles/light.qss");
 
     QFile file(path);
 
@@ -2041,6 +1936,10 @@ void MainWindow::restoreWindowState()
 
     QSettings settings("FreeCrafter", "FreeCrafter");
 
+    const QVariant storedTheme = settings.value(QStringLiteral("ui/darkMode"));
+    if (storedTheme.isValid())
+        darkTheme = storedTheme.toBool();
+
     settings.beginGroup(kSettingsGroup);
 
     const QByteArray geometry = settings.value("geometry").toByteArray();
@@ -2055,6 +1954,9 @@ void MainWindow::restoreWindowState()
 
         restoreState(state);
 
+    if (!storedTheme.isValid())
+        darkTheme = settings.value("darkTheme", darkTheme).toBool();
+
     settings.endGroup();
 
 }
@@ -2065,6 +1967,7 @@ void MainWindow::persistWindowState()
 
     QSettings settings("FreeCrafter", "FreeCrafter");
 
+    settings.setValue(QStringLiteral("ui/darkMode"), darkTheme);
     settings.beginGroup(kSettingsGroup);
 
     settings.setValue("geometry", saveGeometry());
@@ -2127,6 +2030,24 @@ void MainWindow::updateThemeActionIcon()
 
     actionToggleTheme->setIcon(QIcon(iconPath));
 
+}
+
+void MainWindow::updateUndoRedoActionText()
+{
+    if (!undoStack)
+        return;
+
+    if (actionUndo) {
+        const QString undoLabel = undoStack->undoText();
+        actionUndo->setText(undoLabel.isEmpty() ? tr("Undo") : tr("Undo %1").arg(undoLabel));
+        actionUndo->setStatusTip(undoLabel.isEmpty() ? tr("Undo the previous action") : tr("Undo %1").arg(undoLabel));
+    }
+
+    if (actionRedo) {
+        const QString redoLabel = undoStack->redoText();
+        actionRedo->setText(redoLabel.isEmpty() ? tr("Redo") : tr("Redo %1").arg(redoLabel));
+        actionRedo->setStatusTip(redoLabel.isEmpty() ? tr("Redo the next action") : tr("Redo %1").arg(redoLabel));
+    }
 }
 
 void MainWindow::setRenderStyle(Renderer::RenderStyle style)
@@ -2539,30 +2460,6 @@ void MainWindow::saveFileAs()
 
 }
 
-void MainWindow::exportFile()
-
-{
-
-    statusBar()->showMessage(tr("Export workflow not implemented"), 2000);
-
-}
-
-void MainWindow::onUndo()
-
-{
-
-    statusBar()->showMessage(tr("Undo not wired yet"), 1500);
-
-}
-
-void MainWindow::onRedo()
-
-{
-
-    statusBar()->showMessage(tr("Redo not wired yet"), 1500);
-
-}
-
 void MainWindow::showPreferences()
 
 {
@@ -2717,23 +2614,27 @@ void MainWindow::toggleRightDock()
     rightDock_->setVisible(!rightDock_->isVisible());
 }
 
-void MainWindow::toggleTheme()
-
+void MainWindow::setDarkTheme(bool enabled)
 {
+    if (darkTheme == enabled)
+        return;
 
-    darkTheme = !darkTheme;
-
+    darkTheme = enabled;
     applyThemeStylesheet();
 
-    persistWindowState();
+    if (actionToggleTheme && actionToggleTheme->isChecked() != enabled) {
+        QSignalBlocker blocker(actionToggleTheme);
+        actionToggleTheme->setChecked(enabled);
+    }
 
+    persistWindowState();
 }
 
 void MainWindow::runTask()
 
 {
 
-    taskLabel->setText(tr("Running task…"));
+    taskLabel->setText(tr("Running task..."));
 
     QTimer::singleShot(1200, this, [this]() {
 

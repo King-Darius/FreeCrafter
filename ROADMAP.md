@@ -125,6 +125,17 @@ Reference: [Phase 6 planning brief](docs/planning/phase-6-integrated-advanced-to
 
 ---
 
+## Phase 7.5 — Comprehensive Bug Sweep & UX Polish
+
+- [ ] Full regression pass across all implemented features with scripted + exploratory testing to surface functional and stability regressions before the performance push.
+- [ ] Source review and static analysis sweep covering core, graphics, ops, ui, and io modules to tighten ownership, lifetime, and threading assumptions.
+- [ ] Document end-to-end bug triage workflow (capture → reproduce → isolate → fix → verify) and ensure open issues are categorized by area/priority.
+- [ ] Audit undo/redo, autosave, and crash recovery paths to confirm data integrity and user trust.
+- [ ] Holistic GUI/UX review against the top-down contract: verify tool wiring, visual consistency, accessibility contrast, and responsive layout behavior on all supported platforms.
+- [ ] Update automated test suites and add coverage where critical workflows lack assertions (geometry ops, tool activation, document lifecycle, file I/O).
+
+---
+
 ## Phase 8 — Performance & Stability
 
 - [ ] BVH for selection/raycast; frustum/occlusion culling; LOD; instancing

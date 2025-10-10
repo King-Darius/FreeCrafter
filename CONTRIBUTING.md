@@ -42,9 +42,15 @@ Welcome, creators and innovators! FreeCrafter is growing fast, and we’re calli
    - Run `powershell -ExecutionPolicy Bypass -File scripts/run_tests_with_qt_env.ps1 -UseCTest` so Qt's runtime lands on `PATH` during `ctest`.
    - Peek at [docs/testing.md](docs/testing.md) for deeper automation tips and troubleshooting.
 
+### 🧭 Pull Request Guidelines
+
+- **Read `AGENTS.md` before drafting your PR message.** It contains the authoritative checklist that automation follows.
+- **Do not include conversation or chat links** (e.g., `https://chatgpt.com/...`) in the PR summary or description. Automation will block them, and reviewers will request a fix.
+- Provide repro steps (for bugs) or acceptance criteria (for features), your build/test transcript, and screenshots for UI changes alongside the PR summary.
+
 ---
 
-Let’s craft something amazing together!  
+Let’s craft something amazing together!
 **Your skills and voice will define the future of FreeCrafter.** 🚀
 
 Thank you for considering FreeCrafter—your contribution can make all the difference!

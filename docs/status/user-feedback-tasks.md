@@ -3,7 +3,7 @@
 These tasks capture recent user feedback that needs follow-up work.
 
 :::task-stub{title="Define default object colour palette options"}
-1. Audit the current default material definitions in `src/GLViewport.cpp` and `styles/app.qss` to confirm which colours are applied to unselected, selected, monochrome, and hidden-line renders.
+1. Audit the current default material definitions in `src/GLViewport.cpp` and `styles/dark.qss` to confirm which colours are applied to unselected, selected, monochrome, and hidden-line renders (mirror updates in `styles/light.qss`).
 2. Prototype at least three pastel-inspired palettes (e.g., light green, light purple, light blue) and document their RGBA values alongside selection highlight complements.
 3. Add a settings proposal outlining how users would choose a default palette per project (e.g., preferences dialog, project metadata), including persistence requirements.
 4. Socialize the palette options with design/UX for sign-off, then break down implementation tasks for updating shaders, UI previews, and configuration storage.

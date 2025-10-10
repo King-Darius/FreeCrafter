@@ -1,7 +1,7 @@
 #include "RightTray.h"
 
 #include "CollapsibleSection.h"
-#include "EnvPanel.h"
+#include "EnvironmentPanel.h"
 #include "ExplorerPanel.h"
 #include "HistoryPanel.h"
 #include "InspectorPanel.h"
@@ -23,7 +23,7 @@ RightTray::RightTray(QUndoStack* undoStack, QWidget* parent)
     inspector_ = new InspectorPanel(container);
     explorer_ = new ExplorerPanel(container);
     history_ = new HistoryPanel(undoStack, container);
-    environment_ = new EnvPanel(container);
+    environment_ = new EnvironmentPanel(container);
 
     layout->addWidget(new CollapsibleSection(tr("Inspector"), inspector_, true));
     layout->addWidget(new CollapsibleSection(tr("Explorer"), explorer_, true));

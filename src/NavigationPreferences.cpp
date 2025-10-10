@@ -34,13 +34,12 @@ Qt::KeyboardModifiers parseModifiers(const QJsonValue& value)
         const QString lower = token.trimmed().toLower();
         if (lower == QLatin1String("shift"))
             modifiers |= Qt::ShiftModifier;
-        else if (lower == QLatin1String("ctrl") || lower == QLatin1String("control") || lower == QLatin1String("cmd")
-                 || lower == QLatin1String("command"))
+        else if (lower == QLatin1String("ctrl") || lower == QLatin1String("control"))
             modifiers |= Qt::ControlModifier;
         else if (lower == QLatin1String("alt"))
             modifiers |= Qt::AltModifier;
-        else if (lower == QLatin1String("meta"))
-            modifiers |= Qt::ControlModifier;
+        else if (lower == QLatin1String("meta") || lower == QLatin1String("cmd") || lower == QLatin1String("command"))
+            modifiers |= Qt::MetaModifier;
     };
 
     if (value.isArray()) {

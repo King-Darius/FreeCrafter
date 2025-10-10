@@ -34,16 +34,20 @@ struct NavigationConfig {
 inline std::optional<NavigationConfig::DragBinding> NavigationConfig::matchDrag(Qt::MouseButton button,
                                                                                 Qt::KeyboardModifiers modifiers) const
 {
-    const Qt::KeyboardModifiers relevant = Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier;
-    Qt::KeyboardModifiers sanitized = modifiers & relevant;
-    if (modifiers.testFlag(Qt::MetaModifier)) {
-        sanitized |= Qt::ControlModifier;
-    }
+    const auto normalize = [](Qt::KeyboardModifiers mods) {
+        constexpr Qt::KeyboardModifiers relevant = Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier;
+        Qt::KeyboardModifiers sanitized = mods & relevant;
+        if (mods.testFlag(Qt::MetaModifier))
+            sanitized |= Qt::ControlModifier;
+        return sanitized;
+    };
+
+    const Qt::KeyboardModifiers sanitizedEvent = normalize(modifiers);
 
     for (const auto& binding : dragBindings) {
         if (binding.button != button)
             continue;
-        if (binding.modifiers == sanitized)
+        if (normalize(binding.modifiers) == sanitizedEvent)
             return binding;
     }
     return std::nullopt;

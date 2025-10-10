@@ -173,6 +173,11 @@ target_include_directories(test_phase6 PRIVATE src)
 target_link_libraries(test_phase6 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME phase6_advanced_tools COMMAND $<TARGET_FILE:test_phase6>)
 
+add_executable(test_tool_activation tests/test_tool_activation.cpp)
+target_include_directories(test_tool_activation PRIVATE src)
+target_link_libraries(test_tool_activation PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME tool_activation COMMAND $<TARGET_FILE:test_tool_activation>)
+
 add_executable(test_exporters tests/file_io/test_exporters.cpp)
 target_include_directories(test_exporters PRIVATE src)
 target_link_libraries(test_exporters PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)

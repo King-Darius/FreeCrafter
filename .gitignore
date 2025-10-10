@@ -30,3 +30,6 @@ Makefile
 *.exe
 *.app
 .DS_Store
+# Personal logs with local paths
+[REMOVED]
+aqtinstall.log

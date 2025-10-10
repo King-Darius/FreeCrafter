@@ -1713,10 +1713,7 @@ void MainWindow::customizeViewport()
     overlay_->move(viewportWidget_->width() - overlay_->width() - 10, 10);
     overlay_->show();
 
-    connect(viewport, &GLViewport::viewportResized, this, [this](const QSize& size) {
-        if (overlay_)
-            overlay_->move(size.width() - overlay_->width() - 10, 10);
-    }, Qt::UniqueConnection);
+    connect(viewport, &GLViewport::viewportResized, this, &MainWindow::handleViewportResize, Qt::UniqueConnection);
 }
 void MainWindow::createStatusBarWidgets()
 
@@ -2030,6 +2027,14 @@ void MainWindow::updateThemeActionIcon()
 
     actionToggleTheme->setIcon(QIcon(iconPath));
 
+}
+
+void MainWindow::handleViewportResize(const QSize& size)
+{
+    if (!overlay_)
+        return;
+
+    overlay_->move(size.width() - overlay_->width() - 10, 10);
 }
 
 void MainWindow::updateUndoRedoActionText()
@@ -3032,4 +3037,6 @@ void MainWindow::handleMeasurementCommit(const QString& value, const QString& un
         viewport->update();
 
 }
+
+
 

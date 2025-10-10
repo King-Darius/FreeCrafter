@@ -33,3 +33,4 @@ Makefile
 # Personal logs with local paths
 aqinstall.log
 aqtinstall.log
+check_vs.bat

@@ -2,11 +2,14 @@
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "GeometryKernel/GeometryObject.h"
+#include "GeometryKernel/Curve.h"
+#include "GeometryKernel/Solid.h"
 #include "ToolGeometryUtils.h"
 
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
+#include <utility>
 
 namespace Tools {
 
@@ -267,8 +270,6 @@ void DeleteObjectsCommand::performUndo()
     if (!document() || !geometry())
         return;
 
-    std::vector<Scene::Document::ObjectId> updatedSelection = initialSelection();
-
     for (auto& entry : entries_) {
         if (!entry.prototype)
             continue;
@@ -297,15 +298,98 @@ void DeleteObjectsCommand::performUndo()
             document()->moveObject(newId, entry.parentId, entry.childIndex);
 
         entry.currentId = newId;
-
-        for (auto& id : updatedSelection) {
-            if (id == entry.originalId)
-                id = newId;
-        }
     }
-
-    overrideInitialSelection(updatedSelection);
     setFinalSelection({});
+}
+
+ApplyChamferCommand::ApplyChamferCommand(Scene::Document::ObjectId curveId, Phase6::RoundCornerOptions options,
+                                         const QString& description)
+    : Core::Command(description)
+    , curveId_(curveId)
+    , options_(std::move(options))
+{
+}
+
+void ApplyChamferCommand::initialize()
+{
+    Core::Command::initialize();
+    if (captured_)
+        return;
+    if (!document())
+        return;
+    GeometryObject* object = document()->geometryForObject(curveId_);
+    if (!object || object->getType() != ObjectType::Curve)
+        return;
+    auto* curve = static_cast<Curve*>(object);
+    originalLoop_ = curve->getBoundaryLoop();
+    originalHardness_ = curve->getEdgeHardness();
+    captured_ = true;
+}
+
+void ApplyChamferCommand::performRedo()
+{
+    if (!geometry() || !document())
+        return;
+    GeometryObject* object = document()->geometryForObject(curveId_);
+    if (!object || object->getType() != ObjectType::Curve)
+        return;
+    auto* curve = static_cast<Curve*>(object);
+    Phase6::RoundCorner round(*geometry());
+    if (round.filletCurve(*curve, options_))
+        setFinalSelection({ curveId_ });
+}
+
+void ApplyChamferCommand::performUndo()
+{
+    if (!geometry() || !document())
+        return;
+    GeometryObject* object = document()->geometryForObject(curveId_);
+    if (!object || object->getType() != ObjectType::Curve)
+        return;
+    auto* curve = static_cast<Curve*>(object);
+    if (!originalLoop_.empty())
+        curve->rebuildFromPoints(originalLoop_, originalHardness_);
+}
+
+CreateLoftCommand::CreateLoftCommand(Scene::Document::ObjectId startId, Scene::Document::ObjectId endId,
+                                     Phase6::LoftOptions options, const QString& description, std::string name)
+    : Core::Command(description)
+    , startId_(startId)
+    , endId_(endId)
+    , options_(std::move(options))
+    , name_(std::move(name))
+{
+    if (name_.empty())
+        name_ = "Loft";
+}
+
+void CreateLoftCommand::performRedo()
+{
+    if (!geometry() || !document())
+        return;
+    GeometryObject* start = document()->geometryForObject(startId_);
+    GeometryObject* end = document()->geometryForObject(endId_);
+    if (!start || !end || start->getType() != ObjectType::Curve || end->getType() != ObjectType::Curve)
+        return;
+    Phase6::CurveIt op(*geometry());
+    Solid* solid = op.loft(*static_cast<Curve*>(start), *static_cast<Curve*>(end), options_);
+    if (!solid)
+        return;
+    createdId_ = document()->ensureObjectForGeometry(solid, name_);
+    if (createdId_ != 0)
+        setFinalSelection({ createdId_ });
+    else
+        setFinalSelection({});
+}
+
+void CreateLoftCommand::performUndo()
+{
+    if (!document())
+        return;
+    if (createdId_ != 0) {
+        document()->removeObject(createdId_);
+        createdId_ = 0;
+    }
 }
 
 } // namespace Tools

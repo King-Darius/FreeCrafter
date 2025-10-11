@@ -12,6 +12,8 @@
 #include "RotateTool.h"
 #include "ScaleTool.h"
 #include "ExtrudeTool.h"
+#include "ChamferTool.h"
+#include "LoftTool.h"
 #include "DrawingTools.h"
 #include "ModificationTools.h"
 #include "SectionTool.h"

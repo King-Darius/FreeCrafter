@@ -1,5 +1,6 @@
 #include "SceneSettings.h"
 
+#include <algorithm>
 #include <istream>
 #include <ostream>
 #include <sstream>
@@ -29,6 +30,9 @@ void SceneSettings::reset()
 {
     planesVisible = true;
     fillsVisible = true;
+    guidesVisibleFlag = true;
+    gridSettings = {};
+    shadowSettings = {};
     paletteState = defaultPalette();
 }
 
@@ -36,6 +40,14 @@ void SceneSettings::serialize(std::ostream& os) const
 {
     os << "planes " << (planesVisible ? 1 : 0) << '\n';
     os << "fills " << (fillsVisible ? 1 : 0) << '\n';
+    os << "guides " << (guidesVisibleFlag ? 1 : 0) << '\n';
+    os << "gridMajorSpacing " << gridSettings.majorSpacing << '\n';
+    os << "gridMinorDivisions " << gridSettings.minorDivisions << '\n';
+    os << "gridMajorExtent " << gridSettings.majorExtent << '\n';
+    os << "shadowEnabled " << (shadowSettings.enabled ? 1 : 0) << '\n';
+    os << "shadowQuality " << static_cast<int>(shadowSettings.quality) << '\n';
+    os << "shadowStrength " << shadowSettings.strength << '\n';
+    os << "shadowBias " << shadowSettings.bias << '\n';
     os << "palette " << paletteState.id << '\n';
     os << "fill " << paletteState.fill.r << ' ' << paletteState.fill.g << ' ' << paletteState.fill.b << ' '
        << paletteState.fill.a << '\n';
@@ -76,6 +88,35 @@ bool SceneSettings::deserialize(std::istream& is, int version)
             int value = fillsVisible ? 1 : 0;
             if (ss >> value)
                 fillsVisible = value != 0;
+        } else if (key == "guides") {
+            int value = guidesVisibleFlag ? 1 : 0;
+            if (ss >> value)
+                guidesVisibleFlag = value != 0;
+        } else if (key == "gridMajorSpacing") {
+            ss >> gridSettings.majorSpacing;
+            gridSettings.majorSpacing = std::max(0.001f, gridSettings.majorSpacing);
+        } else if (key == "gridMinorDivisions") {
+            ss >> gridSettings.minorDivisions;
+            gridSettings.minorDivisions = std::max(1, gridSettings.minorDivisions);
+        } else if (key == "gridMajorExtent") {
+            ss >> gridSettings.majorExtent;
+            gridSettings.majorExtent = std::max(1, gridSettings.majorExtent);
+        } else if (key == "shadowEnabled") {
+            int value = shadowSettings.enabled ? 1 : 0;
+            if (ss >> value)
+                shadowSettings.enabled = value != 0;
+        } else if (key == "shadowQuality") {
+            int quality = static_cast<int>(shadowSettings.quality);
+            if (ss >> quality) {
+                quality = std::clamp(quality, 0, 2);
+                shadowSettings.quality = static_cast<ShadowQuality>(quality);
+            }
+        } else if (key == "shadowStrength") {
+            ss >> shadowSettings.strength;
+            shadowSettings.strength = std::clamp(shadowSettings.strength, 0.0f, 1.0f);
+        } else if (key == "shadowBias") {
+            ss >> shadowSettings.bias;
+            shadowSettings.bias = std::max(0.00005f, shadowSettings.bias);
         } else if (key == "palette") {
             ss >> paletteState.id;
         } else if (key == "fill") {

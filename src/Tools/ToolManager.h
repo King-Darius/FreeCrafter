@@ -1,7 +1,9 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
+#include <cstdint>
 
 #include "Tool.h"
 #include "LineTool.h"
@@ -35,6 +37,12 @@ public:
     void setNavigationConfig(const NavigationConfig& config);
     void setViewportSize(int w, int h);
 
+    void handlePointerDown(const Tool::PointerInput& input);
+    void handlePointerMove(const Tool::PointerInput& input);
+    void handlePointerUp(const Tool::PointerInput& input);
+    void commitActiveTool();
+    void cancelActiveTool();
+
     void updateInference(const ToolInferenceUpdateRequest& request);
     void clearInference();
     const Interaction::InferenceResult& getCurrentInference() const { return currentInference; }
@@ -45,12 +53,15 @@ public:
     Tool::MeasurementKind getMeasurementKind() const;
     bool applyMeasurementOverride(double value);
 
+    void setGeometryChangedCallback(std::function<void()> callback);
+
 private:
     void propagateViewport();
     void pushInferenceToActive();
     void updateStickyLock();
     void applyAxisLock(const ToolInferenceUpdateRequest& request);
     void setAxisLock(const Vector3& direction);
+    void handleToolInteraction();
 
     std::vector<std::unique_ptr<Tool>> tools;
     Tool* active = nullptr;
@@ -76,5 +87,7 @@ private:
     Vector3 lastSnapPoint;
     bool lastSnapValid = false;
     NavigationConfig navigationConfig;
+    std::function<void()> geometryChangedCallback;
+    std::uint64_t geometryRevision = 0;
 };
 

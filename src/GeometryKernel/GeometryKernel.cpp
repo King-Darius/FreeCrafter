@@ -23,6 +23,7 @@ GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
     }
     GeometryObject* raw = obj.get();
     objects.push_back(std::move(obj));
+    markModified();
     return raw;
 }
 
@@ -35,6 +36,7 @@ GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float hei
     }
     GeometryObject* raw = obj.get();
     objects.push_back(std::move(obj));
+    markModified();
     return raw;
 }
 
@@ -44,6 +46,7 @@ GeometryObject* GeometryKernel::addObject(std::unique_ptr<GeometryObject> object
         return nullptr;
     GeometryObject* raw = object.get();
     objects.push_back(std::move(object));
+    markModified();
     return raw;
 }
 
@@ -62,6 +65,7 @@ GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
     if (metaIt != metadataMap.end()) {
         metadataMap[raw] = metaIt->second;
     }
+    markModified();
     return raw;
 }
 
@@ -70,7 +74,7 @@ void GeometryKernel::deleteObject(GeometryObject* obj) {
     materialAssignments.erase(obj);
     metadataMap.erase(obj);
     for (auto it = objects.begin(); it != objects.end(); ++it) {
-        if (it->get() == obj) { objects.erase(it); return; }
+        if (it->get() == obj) { objects.erase(it); markModified(); return; }
     }
 }
 
@@ -83,6 +87,7 @@ void GeometryKernel::clear()
     dimensions.clear();
     clearGuides();
     resetAxes();
+    markModified();
 }
 
 bool GeometryKernel::saveToFile(const std::string& filename) const {
@@ -120,22 +125,26 @@ bool GeometryKernel::loadFromFile(const std::string& filename) {
         return true;
     }
     clear();
+    bool changed = false;
     while (is) {
         std::string type; if (!(is>>type)) break;
         if (type=="Curve") {
-            auto c = GeometryIO::readCurve(is); if (c) objects.push_back(std::move(c));
+            auto c = GeometryIO::readCurve(is); if (c) { objects.push_back(std::move(c)); changed = true; }
         } else if (type=="Solid") {
-            auto s = GeometryIO::readSolid(is); if (s) objects.push_back(std::move(s));
+            auto s = GeometryIO::readSolid(is); if (s) { objects.push_back(std::move(s)); changed = true; }
         } else {
             break;
         }
     }
+    if (changed)
+        markModified();
     return true;
 }
 
 void GeometryKernel::loadFromStream(std::istream& is, const std::string& terminator)
 {
     clear();
+    bool changed = false;
     std::string type;
     while (is >> type) {
         if (type == terminator) {
@@ -145,16 +154,20 @@ void GeometryKernel::loadFromStream(std::istream& is, const std::string& termina
             auto curve = GeometryIO::readCurve(is);
             if (curve) {
                 objects.push_back(std::move(curve));
+                changed = true;
             }
         } else if (type == "Solid") {
             auto solid = GeometryIO::readSolid(is);
             if (solid) {
                 objects.push_back(std::move(solid));
+                changed = true;
             }
         } else {
             break;
         }
     }
+    if (changed)
+        markModified();
 }
 
 void GeometryKernel::assignMaterial(const GeometryObject* object, const std::string& materialName)
@@ -166,6 +179,7 @@ void GeometryKernel::assignMaterial(const GeometryObject* object, const std::str
     } else {
         materialAssignments[object] = materialName;
     }
+    markModified();
 }
 
 std::string GeometryKernel::getMaterial(const GeometryObject* object) const
@@ -187,6 +201,7 @@ void GeometryKernel::setShapeMetadata(const GeometryObject* object, const ShapeM
     } else {
         metadataMap[object] = metadata;
     }
+    markModified();
 }
 
 std::optional<GeometryKernel::ShapeMetadata> GeometryKernel::shapeMetadata(const GeometryObject* object) const
@@ -265,6 +280,7 @@ bool GeometryKernel::rebuildShapeFromMetadata(GeometryObject* object, const Shap
         return false;
 
     metadataMap[object] = resolved;
+    markModified();
     return true;
 }
 
@@ -277,6 +293,7 @@ void GeometryKernel::addTextAnnotation(const Vector3& position, std::string text
     annotation.text = std::move(text);
     annotation.height = std::max(0.01f, height);
     textAnnotations.push_back(std::move(annotation));
+    markModified();
 }
 
 void GeometryKernel::addDimension(const Vector3& start, const Vector3& end)
@@ -286,17 +303,20 @@ void GeometryKernel::addDimension(const Vector3& start, const Vector3& end)
     dim.end = end;
     dim.value = (end - start).length();
     dimensions.push_back(dim);
+    markModified();
 }
 
 void GeometryKernel::addGuideLine(const Vector3& start, const Vector3& end)
 {
     GuideState::GuideLine line{ start, end };
     guides.lines.push_back(line);
+    markModified();
 }
 
 void GeometryKernel::addGuidePoint(const Vector3& position)
 {
     guides.points.push_back({ position });
+    markModified();
 }
 
 void GeometryKernel::addGuideAngle(const Vector3& origin, const Vector3& startDirection, const Vector3& endDirection)
@@ -306,6 +326,7 @@ void GeometryKernel::addGuideAngle(const Vector3& origin, const Vector3& startDi
     float dot = std::max(-1.0f, std::min(1.0f, s.dot(e)));
     float angle = std::acos(dot) * 180.0f / 3.14159265358979323846f;
     guides.angles.push_back({ origin, s, e, angle });
+    markModified();
 }
 
 GeometryKernel::MeshBuffer GeometryKernel::buildMeshBuffer(const GeometryObject& object) const
@@ -413,6 +434,7 @@ void GeometryKernel::clearGuides()
     guides.lines.clear();
     guides.points.clear();
     guides.angles.clear();
+    markModified();
 }
 
 void GeometryKernel::setAxes(const Vector3& origin, const Vector3& xDirection, const Vector3& yDirection)
@@ -432,9 +454,16 @@ void GeometryKernel::setAxes(const Vector3& origin, const Vector3& xDirection, c
     axes.yAxis = y;
     axes.zAxis = z;
     axes.valid = true;
+    markModified();
 }
 
 void GeometryKernel::resetAxes()
 {
     axes = AxesState{};
+    markModified();
+}
+
+void GeometryKernel::markModified()
+{
+    ++revisionCounter;
 }

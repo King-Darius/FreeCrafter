@@ -13,6 +13,12 @@ class QToolBar;
 class QToolButton;
 class QTabBar;
 class QActionGroup;
+class QMenu;
+class QStackedWidget;
+class QDoubleSpinBox;
+class QSpinBox;
+class QComboBox;
+class QCheckBox;
 class MeasurementWidget;
 class NavigationPreferences;
 class PalettePreferences;
@@ -22,6 +28,11 @@ class TerminalDock;
 class QUndoStack;
 class QSize;
 class AutosaveManager;
+
+namespace Phase6 {
+struct RoundCornerOptions;
+struct LoftOptions;
+}
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -81,6 +92,8 @@ private slots:
     void activateRotate();
     void activateScale();
     void activateExtrude();
+    void activateChamfer();
+    void activateLoft();
     void activateSection();
     void activatePan();
     void activateOrbit();
@@ -109,6 +122,13 @@ private:
     void persistWindowState();
     void persistAutosaveSettings() const;
     void setActiveTool(QAction* action, const QString& toolId, const QString& hint);
+    void updateToolOptionsPanel(const QString& toolId);
+    void syncActiveToolOptions();
+    void updateChamferControls(const Phase6::RoundCornerOptions& options);
+    void updateLoftControls(const Phase6::LoftOptions& options);
+    void applyChamferDefaults();
+    void applyLoftDefaults();
+    void populateAdvancedToolsMenu();
     QString navigationHintForTool(const QString& toolName) const;
     void refreshNavigationActionHints();
     void updateSelectionStatus();
@@ -212,11 +232,15 @@ private:
     QAction* rotateAction = nullptr;
     QAction* scaleAction = nullptr;
     QAction* extrudeAction = nullptr;
+    QAction* chamferAction = nullptr;
+    QAction* loftAction = nullptr;
     QAction* sectionAction = nullptr;
     QAction* panAction = nullptr;
     QAction* orbitAction = nullptr;
     QAction* zoomAction = nullptr;
     QAction* measureAction = nullptr;
+    QAction* chamferOptionsAction = nullptr;
+    QAction* loftOptionsAction = nullptr;
     QAction* gridAction = nullptr;
     QAction* actionShowFrameStatsHud = nullptr;
 
@@ -244,4 +268,27 @@ private:
     EnvironmentPanel* environmentPanel = nullptr;
     bool isRestoringWindowState_ = false;
     bool initializingTerminalDock_ = false;
+
+    QToolBar* toolOptionsToolbar = nullptr;
+    QStackedWidget* toolOptionsStack = nullptr;
+    QWidget* toolOptionsPlaceholder = nullptr;
+    QWidget* chamferOptionsWidget = nullptr;
+    QWidget* loftOptionsWidget = nullptr;
+    QDoubleSpinBox* chamferRadiusSpin = nullptr;
+    QSpinBox* chamferSegmentsSpin = nullptr;
+    QComboBox* chamferStyleCombo = nullptr;
+    QCheckBox* chamferHardEdgeCheck = nullptr;
+    QToolButton* chamferApplyButton = nullptr;
+    QToolButton* chamferDialogButton = nullptr;
+    QSpinBox* loftSectionsSpin = nullptr;
+    QDoubleSpinBox* loftTwistSpin = nullptr;
+    QSpinBox* loftSmoothingSpin = nullptr;
+    QCheckBox* loftCloseRailsCheck = nullptr;
+    QCheckBox* loftSmoothNormalsCheck = nullptr;
+    QCheckBox* loftSymmetryCheck = nullptr;
+    QToolButton* loftApplyButton = nullptr;
+    QToolButton* loftDialogButton = nullptr;
+    QMenu* advancedToolsMenu = nullptr;
+    Phase6::RoundCornerOptions chamferDefaults_;
+    Phase6::LoftOptions loftDefaults_;
 };

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <string>
 
+#include "MeshUtils.h"
+
 namespace {
 Vector3 safeNormalize(const Vector3& v)
 {
@@ -58,7 +60,25 @@ GeometryObject* GeometryKernel::extrudeCurveAlongVector(GeometryObject* curveObj
     if (!curveObj || curveObj->getType() != ObjectType::Curve)
         return nullptr;
     auto* curve = static_cast<Curve*>(curveObj);
-    auto obj = Solid::createFromCurveWithVector(*curve, direction, options.capStart, options.capEnd);
+    if (direction.lengthSquared() <= 1e-10f)
+        return nullptr;
+
+    const auto& loop = curve->getBoundaryLoop();
+    if (loop.size() < 3)
+        return nullptr;
+
+    Vector3 normal = MeshUtils::computePolygonNormal(loop);
+    if (normal.lengthSquared() <= 1e-8f)
+        return nullptr;
+
+    ExtrudeOptions effective = options;
+    bool hasFace = !curve->getMesh().getFaces().empty();
+    if (!hasFace) {
+        effective.capStart = false;
+        effective.capEnd = false;
+    }
+
+    auto obj = Solid::createFromCurveWithVector(*curve, direction, effective.capStart, effective.capEnd);
     if (!obj) {
         return nullptr;
     }

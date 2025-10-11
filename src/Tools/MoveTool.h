@@ -26,6 +26,7 @@ private:
     Vector3 applyAxisConstraint(const Vector3& delta) const;
     std::vector<GeometryObject*> gatherSelection() const;
     void applyTranslation(const Vector3& delta);
+    std::vector<Scene::Document::ObjectId> selectionIds() const;
 
     bool dragging = false;
     Vector3 anchor;

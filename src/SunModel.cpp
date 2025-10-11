@@ -1,131 +1,57 @@
-#include "SunModel.h"
-
-
-
-constexpr double kPi = 3.14159265358979323846;
-#include <QDateTime>
-
-#include <QTimeZone>
-
-#include <QtMath>
-
-#include <cmath>
-
-#include <algorithm>
-
-
-
-namespace {
-
-constexpr double degToRad(double deg) { return deg * kPi / 180.0; }
-
-constexpr double radToDeg(double rad) { return rad * 180.0 / kPi; }
-
-
-
-double wrapDegrees(double value)
-
-{
-
-    double result = std::fmod(value, 360.0);
-
-    if (result < 0.0)
-
-        result += 360.0;
-
-    return result;
-
-}
-
-
-
-} // namespace
-
-
-
-SunModel::Result SunModel::computeSunDirection(const QDate& date,
-
-                                               const QTime& time,
-
-                                               double latitudeDegrees,
-
-                                               double longitudeDegrees,
-
-                                               int timezoneMinutes)
-
-{
-
-    Result result;
-
-    if (!date.isValid()) {
-
-        return result;
-
-    }
-
-
-
-    QTime effectiveTime = time.isValid() ? time : QTime(12, 0, 0);
-
-    QTimeZone zone(timezoneMinutes * 60);
-
-    QDateTime local(date, effectiveTime, zone);
-
-    if (!local.isValid()) {
-        local = QDateTime(date, effectiveTime, QTimeZone::utc());
-        local = local.addSecs(-timezoneMinutes * 60);
+#include "SunModel.h"
+
+#include <QtMath>
+
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+constexpr float kMinValidAltitude = -5.0f;
+
+float normalizeAzimuth(float azimuthDegrees)
+{
+    float azimuth = std::fmod(azimuthDegrees, 360.0f);
+    if (azimuth < 0.0f)
+        azimuth += 360.0f;
+    return azimuth;
+}
+
+} // namespace
+
+SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azimuthDegrees)
+{
+    Result result;
+
+    const float clampedAltitude = std::clamp(altitudeDegrees, -90.0f, 90.0f);
+    const float normalizedAzimuth = normalizeAzimuth(azimuthDegrees);
+
+    result.altitudeDegrees = clampedAltitude;
+    result.azimuthDegrees = normalizedAzimuth;
+
+    if (clampedAltitude <= kMinValidAltitude) {
+        return result;
+
+    const float altitudeRad = qDegreesToRadians(clampedAltitude);
+    const float azimuthRad = qDegreesToRadians(normalizedAzimuth);
+
+    const float horizontal = std::cos(altitudeRad);
+    const float east = horizontal * std::sin(azimuthRad);
+    const float north = horizontal * std::cos(azimuthRad);
+    const float up = std::sin(altitudeRad);
+
+    QVector3D direction(east, up, north);
+    if (direction.isNull()) {
+        return result;
     }
-
-
-
-    QDateTime utc = local.toUTC();
-
-    const double daySeconds = utc.time().msecsSinceStartOfDay() / 1000.0;
-
-    const double julianDay = utc.date().toJulianDay() + daySeconds / 86400.0;
-
-    const double julianCentury = (julianDay - 2451545.0) / 36525.0;
-
-
-
-    const double geomMeanLongSun = wrapDegrees(280.46646 + julianCentury * (36000.76983 + julianCentury * 0.0003032));
-
-    const double geomMeanAnomSun = 357.52911 + julianCentury * (35999.05029 - 0.0001537 * julianCentury);
-
-    const double eccentEarthOrbit = 0.016708634 - julianCentury * (0.000042037 + 0.0000001267 * julianCentury);
-
-
-
-    const double geomMeanLongSunRad = degToRad(geomMeanLongSun);
-
-    const double geomMeanAnomSunRad = degToRad(geomMeanAnomSun);
-
-
-
-    const double sunEqOfCenter = std::sin(geomMeanAnomSunRad) * (1.914602 - julianCentury * (0.004817 + 0.000014 * julianCentury))
-
-        + std::sin(2.0 * geomMeanAnomSunRad) * (0.019993 - 0.000101 * julianCentury)
-
-        + std::sin(3.0 * geomMeanAnomSunRad) * 0.000289;
-
-
-
-    const double sunTrueLong = geomMeanLongSun + sunEqOfCenter;
-
-    const double sunAppLong = sunTrueLong - 0.00569 - 0.00478 * std::sin(degToRad(125.04 - 1934.136 * julianCentury));
-
-
-
-    const double meanObliqEcliptic = 23.0 + (26.0 + ((21.448 - julianCentury * (46.815 + julianCentury * (0.00059 - julianCentury * 0.001813))) / 60.0)) / 60.0;
-
-    const double obliqCorr = meanObliqEcliptic + 0.00256 * std::cos(degToRad(125.04 - 1934.136 * julianCentury));
-
-
-
-    const double obliqCorrRad = degToRad(obliqCorr);
-
-    const double sunAppLongRad = degToRad(sunAppLong);
-
+
+    direction.normalize();
+    result.direction = direction;
+    result.valid = true;
+    return result;
+}
+
+
     const double sunDeclination = std::asin(std::sin(obliqCorrRad) * std::sin(sunAppLongRad));
 
 

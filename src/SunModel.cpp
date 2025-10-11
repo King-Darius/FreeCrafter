@@ -31,6 +31,7 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
 
     if (clampedAltitude <= kMinValidAltitude) {
         return result;
+    }
 
     const float altitudeRad = qDegreesToRadians(clampedAltitude);
     const float azimuthRad = qDegreesToRadians(normalizedAzimuth);
@@ -50,70 +51,6 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     result.valid = true;
     return result;
 }
-
-
-    const double sunDeclination = std::asin(std::sin(obliqCorrRad) * std::sin(sunAppLongRad));
-
-
-
-    const double varY = std::tan(obliqCorrRad / 2.0);
-
-    const double varYSq = varY * varY;
-
-
-
-    const double eqOfTime = 4.0 * radToDeg(varYSq * std::sin(2.0 * geomMeanLongSunRad)
-
-                                           - 2.0 * eccentEarthOrbit * std::sin(geomMeanAnomSunRad)
-
-                                           + 4.0 * eccentEarthOrbit * varYSq * std::sin(geomMeanAnomSunRad) * std::cos(2.0 * geomMeanLongSunRad)
-
-                                           - 0.5 * varYSq * varYSq * std::sin(4.0 * geomMeanLongSunRad)
-
-                                           - 1.25 * eccentEarthOrbit * eccentEarthOrbit * std::sin(2.0 * geomMeanAnomSunRad));
-
-
-
-    const double timezoneHours = timezoneMinutes / 60.0;
-
-    const double minutes = effectiveTime.hour() * 60.0 + effectiveTime.minute() + effectiveTime.second() / 60.0;
-
-    double trueSolarTime = minutes + eqOfTime + 4.0 * longitudeDegrees - 60.0 * timezoneHours;
-
-    trueSolarTime = std::fmod(trueSolarTime, 1440.0);
-
-    if (trueSolarTime < 0.0)
-
-        trueSolarTime += 1440.0;
-
-
-
-    double hourAngle = trueSolarTime / 4.0 - 180.0;
-
-    if (hourAngle < -180.0)
-
-        hourAngle += 360.0;
-
-
-
-    const double hourAngleRad = degToRad(hourAngle);
-
-    const double latitudeRad = degToRad(latitudeDegrees);
-
-
-
-    double cosZenith = std::sin(latitudeRad) * std::sin(sunDeclination) + std::cos(latitudeRad) * std::cos(sunDeclination) * std::cos(hourAngleRad);
-
-    cosZenith = std::clamp(cosZenith, -1.0, 1.0);
-
-
-
-    const double zenith = std::acos(cosZenith);
-
-    const double altitude = kPi / 2.0 - zenith;
-
-
-
     double azimuth = std::atan2(std::sin(hourAngleRad), std::cos(hourAngleRad) * std::sin(latitudeRad) - std::tan(sunDeclination) * std::cos(latitudeRad));
 
     double azimuthDeg = radToDeg(azimuth) + 180.0;

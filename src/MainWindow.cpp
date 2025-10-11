@@ -816,14 +816,34 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     navigationPrefs = std::make_unique<NavigationPreferences>(this);
 
-    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera());
     undoStack = new QUndoStack(this);
+    commandStack = std::make_unique<Core::CommandStack>(undoStack);
+    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera(), commandStack.get());
 
     toolManager->setGeometryChangedCallback([this]() {
         updateSelectionStatus();
         if (viewport)
             viewport->update();
     });
+
+    if (commandStack) {
+        Core::CommandContext context;
+        context.document = viewport->getDocument();
+        context.geometry = viewport->getGeometry();
+        context.geometryChanged = [this]() {
+            if (toolManager)
+                toolManager->notifyExternalGeometryChange();
+        };
+        context.selectionChanged = [this](const std::vector<Scene::Document::ObjectId>&) {
+            updateSelectionStatus();
+            if (viewport)
+                viewport->update();
+        };
+        commandStack->setContext(context);
+    }
+
+    if (toolManager)
+        toolManager->setCommandStack(commandStack.get());
 
     toolManager->setNavigationConfig(navigationPrefs->config());
 

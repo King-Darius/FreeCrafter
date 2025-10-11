@@ -26,6 +26,7 @@ private:
     std::vector<GeometryObject*> gatherSelection() const;
     void applyScale(const Vector3& factors);
     Vector3 determineAxis() const;
+    std::vector<Scene::Document::ObjectId> selectionIds() const;
 
     bool dragging = false;
     bool axisScaling = false;

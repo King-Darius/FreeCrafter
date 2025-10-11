@@ -95,6 +95,10 @@ public:
     const ObjectNode* findObject(ObjectId id) const;
     ObjectNode* findObject(ObjectId id);
 
+    ObjectId objectIdForGeometry(const GeometryObject* object) const;
+    GeometryObject* geometryForObject(ObjectId id);
+    const GeometryObject* geometryForObject(ObjectId id) const;
+
     ObjectId ensureObjectForGeometry(GeometryObject* object, const std::string& name = std::string());
     void synchronizeWithGeometry();
     void pruneInvalidObjects();

@@ -41,6 +41,8 @@ add_library(freecrafter_lib
     src/HotkeyManager.cpp
     src/NavigationPreferences.cpp
     src/PalettePreferences.cpp
+    src/Core/Command.cpp
+    src/Core/CommandStack.cpp
     src/Navigation/ViewPresetManager.cpp
     src/GeometryKernel/Curve.cpp
     src/GeometryKernel/HalfEdgeMesh.cpp
@@ -66,6 +68,7 @@ add_library(freecrafter_lib
     src/Tools/ExtrudeTool.cpp
     src/Tools/GroundProjection.cpp
     src/Tools/DrawingTools.cpp
+    src/Tools/ToolCommands.cpp
     src/Tools/ModificationTools.cpp
     src/Tools/SectionTool.cpp
     src/Tools/OrbitTool.cpp
@@ -170,6 +173,11 @@ add_executable(test_scene_commands tests/test_scene_commands.cpp)
 target_include_directories(test_scene_commands PRIVATE src)
 target_link_libraries(test_scene_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME scene_commands COMMAND $<TARGET_FILE:test_scene_commands>)
+
+add_executable(test_command_stack tests/test_command_stack.cpp)
+target_include_directories(test_command_stack PRIVATE src)
+target_link_libraries(test_command_stack PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME command_stack COMMAND $<TARGET_FILE:test_command_stack>)
 
 add_executable(test_phase4 tests/test_phase4.cpp)
 target_include_directories(test_phase4 PRIVATE src)

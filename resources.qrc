@@ -52,6 +52,7 @@
     <file>resources/icons/palette.svg</file>
     <file>resources/icons/help.svg</file>
     <file>resources/icons/export.svg</file>
+    <file>resources/icons/import.svg</file>
     <file>resources/icons/file.svg</file>
     <file>resources/icons/folder.svg</file>
     <file>resources/icons/grid.svg</file>

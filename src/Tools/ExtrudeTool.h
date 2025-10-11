@@ -36,7 +36,7 @@ private:
 
     bool computeExtrusionFrame();
     bool projectPointerToPlane(const PointerInput& input, Vector3& out) const;
-    bool resolvePointerToWorld(const PointerInput& input, Vector3& out) const;
+    bool computePointerRay(const PointerInput& input, Vector3& origin, Vector3& direction) const;
     bool pickCurveAtPointer(const PointerInput& input, Curve*& outCurve,
         Scene::Document::ObjectId& outId, bool requireFace, bool requireNoFace) const;
     bool trySelectProfile(const PointerInput& input);

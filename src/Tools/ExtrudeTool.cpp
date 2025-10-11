@@ -16,18 +16,6 @@
 namespace {
 constexpr float kMinimumDistance = 1e-5f;
 
-float distanceSquaredToSegment(const Vector3& a, const Vector3& b, const Vector3& p)
-{
-    Vector3 ab = b - a;
-    float denom = ab.lengthSquared();
-    if (denom <= 1e-12f)
-        return (p - a).lengthSquared();
-    float t = (p - a).dot(ab) / denom;
-    t = std::clamp(t, 0.0f, 1.0f);
-    Vector3 closest = a + ab * t;
-    return (p - closest).lengthSquared();
-}
-
 bool loopIsClosed(const std::vector<Vector3>& loop)
 {
     if (loop.size() < 3)
@@ -35,6 +23,90 @@ bool loopIsClosed(const std::vector<Vector3>& loop)
     Vector3 start = loop.front();
     Vector3 end = loop.back();
     return (start - end).lengthSquared() <= (kMinimumDistance * kMinimumDistance);
+}
+
+bool intersectRayTriangle(const Vector3& origin, const Vector3& direction,
+    const Vector3& v0, const Vector3& v1, const Vector3& v2, float& outT)
+{
+    const float epsilon = 1e-6f;
+    Vector3 edge1 = v1 - v0;
+    Vector3 edge2 = v2 - v0;
+    Vector3 pvec = direction.cross(edge2);
+    float det = edge1.dot(pvec);
+    if (std::fabs(det) < epsilon)
+        return false;
+    float invDet = 1.0f / det;
+    Vector3 tvec = origin - v0;
+    float u = tvec.dot(pvec) * invDet;
+    if (u < 0.0f || u > 1.0f)
+        return false;
+    Vector3 qvec = tvec.cross(edge1);
+    float v = direction.dot(qvec) * invDet;
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
+    float t = edge2.dot(qvec) * invDet;
+    if (t < 0.0f)
+        return false;
+    outT = t;
+    return true;
+}
+
+float closestDistanceSquaredRaySegment(const Vector3& rayOrigin, const Vector3& rayDirection,
+    const Vector3& a, const Vector3& b, float& outRayT)
+{
+    Vector3 u = b - a;
+    Vector3 v = rayDirection;
+    Vector3 w0 = a - rayOrigin;
+
+    float aDot = u.dot(u);
+    float bDot = u.dot(v);
+    float cDot = v.dot(v);
+    float dDot = u.dot(w0);
+    float eDot = v.dot(w0);
+    float denom = aDot * cDot - bDot * bDot;
+
+    float sN, sD = denom;
+    float tN, tD = denom;
+    const float epsilon = 1e-8f;
+
+    if (denom < epsilon) {
+        sN = 0.0f;
+        sD = 1.0f;
+        tN = eDot;
+        tD = cDot;
+    } else {
+        sN = (bDot * eDot - cDot * dDot);
+        tN = (aDot * eDot - bDot * dDot);
+
+        if (sN < 0.0f) {
+            sN = 0.0f;
+            tN = eDot;
+            tD = cDot;
+        } else if (sN > sD) {
+            sN = sD;
+            tN = eDot + bDot;
+            tD = cDot;
+        }
+    }
+
+    if (tN < 0.0f) {
+        tN = 0.0f;
+        if (-dDot < 0.0f)
+            sN = 0.0f;
+        else if (-dDot > aDot)
+            sN = sD;
+        else {
+            sN = -dDot;
+            sD = aDot;
+        }
+    }
+
+    float sc = (std::fabs(sN) < epsilon) ? 0.0f : sN / sD;
+    float tc = (std::fabs(tN) < epsilon) ? 0.0f : tN / tD;
+
+    Vector3 dP = w0 + u * sc - v * tc;
+    outRayT = tc;
+    return dP.dot(dP);
 }
 }
 
@@ -104,14 +176,9 @@ bool ExtrudeTool::computeExtrusionFrame()
 
 bool ExtrudeTool::projectPointerToPlane(const PointerInput& input, Vector3& out) const
 {
-    if (!camera)
-        return false;
-    if (viewportWidth <= 0 || viewportHeight <= 0)
-        return false;
-
     Vector3 origin;
     Vector3 direction;
-    if (!CameraNavigation::computeRay(*camera, input.x, input.y, viewportWidth, viewportHeight, origin, direction))
+    if (!computePointerRay(input, origin, direction))
         return false;
 
     float denom = direction.dot(baseDirection);
@@ -140,29 +207,15 @@ float ExtrudeTool::clampDistance(float value) const
     return value;
 }
 
-bool ExtrudeTool::resolvePointerToWorld(const PointerInput& input, Vector3& out) const
+bool ExtrudeTool::computePointerRay(const PointerInput& input, Vector3& origin, Vector3& direction) const
 {
-    const auto& snap = getInferenceResult();
-    if (snap.isValid()) {
-        out = snap.position;
-        return true;
-    }
     if (!camera)
         return false;
     if (viewportWidth <= 0 || viewportHeight <= 0)
         return false;
 
-    Vector3 origin;
-    Vector3 direction;
     if (!CameraNavigation::computeRay(*camera, input.x, input.y, viewportWidth, viewportHeight, origin, direction))
         return false;
-
-    if (std::fabs(direction.y) <= 1e-6f)
-        return false;
-    float t = -origin.y / direction.y;
-    if (t < 0.0f)
-        return false;
-    out = origin + direction * t;
     return true;
 }
 
@@ -172,14 +225,19 @@ bool ExtrudeTool::pickCurveAtPointer(const PointerInput& input, Curve*& outCurve
     if (!geometry)
         return false;
 
-    Vector3 worldPoint;
-    if (!resolvePointerToWorld(input, worldPoint))
+    Vector3 rayOrigin;
+    Vector3 rayDirection;
+    if (!computePointerRay(input, rayOrigin, rayDirection))
         return false;
 
     float bestDistance = std::numeric_limits<float>::max();
+    float bestRayT = std::numeric_limits<float>::max();
+    bool bestHasIntersection = false;
     Curve* bestCurve = nullptr;
     Scene::Document::ObjectId bestId = 0;
     Scene::Document* doc = getDocument();
+    const float selectionRadius = 0.9f;
+    const float selectionRadiusSquared = selectionRadius * selectionRadius;
 
     for (const auto& object : geometry->getObjects()) {
         if (object->getType() != ObjectType::Curve)
@@ -191,30 +249,104 @@ bool ExtrudeTool::pickCurveAtPointer(const PointerInput& input, Curve*& outCurve
         if (requireNoFace && hasFace)
             continue;
 
-        const auto& loop = curve->getBoundaryLoop();
-        if (loop.empty())
-            continue;
+        bool curveHasIntersection = false;
+        float curveRayT = std::numeric_limits<float>::max();
 
-        float localBest = std::numeric_limits<float>::max();
-        for (size_t i = 0; i < loop.size(); ++i) {
-            localBest = std::min(localBest, (loop[i] - worldPoint).lengthSquared());
-            if (i + 1 < loop.size())
-                localBest = std::min(localBest, distanceSquaredToSegment(loop[i], loop[i + 1], worldPoint));
+        const auto& mesh = curve->getMesh();
+        const auto& vertices = mesh.getVertices();
+        const auto& triangles = mesh.getTriangles();
+        if (!triangles.empty()) {
+            for (const auto& tri : triangles) {
+                if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0)
+                    continue;
+                if (tri.v0 >= static_cast<int>(vertices.size())
+                    || tri.v1 >= static_cast<int>(vertices.size())
+                    || tri.v2 >= static_cast<int>(vertices.size()))
+                    continue;
+                float t = 0.0f;
+                if (intersectRayTriangle(rayOrigin, rayDirection,
+                        vertices[tri.v0].position, vertices[tri.v1].position, vertices[tri.v2].position, t)) {
+                    if (t < curveRayT) {
+                        curveRayT = t;
+                        curveHasIntersection = true;
+                    }
+                }
+            }
         }
 
-        if (localBest < bestDistance) {
-            bestDistance = localBest;
-            bestCurve = curve;
-            if (doc)
-                bestId = doc->objectIdForGeometry(object.get());
+        float curveDistance = std::numeric_limits<float>::max();
+        float curveDistanceRayT = std::numeric_limits<float>::max();
+        const auto& loop = curve->getBoundaryLoop();
+        if (!loop.empty()) {
+            if (loop.size() == 1) {
+                float segmentRayT = 0.0f;
+                float segmentDistance = closestDistanceSquaredRaySegment(rayOrigin, rayDirection, loop.front(), loop.front(), segmentRayT);
+                if (segmentDistance < curveDistance && segmentRayT >= 0.0f) {
+                    curveDistance = segmentDistance;
+                    curveDistanceRayT = segmentRayT;
+                }
+            }
+            for (size_t i = 0; i + 1 < loop.size(); ++i) {
+                float segmentRayT = 0.0f;
+                float segmentDistance = closestDistanceSquaredRaySegment(rayOrigin, rayDirection, loop[i], loop[i + 1], segmentRayT);
+                if (segmentDistance < curveDistance && segmentRayT >= 0.0f) {
+                    curveDistance = segmentDistance;
+                    curveDistanceRayT = segmentRayT;
+                }
+            }
+            if (loop.size() > 1 && loopIsClosed(loop)) {
+                float segmentRayT = 0.0f;
+                float segmentDistance = closestDistanceSquaredRaySegment(rayOrigin, rayDirection, loop.back(), loop.front(), segmentRayT);
+                if (segmentDistance < curveDistance && segmentRayT >= 0.0f) {
+                    curveDistance = segmentDistance;
+                    curveDistanceRayT = segmentRayT;
+                }
+            }
+        }
+
+        bool candidateValid = false;
+        bool candidateIntersection = false;
+        float candidateRayT = std::numeric_limits<float>::max();
+        float candidateDistance = std::numeric_limits<float>::max();
+
+        if (curveHasIntersection) {
+            candidateValid = true;
+            candidateIntersection = true;
+            candidateRayT = curveRayT;
+            candidateDistance = 0.0f;
+        } else if (curveDistance <= selectionRadiusSquared) {
+            candidateValid = true;
+            candidateIntersection = false;
+            candidateRayT = curveDistanceRayT;
+            candidateDistance = curveDistance;
+        }
+
+        if (!candidateValid)
+            continue;
+
+        Scene::Document::ObjectId candidateId = 0;
+        if (doc)
+            candidateId = doc->objectIdForGeometry(object.get());
+
+        if (candidateIntersection) {
+            if (!bestHasIntersection || candidateRayT < bestRayT) {
+                bestHasIntersection = true;
+                bestRayT = candidateRayT;
+                bestDistance = candidateDistance;
+                bestCurve = curve;
+                bestId = candidateId;
+            }
+        } else if (!bestHasIntersection) {
+            if (candidateDistance < bestDistance || (std::fabs(candidateDistance - bestDistance) <= 1e-6f && candidateRayT < bestRayT)) {
+                bestDistance = candidateDistance;
+                bestRayT = candidateRayT;
+                bestCurve = curve;
+                bestId = candidateId;
+            }
         }
     }
 
     if (!bestCurve)
-        return false;
-
-    const float selectionRadius = 0.9f;
-    if (bestDistance > selectionRadius * selectionRadius)
         return false;
 
     outCurve = bestCurve;

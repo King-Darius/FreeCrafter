@@ -46,6 +46,8 @@ public:
     bool isHiddenGeometryVisible() const { return showHiddenGeometry; }
     void setShowGrid(bool show);
     bool showGrid() const { return gridVisible; }
+    void setFrameStatsVisible(bool visible);
+    bool frameStatsVisible() const { return frameStatsHudVisible; }
     void setSunSettings(const SunSettings& settings);
     void setBackgroundPalette(const QColor& sky, const QColor& ground, const QColor& horizonLine);
     const SunSettings& sunSettings() const { return environmentSettings; }
@@ -129,6 +131,7 @@ private:
     Renderer::RenderStyle renderStyle = Renderer::RenderStyle::ShadedWithEdges;
     bool showHiddenGeometry = false;
     bool gridVisible = true;
+    bool frameStatsHudVisible = false;
     SunSettings environmentSettings;
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");

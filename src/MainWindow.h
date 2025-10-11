@@ -186,6 +186,7 @@ private:
     QAction* zoomAction = nullptr;
     QAction* measureAction = nullptr;
     QAction* gridAction = nullptr;
+    QAction* actionShowFrameStatsHud = nullptr;
 
     QActionGroup* renderStyleGroup = nullptr;
     QActionGroup* paletteActionGroup = nullptr;
@@ -203,6 +204,7 @@ private:
     bool darkTheme = true;
     Renderer::RenderStyle renderStyleChoice = Renderer::RenderStyle::ShadedWithEdges;
     bool showHiddenGeometry = false;
+    bool showFrameStatsHud = false;
     QString currentViewPresetId = QStringLiteral("iso");
     ViewPresetManager viewPresetManager;
     SunSettings sunSettings;

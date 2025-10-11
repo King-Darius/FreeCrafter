@@ -22,6 +22,10 @@
 #include "../Interaction/InferenceEngine.h"
 #include "../NavigationConfig.h"
 
+namespace Core {
+class CommandStack;
+}
+
 struct ToolInferenceUpdateRequest {
     bool hasRay = false;
     Interaction::PickRay ray;
@@ -30,7 +34,7 @@ struct ToolInferenceUpdateRequest {
 
 class ToolManager {
 public:
-    ToolManager(Scene::Document* document, CameraController* c);
+    ToolManager(Scene::Document* document, CameraController* c, Core::CommandStack* stack = nullptr);
     Tool* getActiveTool() const { return active; }
     void activateTool(const char* name, bool temporary = false);
     void restorePreviousTool();
@@ -54,6 +58,8 @@ public:
     bool applyMeasurementOverride(double value);
 
     void setGeometryChangedCallback(std::function<void()> callback);
+    void setCommandStack(Core::CommandStack* stack);
+    void notifyExternalGeometryChange();
 
 private:
     void propagateViewport();
@@ -73,6 +79,7 @@ private:
     GeometryKernel* geometry = nullptr;
     CameraController* camera = nullptr;
     Scene::Document* document = nullptr;
+    Core::CommandStack* commandStack = nullptr;
     Interaction::InferenceEngine inferenceEngine;
     Interaction::InferenceResult currentInference;
     Interaction::InferenceResult stickyInference;

@@ -1,6 +1,12 @@
-#include "ScaleTool.h"
-
-#include <cmath>
+#include "ScaleTool.h"
+
+#include <algorithm>
+#include <cmath>
+#include <memory>
+
+#include "ToolCommands.h"
+#include "ToolGeometryUtils.h"
+#include <QString>
 #include <algorithm>
 
 #include "ToolGeometryUtils.h"
@@ -71,14 +77,49 @@ void ScaleTool::onPointerDown(const PointerInput& input)
 
     pivot = Vector3();
     for (GeometryObject* obj : selection) {
-        pivot += computeCentroid(*obj);
-    }
-    pivot = pivot / static_cast<float>(selection.size());
-
-    axis = determineAxis();
-    axisScaling = axis.lengthSquared() > 1e-6f;
-    if (axisScaling) {
-        axis = axis.normalized();
+        pivot += computeCentroid(*obj);    bool executed = false;
+    if (auto* stack = getCommandStack()) {
+        auto ids = selectionIds();
+        if (!ids.empty()) {
+            auto command = std::make_unique<Tools::ScaleObjectsCommand>(ids, pivot, scaleFactors, QStringLiteral("Scale"));
+            stack->push(std::move(command));
+            executed = true;
+        }
+    }
+    if (!executed) {
+        applyScale(scaleFactors);
+    }
+    dragging = false;
+    selection.clear();
+    scaleFactors = Vector3(1.0f, 1.0f, 1.0f);
+}
+void ScaleTool::applyScale(const Vector3& factors)
+{
+    if (!geometry)
+        return;
+    for (GeometryObject* obj : selection) {
+        if (!obj)
+            continue;
+        scaleObject(*obj, pivot, factors);
+    }
+}
+
+std::vector<Scene::Document::ObjectId> ScaleTool::selectionIds() const
+{
+    std::vector<Scene::Document::ObjectId> ids;
+    Scene::Document* doc = getDocument();
+    if (!doc)
+        return ids;
+    ids.reserve(selection.size());
+    for (GeometryObject* obj : selection) {
+        if (!obj)
+            continue;
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
+    }
+    return ids;
+}
     }
 
     Vector3 world;

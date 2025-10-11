@@ -28,10 +28,11 @@ Vector3 normalizeOrZero(const Vector3& value)
 }
 }
 
-ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
+ToolManager::ToolManager(Scene::Document* doc, CameraController* c, Core::CommandStack* stack)
     : geometry(doc ? &doc->geometry() : nullptr)
     , camera(c)
     , document(doc)
+    , commandStack(stack)
 {
     GeometryKernel* gPtr = geometry;
     tools.push_back(std::make_unique<SmartSelectTool>(gPtr, c));
@@ -65,6 +66,10 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
     active = tools.empty() ? nullptr : tools.front().get();
     if (active && !active->isNavigationTool()) {
         lastModelingTool = active;
+    }
+    for (auto& tool : tools) {
+        tool->setDocument(document);
+        tool->setCommandStack(commandStack);
     }
     propagateViewport();
     geometryRevision = geometry ? geometry->revision() : 0;
@@ -391,6 +396,25 @@ bool ToolManager::applyMeasurementOverride(double value)
 void ToolManager::setGeometryChangedCallback(std::function<void()> callback)
 {
     geometryChangedCallback = std::move(callback);
+}
+
+void ToolManager::setCommandStack(Core::CommandStack* stack)
+{
+    commandStack = stack;
+    for (auto& tool : tools) {
+        tool->setCommandStack(commandStack);
+    }
+}
+
+void ToolManager::notifyExternalGeometryChange()
+{
+    if (!geometry)
+        return;
+    geometryRevision = geometry->revision();
+    if (document)
+        document->synchronizeWithGeometry();
+    if (geometryChangedCallback)
+        geometryChangedCallback();
 }
 
 void ToolManager::propagateViewport()

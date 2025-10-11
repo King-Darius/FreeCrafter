@@ -12,6 +12,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "GeometryKernel/Solid.h"
 #include "GeometryKernel/GeometryKernel.h"
@@ -394,11 +395,20 @@ bool importGltf(const QString& path, Document& document, ImportResult& result)
     }
 
     std::unordered_map<const GeometryObject*, std::string> nameMap;
-    tempDocument.forEachNode([&](Scene::Document::ObjectNode& node) {
-        if (node.geometry) {
-            nameMap[node.geometry] = node.name;
+    std::vector<const Scene::Document::ObjectNode*> stack;
+    stack.push_back(&tempDocument.objectTree());
+    while (!stack.empty()) {
+        const Scene::Document::ObjectNode* node = stack.back();
+        stack.pop_back();
+        if (!node)
+            continue;
+        if (node->geometry) {
+            nameMap[node->geometry] = node->name;
         }
-    });
+        for (const auto& child : node->children) {
+            stack.push_back(child.get());
+        }
+    }
 
     const auto& sourceMaterials = tempDocument.geometry().getMaterials();
     for (const auto& objectPtr : imported) {

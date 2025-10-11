@@ -8,6 +8,8 @@ class Curve : public GeometryObject {
 public:
     static std::unique_ptr<Curve> createFromPoints(const std::vector<Vector3>& pts,
         const std::vector<bool>& edgeHardness = {});
+    static std::unique_ptr<Curve> createOpenPolyline(const std::vector<Vector3>& pts,
+        const std::vector<bool>& edgeHardness = {});
     bool rebuildFromPoints(const std::vector<Vector3>& pts, const std::vector<bool>& edgeHardness = {});
 
     ObjectType getType() const override { return ObjectType::Curve; }

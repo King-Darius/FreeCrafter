@@ -860,6 +860,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
         storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
         storedGridVisible = settings.value(QStringLiteral("%1/showGrid").arg(kSettingsGroup), storedGridVisible).toBool();
+        showFrameStatsHud = settings.value(QStringLiteral("%1/showFrameStatsHud").arg(kSettingsGroup), showFrameStatsHud).toBool();
 
         sunSettings.load(settings, QStringLiteral("Environment"));
 
@@ -869,6 +870,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     viewport->setShowHiddenGeometry(showHiddenGeometry);
     viewport->setShowGrid(storedGridVisible);
+    viewport->setFrameStatsVisible(showFrameStatsHud);
 
     viewport->setSunSettings(sunSettings);
 
@@ -1153,6 +1155,19 @@ void MainWindow::createMenus()
         gridAction->setChecked(viewport->showGrid());
     }
     connect(gridAction, &QAction::toggled, this, &MainWindow::toggleGrid);
+
+    actionShowFrameStatsHud = viewMenu->addAction(tr("Show Frame Stats HUD"));
+    actionShowFrameStatsHud->setCheckable(true);
+    actionShowFrameStatsHud->setStatusTip(tr("Show rendering performance stats in the viewport."));
+    actionShowFrameStatsHud->setChecked(showFrameStatsHud);
+    connect(actionShowFrameStatsHud, &QAction::toggled, this, [this](bool checked) {
+        showFrameStatsHud = checked;
+        if (viewport)
+            viewport->setFrameStatsVisible(checked);
+        persistViewSettings();
+        if (statusBar())
+            statusBar()->showMessage(checked ? tr("Frame stats overlay shown") : tr("Frame stats overlay hidden"), 1500);
+    });
 
     QMenu* insertMenu = menuBar()->addMenu(tr("&Insert"));
     insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
@@ -2277,6 +2292,8 @@ void MainWindow::persistViewSettings() const
 
     settings.setValue(QStringLiteral("showGrid"), viewport->showGrid());
 
+    settings.setValue(QStringLiteral("showFrameStatsHud"), showFrameStatsHud);
+
     settings.endGroup();
 
 }
@@ -2308,6 +2325,17 @@ void MainWindow::syncViewSettingsUI()
         gridAction->setChecked(viewport->showGrid());
 
     }
+
+    if (actionShowFrameStatsHud && viewport) {
+
+        QSignalBlocker blocker(actionShowFrameStatsHud);
+
+        actionShowFrameStatsHud->setChecked(viewport->frameStatsVisible());
+
+    }
+
+    if (viewport)
+        showFrameStatsHud = viewport->frameStatsVisible();
 
     updateViewPresetButtonLabel();
 

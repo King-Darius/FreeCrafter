@@ -6,6 +6,7 @@
 #include <QFontDatabase>
 #include <QStringList>
 #include <QSurfaceFormat>
+#include <QResource>
 
 int main(int argc, char* argv[])
 {
@@ -14,6 +15,8 @@ int main(int argc, char* argv[])
     fmt.setProfile(QSurfaceFormat::CoreProfile);
     fmt.setVersion(3, 3);
     QSurfaceFormat::setDefaultFormat(fmt);
+
+    Q_INIT_RESOURCE(resources);
 
     QApplication app(argc, argv);
 

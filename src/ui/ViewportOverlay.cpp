@@ -12,6 +12,8 @@ ViewportOverlay::ViewportOverlay(QWidget* parent)
 {
     setAttribute(Qt::WA_NoSystemBackground, true);
     setAttribute(Qt::WA_TranslucentBackground, true);
+    setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    setFocusPolicy(Qt::NoFocus);
     setFixedSize(100, 100);
 }
 

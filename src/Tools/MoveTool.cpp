@@ -1,9 +1,12 @@
 #include "MoveTool.h"
 
 #include <cmath>
+#include <memory>
 
 #include "CameraNavigation.h"
+#include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
+#include <QString>
 
 MoveTool::MoveTool(GeometryKernel* g, CameraController* c)
     : Tool(g, c)
@@ -84,7 +87,18 @@ void MoveTool::onCommit()
         translation = Vector3();
         return;
     }
-    applyTranslation(translation);
+    bool executed = false;
+    if (auto* stack = getCommandStack()) {
+        auto ids = selectionIds();
+        if (!ids.empty()) {
+            auto command = std::make_unique<Tools::TranslateObjectsCommand>(ids, translation, QStringLiteral("Move"));
+            stack->push(std::move(command));
+            executed = true;
+        }
+    }
+    if (!executed) {
+        applyTranslation(translation);
+    }
     dragging = false;
     selection.clear();
     translation = Vector3();
@@ -190,5 +204,22 @@ void MoveTool::applyTranslation(const Vector3& delta)
             continue;
         translateObject(*obj, delta);
     }
+}
+
+std::vector<Scene::Document::ObjectId> MoveTool::selectionIds() const
+{
+    std::vector<Scene::Document::ObjectId> ids;
+    Scene::Document* doc = getDocument();
+    if (!doc)
+        return ids;
+    ids.reserve(selection.size());
+    for (GeometryObject* obj : selection) {
+        if (!obj)
+            continue;
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
+    }
+    return ids;
 }
 

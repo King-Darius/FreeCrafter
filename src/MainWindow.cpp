@@ -11,11 +11,17 @@
 #include "NavigationPreferences.h"
 #include "PalettePreferences.h"
 #include "Scene/Document.h"
+#include "Scene/SceneCommands.h"
 #include "SunModel.h"
 #include "Tools/ToolManager.h"
+#include "ui/ExternalReferenceDialog.h"
+#include "ui/GuideManagerDialog.h"
+#include "ui/ImageImportDialog.h"
 #include "ui/EnvironmentPanel.h"
+#include "ui/InsertShapeDialog.h"
 #include "ui/InspectorPanel.h"
 #include "ui/MeasurementWidget.h"
+#include "ui/PluginManagerDialog.h"
 #include "ui/ViewSettingsDialog.h"
 
 #include <QAction>
@@ -52,6 +58,7 @@
 #include <initializer_list>
 #include <Qt>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -64,6 +71,21 @@ constexpr int kToolbarHeight = 48;
 constexpr int kStatusHeight = 28;
 
 const char* kSettingsGroup = "MainWindow";
+
+QString primitiveDisplayName(Scene::PrimitiveType type)
+{
+    switch (type) {
+    case Scene::PrimitiveType::Box:
+        return QObject::tr("box");
+    case Scene::PrimitiveType::Plane:
+        return QObject::tr("plane");
+    case Scene::PrimitiveType::Cylinder:
+        return QObject::tr("cylinder");
+    case Scene::PrimitiveType::Sphere:
+        return QObject::tr("sphere");
+    }
+    return QObject::tr("primitive");
+}
 
 QString renderStyleToSetting(Renderer::RenderStyle style)
 
@@ -1181,18 +1203,33 @@ void MainWindow::createMenus()
     });
 
     QMenu* insertMenu = menuBar()->addMenu(tr("&Insert"));
-    insertMenu->addAction(tr("Shapes"), this, [this]() { statusBar()->showMessage(tr("Insert Shapes not implemented"), 2000); });
-    insertMenu->addAction(tr("Guides"), this, [this]() { statusBar()->showMessage(tr("Insert Guides not implemented"), 2000); });
-    insertMenu->addAction(tr("Images"), this, [this]() { statusBar()->showMessage(tr("Insert Images not implemented"), 2000); });
-    insertMenu->addAction(tr("External Reference"), this, [this]() { statusBar()->showMessage(tr("External references not implemented"), 2000); });
+    QAction* insertShapesAction = insertMenu->addAction(tr("Shapes"), this, &MainWindow::showInsertShapesDialog);
+    insertShapesAction->setStatusTip(tr("Open the primitive dialog to add a box, plane, cylinder, or sphere."));
+    insertShapesAction->setToolTip(tr("Insert primitive geometry"));
+
+    QAction* insertGuidesAction = insertMenu->addAction(tr("Guides"), this, &MainWindow::showGuideManager);
+    insertGuidesAction->setStatusTip(tr("Open the guide manager to add or clear axis guides."));
+    insertGuidesAction->setToolTip(tr("Manage drawing guides"));
+
+    QAction* insertImagesAction = insertMenu->addAction(tr("Images"), this, &MainWindow::showImageImportDialog);
+    insertImagesAction->setStatusTip(tr("Import an image as a reference plane in the scene."));
+    insertImagesAction->setToolTip(tr("Insert reference image"));
+
+    QAction* insertReferenceAction = insertMenu->addAction(tr("External Reference"), this, &MainWindow::showExternalReferenceDialog);
+    insertReferenceAction->setStatusTip(tr("Link an external model as a proxy in the current document."));
+    insertReferenceAction->setToolTip(tr("Link external model"));
 
     QMenu* toolsMenu = menuBar()->addMenu(tr("&Tools"));
-    toolsMenu->addAction(tr("Plugins..."), this, [this]() { statusBar()->showMessage(tr("Plugin manager not implemented"), 2000); });
+    QAction* pluginManagerAction = toolsMenu->addAction(tr("Plugins..."), this, &MainWindow::showPluginManagerDialog);
+    pluginManagerAction->setStatusTip(tr("Inspect discovered plugins and refresh the plugin search paths."));
+    pluginManagerAction->setToolTip(tr("Open plugin manager"));
     actionPalette = toolsMenu->addAction(tr("Command Palette..."), this, &MainWindow::showCommandPalette);
     actionPalette->setIcon(QIcon(QStringLiteral(":/icons/search.svg")));
 
     QMenu* windowMenu = menuBar()->addMenu(tr("&Window"));
-    windowMenu->addAction(tr("New Window"), this, [this]() { statusBar()->showMessage(tr("New window not implemented"), 2000); });
+    QAction* newWindowAction = windowMenu->addAction(tr("New Window"), this, &MainWindow::spawnNewWindow);
+    newWindowAction->setStatusTip(tr("Open a second FreeCrafter window."));
+    newWindowAction->setToolTip(tr("Open another window"));
 
     QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
     actionShortcuts = helpMenu->addAction(tr("Keyboard Shortcuts"), this, &MainWindow::showKeyboardShortcuts);
@@ -1372,6 +1409,181 @@ void MainWindow::exportFile()
     }
 
     statusBar()->showMessage(tr("Exported \"%1\"").arg(QFileInfo(filePath).fileName()), 4000);
+}
+
+void MainWindow::showInsertShapesDialog()
+{
+    if (!viewport) {
+        statusBar()->showMessage(tr("No viewport available for inserting shapes."), 3000);
+        return;
+    }
+    Scene::Document* document = viewport->getDocument();
+    if (!document) {
+        statusBar()->showMessage(tr("No active document for inserting shapes."), 3000);
+        return;
+    }
+    if (!undoStack) {
+        statusBar()->showMessage(tr("Undo stack unavailable; cannot insert shapes."), 3000);
+        return;
+    }
+
+    InsertShapeDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    Scene::PrimitiveOptions options = dialog.selectedOptions();
+    auto* command = new Scene::AddPrimitiveCommand(*document, options);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to insert shape: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
+        return;
+    }
+    command->undo();
+    undoStack->push(command);
+
+    viewport->update();
+    statusBar()->showMessage(tr("Inserted %1").arg(primitiveDisplayName(options.type)), 2500);
+}
+
+void MainWindow::showGuideManager()
+{
+    GeometryKernel::GuideState current;
+    Scene::Document* document = nullptr;
+    if (viewport)
+        document = viewport->getDocument();
+    if (document)
+        current = document->geometry().getGuides();
+
+    GuideManagerDialog dialog(current, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    if (!document || !undoStack) {
+        statusBar()->showMessage(tr("Unable to update guides without an active document."), 3000);
+        return;
+    }
+
+    GeometryKernel::GuideState next = dialog.selectedState();
+    auto* command = new Scene::SetGuidesCommand(*document, next);
+    undoStack->push(command);
+    viewport->update();
+    if (next.lines.empty() && next.points.empty() && next.angles.empty()) {
+        statusBar()->showMessage(tr("Cleared all guides."), 2000);
+    } else {
+        statusBar()->showMessage(tr("Updated guides."), 2000);
+    }
+}
+
+void MainWindow::showImageImportDialog()
+{
+    if (!viewport) {
+        statusBar()->showMessage(tr("No viewport available for image import."), 3000);
+        return;
+    }
+    Scene::Document* document = viewport->getDocument();
+    if (!document) {
+        statusBar()->showMessage(tr("No active document for image import."), 3000);
+        return;
+    }
+    if (!undoStack) {
+        statusBar()->showMessage(tr("Undo stack unavailable; cannot import image."), 3000);
+        return;
+    }
+
+    ImageImportDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    Scene::ImagePlaneOptions options = dialog.options();
+    if (options.filePath.empty()) {
+        statusBar()->showMessage(tr("No image selected."), 2000);
+        return;
+    }
+
+    auto* command = new Scene::AddImagePlaneCommand(*document, options);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to insert image: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
+        return;
+    }
+    command->undo();
+    undoStack->push(command);
+
+    viewport->update();
+    statusBar()->showMessage(tr("Inserted image plane \"%1\"").arg(QFileInfo(QString::fromStdString(options.filePath)).fileName()), 2500);
+}
+
+void MainWindow::showExternalReferenceDialog()
+{
+    if (!viewport) {
+        statusBar()->showMessage(tr("No viewport available for linking references."), 3000);
+        return;
+    }
+    Scene::Document* document = viewport->getDocument();
+    if (!document) {
+        statusBar()->showMessage(tr("No active document for linking references."), 3000);
+        return;
+    }
+    if (!undoStack) {
+        statusBar()->showMessage(tr("Undo stack unavailable; cannot link reference."), 3000);
+        return;
+    }
+
+    ExternalReferenceDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    Scene::ExternalReferenceOptions options = dialog.options();
+    if (options.filePath.empty()) {
+        statusBar()->showMessage(tr("No reference selected."), 2000);
+        return;
+    }
+
+    if (options.displayName.empty()) {
+        options.displayName = QFileInfo(QString::fromStdString(options.filePath)).completeBaseName().toStdString();
+    }
+
+    auto* command = new Scene::LinkExternalReferenceCommand(*document, options);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to link reference: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
+        return;
+    }
+    command->undo();
+    undoStack->push(command);
+
+    viewport->update();
+    statusBar()->showMessage(tr("Linked external reference \"%1\"").arg(QString::fromStdString(options.displayName)), 2500);
+}
+
+void MainWindow::showPluginManagerDialog()
+{
+    PluginManagerDialog dialog(this);
+    dialog.exec();
+    statusBar()->showMessage(tr("Plugin manager closed."), 2000);
+}
+
+void MainWindow::spawnNewWindow()
+{
+    auto cleanup = [this]() {
+        secondaryWindows.erase(std::remove_if(secondaryWindows.begin(), secondaryWindows.end(), [](const QPointer<MainWindow>& window) {
+                                return window.isNull();
+                            }),
+                            secondaryWindows.end());
+    };
+    cleanup();
+
+    MainWindow* window = new MainWindow();
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    window->show();
+    secondaryWindows.push_back(window);
+    statusBar()->showMessage(tr("Opened a new window."), 2000);
 }
 
 void MainWindow::onUndo()

@@ -31,6 +31,7 @@ class QSize;
 #include "ui/ViewportOverlay.h"
 
 #include <QHash>
+#include <QVector>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -45,6 +46,12 @@ private slots:
     void saveFile();
     void saveFileAs();
     void exportFile();
+    void showInsertShapesDialog();
+    void showGuideManager();
+    void showImageImportDialog();
+    void showExternalReferenceDialog();
+    void showPluginManagerDialog();
+    void spawnNewWindow();
     void onUndo();
     void onRedo();
     void showPreferences();
@@ -198,6 +205,7 @@ private:
     QAction* actionViewHiddenGeometry = nullptr;
 
     QActionGroup* toolActionGroup = nullptr;
+    QVector<QPointer<MainWindow>> secondaryWindows;
 
     HotkeyManager hotkeys;
     QHash<QString, QAction*> paletteActions;

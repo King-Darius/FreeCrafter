@@ -795,6 +795,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera());
     undoStack = new QUndoStack(this);
 
+    toolManager->setGeometryChangedCallback([this]() {
+        updateSelectionStatus();
+        if (viewport)
+            viewport->update();
+    });
+
     toolManager->setNavigationConfig(navigationPrefs->config());
 
     viewport->setToolManager(toolManager.get());
@@ -2369,19 +2375,16 @@ void MainWindow::updateShadowStatus(const SunSettings& previous, const SunSettin
 
         return;
 
+    constexpr float kAngleEpsilon = 0.1f;
+    auto nearlyEqual = [](float a, float b, float epsilon) {
+        return std::fabs(a - b) <= epsilon;
+    };
+
     bool changed = previous.shadowsEnabled != current.shadowsEnabled
 
-        || previous.date != current.date
+        || !nearlyEqual(previous.elevationDegrees, current.elevationDegrees, kAngleEpsilon)
 
-        || previous.time != current.time
-
-        || !qFuzzyCompare(previous.latitude, current.latitude)
-
-        || !qFuzzyCompare(previous.longitude, current.longitude)
-
-        || previous.timezoneMinutes != current.timezoneMinutes
-
-        || previous.daylightSaving != current.daylightSaving;
+        || !nearlyEqual(previous.azimuthDegrees, current.azimuthDegrees, kAngleEpsilon);
 
     if (!changed)
 
@@ -2395,15 +2398,9 @@ void MainWindow::updateShadowStatus(const SunSettings& previous, const SunSettin
 
     }
 
-    SunModel::Result result = SunModel::computeSunDirection(current.date,
+    SunModel::Result result = SunModel::computeSunDirection(current.elevationDegrees,
 
-                                                            current.time,
-
-                                                            current.latitude,
-
-                                                            current.longitude,
-
-                                                            current.effectiveTimezoneMinutes());
+                                                            current.azimuthDegrees);
 
     if (result.valid) {
 

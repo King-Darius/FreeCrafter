@@ -28,7 +28,7 @@ float clampFov(float value)
 
 CameraController::CameraController()
     : yaw(45.0f)
-    , pitch(-30.0f)
+    , pitch(35.0f)
     , distance(20.0f)
     , targetX(0.0f)
     , targetY(0.0f)

@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QPointer>
+#include <QString>
 #include <memory>
 
 class GLViewport;
@@ -20,6 +21,7 @@ class InspectorPanel;
 class TerminalDock;
 class QUndoStack;
 class QSize;
+class AutosaveManager;
 
 #include "HotkeyManager.h"
 #include "Renderer.h"
@@ -103,6 +105,7 @@ private:
     void applyThemeStylesheet();
     void restoreWindowState();
     void persistWindowState();
+    void persistAutosaveSettings() const;
     void setActiveTool(QAction* action, const QString& toolId, const QString& hint);
     QString navigationHintForTool(const QString& toolName) const;
     void refreshNavigationActionHints();
@@ -119,12 +122,16 @@ private:
     void handleSunSettingsChanged(const SunSettings& settings);
     void updateShadowStatus(const SunSettings& previous, const SunSettings& current);
     void closeEvent(QCloseEvent* event) override;
+    void initializeAutosave();
+    void maybeRestoreAutosave();
+    void updateAutosaveSource(const QString& path, bool purgePreviousPrefix);
 
     GLViewport* viewport = nullptr;
     std::unique_ptr<ToolManager> toolManager;
     std::unique_ptr<Core::CommandStack> commandStack;
     std::unique_ptr<NavigationPreferences> navigationPrefs;
     std::unique_ptr<PalettePreferences> palettePrefs;
+    std::unique_ptr<AutosaveManager> autosaveManager;
     MeasurementWidget* measurementWidget = nullptr;
     InspectorPanel* inspectorPanel = nullptr;
     QLabel* hintLabel = nullptr;
@@ -177,6 +184,8 @@ private:
     QAction* actionSettings = nullptr;
     QAction* actionShortcuts = nullptr;
     QUndoStack* undoStack = nullptr;
+
+    QString currentDocumentPath;
 
     QAction* selectAction = nullptr;
     QAction* lineAction = nullptr;

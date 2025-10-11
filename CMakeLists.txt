@@ -43,6 +43,7 @@ add_library(freecrafter_lib
     src/PalettePreferences.cpp
     src/Core/Command.cpp
     src/Core/CommandStack.cpp
+    src/app/AutosaveManager.cpp
     src/Navigation/ViewPresetManager.cpp
     src/GeometryKernel/Curve.cpp
     src/GeometryKernel/HalfEdgeMesh.cpp
@@ -102,6 +103,7 @@ add_library(freecrafter_lib
 target_include_directories(freecrafter_lib
     PRIVATE
         src
+        src/app
         src/GeometryKernel
         src/Tools
         src/Interaction
@@ -198,6 +200,11 @@ add_executable(test_tool_activation tests/test_tool_activation.cpp)
 target_include_directories(test_tool_activation PRIVATE src)
 target_link_libraries(test_tool_activation PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME tool_activation COMMAND $<TARGET_FILE:test_tool_activation>)
+
+add_executable(test_autosave tests/test_autosave.cpp)
+target_include_directories(test_autosave PRIVATE src)
+target_link_libraries(test_autosave PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME autosave_manager COMMAND $<TARGET_FILE:test_autosave>)
 
 add_executable(test_exporters tests/file_io/test_exporters.cpp)
 target_include_directories(test_exporters PRIVATE src)

@@ -91,6 +91,7 @@ add_library(freecrafter_lib
     src/ui/ExplorerPanel.cpp
     src/ui/HistoryPanel.cpp
     src/ui/RightTray.cpp
+    src/ui/TerminalDock.cpp
     src/ui/ViewportOverlay.cpp
     resources.qrc
 )

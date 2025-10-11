@@ -5,6 +5,7 @@
 #endif
 
 #include "FileIO/Exporters/SceneExporter.h"
+#include "FileIO/SceneIOFormat.h"
 #include "GLViewport.h"
 #include "NavigationConfig.h"
 #include "NavigationPreferences.h"
@@ -943,6 +944,10 @@ void MainWindow::createMenus()
     actionOpen->setIcon(QIcon(QStringLiteral(":/icons/open.svg")));
     actionOpen->setStatusTip(tr("Open an existing FreeCrafter document"));
 
+    actionImport = fileMenu->addAction(tr("Import..."), this, &MainWindow::importExternalModel);
+    actionImport->setIcon(QIcon(QStringLiteral(":/icons/import.svg")));
+    actionImport->setStatusTip(tr("Import external geometry into the active document"));
+
     actionSave = fileMenu->addAction(tr("Save"), this, &MainWindow::saveFile);
     actionSave->setIcon(QIcon(QStringLiteral(":/icons/save.svg")));
     actionSave->setStatusTip(tr("Save the active document"));
@@ -1212,23 +1217,68 @@ void MainWindow::createMenus()
 
 void MainWindow::importExternalModel()
 {
-    const QString filter = tr("3D Models (*.obj *.stl *.fbx *.dxf *.dwg);;Wavefront OBJ (*.obj);;STL (*.stl);;FBX (*.fbx);;DXF (*.dxf);;DWG (*.dwg)");
+    QStringList wildcardFilters;
+    QStringList formatFilters;
+    const auto availableFormats = FileIO::availableSceneFormats();
+    for (auto format : availableFormats) {
+        const std::string extension = FileIO::formatExtension(format);
+        if (!extension.empty()) {
+            QString ext = QString::fromStdString(extension);
+            if (ext.startsWith(QLatin1Char('.')))
+                ext.remove(0, 1);
+            if (!ext.isEmpty())
+                wildcardFilters << QStringLiteral("*.%1").arg(ext);
+        }
+        const std::string filterString = FileIO::formatFilterString(format);
+        if (!filterString.empty())
+            formatFilters << QString::fromStdString(filterString);
+    }
+
+    QStringList filters;
+    if (!wildcardFilters.isEmpty()) {
+        filters << tr("Supported 3D Models (%1)").arg(wildcardFilters.join(QLatin1Char(' ')));
+    }
+    filters.append(formatFilters);
+    if (filters.isEmpty()) {
+        filters << tr("All Files (*)");
+    }
+    const QString filter = filters.join(QStringLiteral(";;"));
+
     const QString fileName = QFileDialog::getOpenFileName(this, tr("Import Model"), QString(), filter);
     if (fileName.isEmpty())
         return;
 
     Scene::Document::FileFormat format = Scene::Document::FileFormat::Auto;
-    const QString suffix = QFileInfo(fileName).suffix().toLower();
-    if (suffix == QLatin1String("obj")) {
-        format = Scene::Document::FileFormat::Obj;
-    } else if (suffix == QLatin1String("stl")) {
-        format = Scene::Document::FileFormat::Stl;
-    } else if (suffix == QLatin1String("fbx")) {
-        format = Scene::Document::FileFormat::Fbx;
-    } else if (suffix == QLatin1String("dxf")) {
-        format = Scene::Document::FileFormat::Dxf;
-    } else if (suffix == QLatin1String("dwg")) {
-        format = Scene::Document::FileFormat::Dwg;
+    const QFileInfo info(fileName);
+    const QString suffix = info.suffix().toLower();
+    if (!suffix.isEmpty()) {
+        const auto sceneFormat = FileIO::sceneFormatFromExtension(suffix.toStdString());
+        if (sceneFormat) {
+            switch (*sceneFormat) {
+            case FileIO::SceneFormat::OBJ:
+                format = Scene::Document::FileFormat::Obj;
+                break;
+            case FileIO::SceneFormat::STL:
+                format = Scene::Document::FileFormat::Stl;
+                break;
+            case FileIO::SceneFormat::GLTF:
+                format = Scene::Document::FileFormat::Gltf;
+                break;
+            case FileIO::SceneFormat::FBX:
+                format = Scene::Document::FileFormat::Fbx;
+                break;
+            default:
+                break;
+            }
+        }
+
+        if (format == Scene::Document::FileFormat::Auto) {
+            if (suffix == QLatin1String("dxf")) {
+                format = Scene::Document::FileFormat::Dxf;
+            } else if (suffix == QLatin1String("dwg")) {
+                format = Scene::Document::FileFormat::Dwg;
+            }
+        }
     }
 
     Scene::Document* doc = viewport ? viewport->getDocument() : nullptr;
@@ -1378,6 +1428,8 @@ void MainWindow::createToolbars()
     primaryToolbar->addAction(actionNew);
 
     primaryToolbar->addAction(actionOpen);
+
+    primaryToolbar->addAction(actionImport);
 
     primaryToolbar->addAction(actionSave);
 
@@ -1782,6 +1834,7 @@ void MainWindow::registerShortcuts()
 
     hotkeys.registerAction(QStringLiteral("file.open"), actionOpen);
 
+    hotkeys.registerAction(QStringLiteral("file.import"), actionImport);
     hotkeys.registerAction(QStringLiteral("file.save"), actionSave);
 
     hotkeys.registerAction(QStringLiteral("file.saveAs"), actionSaveAs);
@@ -1881,7 +1934,9 @@ void MainWindow::registerShortcuts()
 
         if (actionOpen) actionOpen->setToolTip(format(actionOpen, tr("Open")));
 
+        if (actionImport) actionImport->setToolTip(format(actionImport, tr("Import")));
         if (actionSave) actionSave->setToolTip(format(actionSave, tr("Save")));
+        if (actionExport) actionExport->setToolTip(format(actionExport, tr("Export")));
 
         if (actionUndo) actionUndo->setToolTip(format(actionUndo, tr("Undo")));
 

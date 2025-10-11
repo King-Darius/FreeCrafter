@@ -51,6 +51,8 @@ add_library(freecrafter_lib
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp
     src/Scene/Document.cpp
+    src/Scene/PrimitiveBuilder.cpp
+    src/Scene/SceneCommands.cpp
     src/Scene/SceneSettings.cpp
     src/Scene/SectionPlane.cpp
     src/FileIO/Importers/FileImporter.cpp
@@ -79,6 +81,11 @@ add_library(freecrafter_lib
     src/ui/InspectorPanel.cpp
     src/ui/ViewSettingsDialog.cpp
     src/ui/EnvironmentPanel.cpp
+    src/ui/InsertShapeDialog.cpp
+    src/ui/GuideManagerDialog.cpp
+    src/ui/ImageImportDialog.cpp
+    src/ui/ExternalReferenceDialog.cpp
+    src/ui/PluginManagerDialog.cpp
     src/ui/LeftToolPalette.cpp
     src/ui/CollapsibleSection.cpp
     src/ui/ExplorerPanel.cpp
@@ -157,6 +164,11 @@ if(EXISTS "${_qt_bin_dir}")
 endif()
 
 add_test(NAME scene_settings COMMAND $<TARGET_FILE:test_scene_settings>)
+
+add_executable(test_scene_commands tests/test_scene_commands.cpp)
+target_include_directories(test_scene_commands PRIVATE src)
+target_link_libraries(test_scene_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME scene_commands COMMAND $<TARGET_FILE:test_scene_commands>)
 
 add_executable(test_phase4 tests/test_phase4.cpp)
 target_include_directories(test_phase4 PRIVATE src)

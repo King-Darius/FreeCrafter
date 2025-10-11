@@ -60,6 +60,28 @@ int main() {
     }
     assert(foundTop && foundBottom);
 
+    GeometryKernel::ExtrudeOptions options;
+    options.capStart = false;
+    options.capEnd = true;
+    GeometryObject* uncapped = kernel.extrudeCurve(curveObj, height, options);
+    assert(uncapped);
+    auto* uncappedSolid = static_cast<Solid*>(uncapped);
+    const auto& uncappedMesh = uncappedSolid->getMesh();
+    bool bottomFound = false;
+    for (const auto& face : uncappedMesh.getFaces()) {
+        if (face.normal.y < -0.9f)
+            bottomFound = true;
+    }
+    assert(!bottomFound);
+    kernel.deleteObject(uncapped);
+
+    Vector3 sweepDirection{ 0.0f, height, 1.5f };
+    GeometryObject* swept = kernel.extrudeCurveAlongVector(curveObj, sweepDirection);
+    assert(swept);
+    auto* sweptSolid = static_cast<Solid*>(swept);
+    assert(std::fabs(sweptSolid->getHeight() - sweepDirection.length()) < 1e-5f);
+    kernel.deleteObject(swept);
+
     // tiny extrusion ignored
     assert(kernel.extrudeCurve(curveObj, 1e-5f) == nullptr);
 

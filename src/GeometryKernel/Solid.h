@@ -9,8 +9,14 @@ class Curve;
 
 class Solid : public GeometryObject {
 public:
-    static std::unique_ptr<Solid> createFromProfile(const std::vector<Vector3>& baseProfile, float height);
-    static std::unique_ptr<Solid> createFromCurve(const Curve& curve, float height);
+    static std::unique_ptr<Solid> createFromProfile(const std::vector<Vector3>& baseProfile, float height,
+        bool capStart = true, bool capEnd = true);
+    static std::unique_ptr<Solid> createFromProfileWithVector(const std::vector<Vector3>& baseProfile,
+        const Vector3& direction, bool capStart = true, bool capEnd = true);
+    static std::unique_ptr<Solid> createFromCurve(const Curve& curve, float height,
+        bool capStart = true, bool capEnd = true);
+    static std::unique_ptr<Solid> createFromCurveWithVector(const Curve& curve, const Vector3& direction,
+        bool capStart = true, bool capEnd = true);
     static std::unique_ptr<Solid> createFromMesh(HalfEdgeMesh mesh);
 
     ObjectType getType() const override { return ObjectType::Solid; }

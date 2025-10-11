@@ -17,6 +17,7 @@ class NavigationPreferences;
 class PalettePreferences;
 class EnvironmentPanel;
 class InspectorPanel;
+class TerminalDock;
 class QUndoStack;
 class QSize;
 
@@ -94,6 +95,7 @@ private:
     void createDockPanels();
     void createLeftDock();
     void createRightDock();
+    void createTerminalDock();
     void customizeViewport();
     void createStatusBarWidgets();
     void registerShortcuts();
@@ -135,9 +137,11 @@ private:
     QPointer<QToolButton> viewPresetToolButton;
     QDockWidget* leftDock_ = nullptr;
     QDockWidget* rightDock_ = nullptr;
+    QDockWidget* terminalDock_ = nullptr;
     QWidget* viewportWidget_ = nullptr;
     ViewportOverlay* overlay_ = nullptr;
     RightTray* rightTray_ = nullptr;
+    TerminalDock* terminalWidget_ = nullptr;
 
     QAction* actionNew = nullptr;
     QAction* actionOpen = nullptr;
@@ -217,4 +221,6 @@ private:
     ViewPresetManager viewPresetManager;
     SunSettings sunSettings;
     EnvironmentPanel* environmentPanel = nullptr;
+    bool isRestoringWindowState_ = false;
+    bool initializingTerminalDock_ = false;
 };

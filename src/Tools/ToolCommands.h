@@ -30,6 +30,27 @@ private:
     Scene::Document::ObjectId createdId_ = 0;
 };
 
+class ExtrudeProfileCommand : public Core::Command {
+public:
+    ExtrudeProfileCommand(Scene::Document::ObjectId profileId,
+                          std::optional<Scene::Document::ObjectId> pathId,
+                          Vector3 direction, bool capStart, bool capEnd,
+                          const QString& description, std::string name = {});
+
+protected:
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Scene::Document::ObjectId profileId_ = 0;
+    std::optional<Scene::Document::ObjectId> pathId_;
+    Vector3 direction_;
+    bool capStart_ = true;
+    bool capEnd_ = true;
+    std::string name_;
+    Scene::Document::ObjectId createdId_ = 0;
+};
+
 class TranslateObjectsCommand : public Core::Command {
 public:
     TranslateObjectsCommand(std::vector<Scene::Document::ObjectId> ids, Vector3 delta, const QString& description);

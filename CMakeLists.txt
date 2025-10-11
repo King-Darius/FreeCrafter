@@ -67,6 +67,8 @@ add_library(freecrafter_lib
     src/Tools/RotateTool.cpp
     src/Tools/ScaleTool.cpp
     src/Tools/ExtrudeTool.cpp
+    src/Tools/ChamferTool.cpp
+    src/Tools/LoftTool.cpp
     src/Tools/GroundProjection.cpp
     src/Tools/DrawingTools.cpp
     src/Tools/ToolCommands.cpp
@@ -84,6 +86,8 @@ add_library(freecrafter_lib
     src/ui/MeasurementWidget.cpp
     src/ui/InspectorPanel.cpp
     src/ui/ViewSettingsDialog.cpp
+    src/ui/ChamferOptionsDialog.cpp
+    src/ui/LoftOptionsDialog.cpp
     src/ui/EnvironmentPanel.cpp
     src/ui/InsertShapeDialog.cpp
     src/ui/GuideManagerDialog.cpp
@@ -92,11 +96,14 @@ add_library(freecrafter_lib
     src/ui/PluginManagerDialog.cpp
     src/ui/LeftToolPalette.cpp
     src/ui/CollapsibleSection.cpp
-    src/ui/ExplorerPanel.cpp
+    src/ui/OutlinerPanel.cpp
+    src/ui/MaterialsPanel.cpp
+    src/ui/TagsPanel.cpp
     src/ui/HistoryPanel.cpp
     src/ui/RightTray.cpp
     src/ui/TerminalDock.cpp
     src/ui/ViewportOverlay.cpp
+    src/Scene/SceneGraphCommands.cpp
     resources.qrc
 )
 
@@ -200,6 +207,11 @@ add_executable(test_tool_activation tests/test_tool_activation.cpp)
 target_include_directories(test_tool_activation PRIVATE src)
 target_link_libraries(test_tool_activation PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME tool_activation COMMAND $<TARGET_FILE:test_tool_activation>)
+
+add_executable(test_advanced_tools tests/test_advanced_tools.cpp)
+target_include_directories(test_advanced_tools PRIVATE src)
+target_link_libraries(test_advanced_tools PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME advanced_tools COMMAND $<TARGET_FILE:test_advanced_tools>)
 
 add_executable(test_autosave tests/test_autosave.cpp)
 target_include_directories(test_autosave PRIVATE src)

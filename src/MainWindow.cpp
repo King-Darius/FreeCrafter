@@ -13,11 +13,15 @@
 #include "Scene/Document.h"
 #include "Scene/SceneCommands.h"
 #include "SunModel.h"
+#include "Tools/ChamferTool.h"
+#include "Tools/LoftTool.h"
 #include "Tools/ToolManager.h"
 #include "app/AutosaveManager.h"
 #include "ui/ExternalReferenceDialog.h"
 #include "ui/GuideManagerDialog.h"
 #include "ui/ImageImportDialog.h"
+#include "ui/ChamferOptionsDialog.h"
+#include "ui/LoftOptionsDialog.h"
 #include "ui/EnvironmentPanel.h"
 #include "ui/InsertShapeDialog.h"
 #include "ui/InspectorPanel.h"
@@ -59,6 +63,9 @@
 #include <QWidgetAction>
 #include <QStringList>
 #include <QColor>
+#include <QStackedWidget>
+#include <QDoubleSpinBox>
+#include <QHBoxLayout>
 #include <initializer_list>
 #include <Qt>
 
@@ -823,10 +830,24 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     commandStack = std::make_unique<Core::CommandStack>(undoStack);
     toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera(), commandStack.get());
 
+    chamferDefaults_.radius = 0.1f;
+    chamferDefaults_.segments = 6;
+    chamferDefaults_.style = Phase6::CornerStyle::Chamfer;
+    chamferDefaults_.tagHardEdges = true;
+
+    loftDefaults_.sections = 8;
+    loftDefaults_.closeRails = false;
+    loftDefaults_.smoothNormals = true;
+    loftDefaults_.twistDegrees = 0.0f;
+    loftDefaults_.smoothingPasses = 1;
+    loftDefaults_.symmetricPairing = false;
+
     toolManager->setGeometryChangedCallback([this]() {
         updateSelectionStatus();
         if (viewport)
             viewport->update();
+        if (rightTray_)
+            rightTray_->refreshPanels();
     });
 
     if (commandStack) {
@@ -836,11 +857,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         context.geometryChanged = [this]() {
             if (toolManager)
                 toolManager->notifyExternalGeometryChange();
+            if (rightTray_)
+                rightTray_->refreshPanels();
         };
         context.selectionChanged = [this](const std::vector<Scene::Document::ObjectId>&) {
             updateSelectionStatus();
             if (viewport)
                 viewport->update();
+            if (rightTray_)
+                rightTray_->refreshPanels();
         };
         commandStack->setContext(context);
     }
@@ -1561,6 +1586,18 @@ void MainWindow::createMenus()
     actionPalette = toolsMenu->addAction(tr("Command Palette..."), this, &MainWindow::showCommandPalette);
     actionPalette->setIcon(QIcon(QStringLiteral(":/icons/search.svg")));
 
+    advancedToolsMenu = toolsMenu->addMenu(tr("Advanced Tools"));
+    chamferOptionsAction = advancedToolsMenu->addAction(tr("Chamfer Options..."), this, &MainWindow::showChamferOptionsDialog);
+    if (chamferOptionsAction) {
+        chamferOptionsAction->setStatusTip(tr("Adjust chamfer defaults including radius and segments."));
+        chamferOptionsAction->setToolTip(tr("Configure chamfer tool"));
+    }
+    loftOptionsAction = advancedToolsMenu->addAction(tr("Loft Options..."), this, &MainWindow::showLoftOptionsDialog);
+    if (loftOptionsAction) {
+        loftOptionsAction->setStatusTip(tr("Adjust loft sections, twist, and smoothing."));
+        loftOptionsAction->setToolTip(tr("Configure loft tool"));
+    }
+
     QMenu* windowMenu = menuBar()->addMenu(tr("&Window"));
     QAction* newWindowAction = windowMenu->addAction(tr("New Window"), this, &MainWindow::spawnNewWindow);
     newWindowAction->setStatusTip(tr("Open a second FreeCrafter window."));
@@ -2182,6 +2219,16 @@ void MainWindow::createToolbars()
                      tr("Extrude"),
                      &MainWindow::activateExtrude,
                      tr("Push or pull faces to add volume."));
+    createToolAction(chamferAction,
+                     QStringLiteral(":/icons/offset.png"),
+                     tr("Chamfer"),
+                     &MainWindow::activateChamfer,
+                     tr("Apply chamfers or fillets to a selected curve."));
+    createToolAction(loftAction,
+                     QStringLiteral(":/icons/followme.png"),
+                     tr("Loft"),
+                     &MainWindow::activateLoft,
+                     tr("Create a lofted solid between two selected profiles."));
     createToolAction(sectionAction,
                      QStringLiteral(":/icons/section.png"),
                      tr("Section"),
@@ -2207,6 +2254,225 @@ void MainWindow::createToolbars()
                      tr("Measure"),
                      &MainWindow::activateMeasure,
                      tr("Measure distances in the model."));
+
+    toolOptionsToolbar = addToolBar(tr("Tool Options"));
+    if (toolOptionsToolbar) {
+        toolOptionsToolbar->setObjectName(QStringLiteral("ToolOptionsToolbar"));
+        toolOptionsToolbar->setMovable(false);
+        toolOptionsToolbar->setFloatable(false);
+        toolOptionsToolbar->setIconSize(QSize(18, 18));
+
+        auto* optionsContainer = new QWidget(toolOptionsToolbar);
+        auto* optionsLayout = new QHBoxLayout(optionsContainer);
+        optionsLayout->setContentsMargins(8, 4, 8, 4);
+        optionsLayout->setSpacing(8);
+        toolOptionsStack = new QStackedWidget(optionsContainer);
+        optionsLayout->addWidget(toolOptionsStack);
+        optionsContainer->setLayout(optionsLayout);
+        auto* optionsAction = new QWidgetAction(toolOptionsToolbar);
+        optionsAction->setDefaultWidget(optionsContainer);
+        toolOptionsToolbar->addAction(optionsAction);
+
+        toolOptionsPlaceholder = new QWidget(toolOptionsStack);
+        if (toolOptionsPlaceholder) {
+            auto* placeholderLayout = new QHBoxLayout(toolOptionsPlaceholder);
+            placeholderLayout->setContentsMargins(0, 0, 0, 0);
+            placeholderLayout->setSpacing(4);
+            auto* placeholderLabel = new QLabel(tr("No active tool options"), toolOptionsPlaceholder);
+            placeholderLayout->addWidget(placeholderLabel);
+            placeholderLayout->addStretch(1);
+        }
+        if (toolOptionsStack && toolOptionsPlaceholder)
+            toolOptionsStack->addWidget(toolOptionsPlaceholder);
+
+        chamferOptionsWidget = new QWidget(toolOptionsStack);
+        if (chamferOptionsWidget) {
+            auto* chamferLayout = new QHBoxLayout(chamferOptionsWidget);
+            chamferLayout->setContentsMargins(0, 0, 0, 0);
+            chamferLayout->setSpacing(6);
+            chamferRadiusSpin = new QDoubleSpinBox(chamferOptionsWidget);
+            chamferRadiusSpin->setRange(0.001, 1000.0);
+            chamferRadiusSpin->setDecimals(3);
+            chamferRadiusSpin->setSingleStep(0.01);
+            chamferRadiusSpin->setToolTip(tr("Chamfer radius"));
+            chamferLayout->addWidget(chamferRadiusSpin);
+
+            chamferSegmentsSpin = new QSpinBox(chamferOptionsWidget);
+            chamferSegmentsSpin->setRange(1, 128);
+            chamferSegmentsSpin->setToolTip(tr("Segment count"));
+            chamferLayout->addWidget(chamferSegmentsSpin);
+
+            chamferStyleCombo = new QComboBox(chamferOptionsWidget);
+            chamferStyleCombo->addItem(tr("Fillet"), static_cast<int>(Phase6::CornerStyle::Fillet));
+            chamferStyleCombo->addItem(tr("Chamfer"), static_cast<int>(Phase6::CornerStyle::Chamfer));
+            chamferStyleCombo->setToolTip(tr("Corner style"));
+            chamferLayout->addWidget(chamferStyleCombo);
+
+            chamferHardEdgeCheck = new QCheckBox(tr("Hard"), chamferOptionsWidget);
+            chamferHardEdgeCheck->setToolTip(tr("Tag resulting edges as hard"));
+            chamferLayout->addWidget(chamferHardEdgeCheck);
+
+            chamferDialogButton = new QToolButton(chamferOptionsWidget);
+            chamferDialogButton->setIcon(QIcon(QStringLiteral(":/icons/settings.svg")));
+            chamferDialogButton->setToolTip(tr("Open chamfer options"));
+            chamferLayout->addWidget(chamferDialogButton);
+
+            chamferApplyButton = new QToolButton(chamferOptionsWidget);
+            chamferApplyButton->setText(tr("Apply"));
+            chamferApplyButton->setToolTip(tr("Commit chamfer"));
+            chamferApplyButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            chamferLayout->addWidget(chamferApplyButton);
+
+            chamferLayout->addStretch(1);
+        }
+        if (toolOptionsStack && chamferOptionsWidget)
+            toolOptionsStack->addWidget(chamferOptionsWidget);
+
+        loftOptionsWidget = new QWidget(toolOptionsStack);
+        if (loftOptionsWidget) {
+            auto* loftLayout = new QHBoxLayout(loftOptionsWidget);
+            loftLayout->setContentsMargins(0, 0, 0, 0);
+            loftLayout->setSpacing(6);
+
+            loftSectionsSpin = new QSpinBox(loftOptionsWidget);
+            loftSectionsSpin->setRange(2, 256);
+            loftSectionsSpin->setToolTip(tr("Section count"));
+            loftLayout->addWidget(loftSectionsSpin);
+
+            loftTwistSpin = new QDoubleSpinBox(loftOptionsWidget);
+            loftTwistSpin->setRange(-360.0, 360.0);
+            loftTwistSpin->setDecimals(2);
+            loftTwistSpin->setSingleStep(5.0);
+            loftTwistSpin->setSuffix(QStringLiteral("°"));
+            loftTwistSpin->setToolTip(tr("Twist"));
+            loftLayout->addWidget(loftTwistSpin);
+
+            loftSmoothingSpin = new QSpinBox(loftOptionsWidget);
+            loftSmoothingSpin->setRange(0, 10);
+            loftSmoothingSpin->setToolTip(tr("Smoothing passes"));
+            loftLayout->addWidget(loftSmoothingSpin);
+
+            loftCloseRailsCheck = new QCheckBox(tr("Close"), loftOptionsWidget);
+            loftCloseRailsCheck->setToolTip(tr("Close rails"));
+            loftLayout->addWidget(loftCloseRailsCheck);
+
+            loftSmoothNormalsCheck = new QCheckBox(tr("Smooth"), loftOptionsWidget);
+            loftSmoothNormalsCheck->setToolTip(tr("Smooth normals"));
+            loftLayout->addWidget(loftSmoothNormalsCheck);
+
+            loftSymmetryCheck = new QCheckBox(tr("Sym"), loftOptionsWidget);
+            loftSymmetryCheck->setToolTip(tr("Symmetric pairing"));
+            loftLayout->addWidget(loftSymmetryCheck);
+
+            loftDialogButton = new QToolButton(loftOptionsWidget);
+            loftDialogButton->setIcon(QIcon(QStringLiteral(":/icons/settings.svg")));
+            loftDialogButton->setToolTip(tr("Open loft options"));
+            loftLayout->addWidget(loftDialogButton);
+
+            loftApplyButton = new QToolButton(loftOptionsWidget);
+            loftApplyButton->setText(tr("Apply"));
+            loftApplyButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            loftApplyButton->setToolTip(tr("Commit loft"));
+            loftLayout->addWidget(loftApplyButton);
+
+            loftLayout->addStretch(1);
+        }
+        if (toolOptionsStack && loftOptionsWidget)
+            toolOptionsStack->addWidget(loftOptionsWidget);
+    }
+
+    if (chamferRadiusSpin) {
+        chamferRadiusSpin->setValue(chamferDefaults_.radius);
+        connect(chamferRadiusSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+            chamferDefaults_.radius = static_cast<float>(value);
+            applyChamferDefaults();
+        });
+    }
+    if (chamferSegmentsSpin) {
+        chamferSegmentsSpin->setValue(chamferDefaults_.segments);
+        connect(chamferSegmentsSpin, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+            chamferDefaults_.segments = value;
+            applyChamferDefaults();
+        });
+    }
+    if (chamferStyleCombo) {
+        int styleIndex = chamferStyleCombo->findData(static_cast<int>(chamferDefaults_.style));
+        chamferStyleCombo->setCurrentIndex(styleIndex < 0 ? 0 : styleIndex);
+        connect(chamferStyleCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+            chamferDefaults_.style = static_cast<Phase6::CornerStyle>(chamferStyleCombo->itemData(index).toInt());
+            applyChamferDefaults();
+        });
+    }
+    if (chamferHardEdgeCheck) {
+        chamferHardEdgeCheck->setChecked(chamferDefaults_.tagHardEdges);
+        connect(chamferHardEdgeCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            chamferDefaults_.tagHardEdges = checked;
+            applyChamferDefaults();
+        });
+    }
+    if (chamferApplyButton) {
+        connect(chamferApplyButton, &QToolButton::clicked, this, [this]() {
+            applyChamferDefaults();
+            if (toolManager)
+                toolManager->commitActiveTool();
+        });
+    }
+    if (chamferDialogButton)
+        connect(chamferDialogButton, &QToolButton::clicked, this, &MainWindow::showChamferOptionsDialog);
+
+    if (loftSectionsSpin) {
+        loftSectionsSpin->setValue(loftDefaults_.sections);
+        connect(loftSectionsSpin, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+            loftDefaults_.sections = value;
+            applyLoftDefaults();
+        });
+    }
+    if (loftTwistSpin) {
+        loftTwistSpin->setValue(loftDefaults_.twistDegrees);
+        connect(loftTwistSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+            loftDefaults_.twistDegrees = static_cast<float>(value);
+            applyLoftDefaults();
+        });
+    }
+    if (loftSmoothingSpin) {
+        loftSmoothingSpin->setValue(loftDefaults_.smoothingPasses);
+        connect(loftSmoothingSpin, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+            loftDefaults_.smoothingPasses = value;
+            applyLoftDefaults();
+        });
+    }
+    if (loftCloseRailsCheck) {
+        loftCloseRailsCheck->setChecked(loftDefaults_.closeRails);
+        connect(loftCloseRailsCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            loftDefaults_.closeRails = checked;
+            applyLoftDefaults();
+        });
+    }
+    if (loftSmoothNormalsCheck) {
+        loftSmoothNormalsCheck->setChecked(loftDefaults_.smoothNormals);
+        connect(loftSmoothNormalsCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            loftDefaults_.smoothNormals = checked;
+            applyLoftDefaults();
+        });
+    }
+    if (loftSymmetryCheck) {
+        loftSymmetryCheck->setChecked(loftDefaults_.symmetricPairing);
+        connect(loftSymmetryCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            loftDefaults_.symmetricPairing = checked;
+            applyLoftDefaults();
+        });
+    }
+    if (loftApplyButton) {
+        connect(loftApplyButton, &QToolButton::clicked, this, [this]() {
+            applyLoftDefaults();
+            if (toolManager)
+                toolManager->commitActiveTool();
+        });
+    }
+    if (loftDialogButton)
+        connect(loftDialogButton, &QToolButton::clicked, this, &MainWindow::showLoftOptionsDialog);
+
+    populateAdvancedToolsMenu();
 
     selectAction->setChecked(true);
 
@@ -2271,6 +2537,8 @@ void MainWindow::createLeftDock()
                                     rotateAction,
                                     scaleAction,
                                     extrudeAction,
+                                    chamferAction,
+                                    loftAction,
                                     sectionAction });
     if (!modifyGroup.actions.isEmpty())
         groups.append(modifyGroup);
@@ -2311,7 +2579,10 @@ void MainWindow::createRightDock()
     rightDock_->setMinimumWidth(320);
     rightDock_->setMaximumWidth(420);
 
-    rightTray_ = new RightTray(undoStack, rightDock_);
+    Scene::Document* document = viewport ? viewport->getDocument() : nullptr;
+    GeometryKernel* geometry = viewport ? viewport->getGeometry() : nullptr;
+    Core::CommandStack* stack = commandStack.get();
+    rightTray_ = new RightTray(document, geometry, stack, undoStack, rightDock_);
     rightDock_->setWidget(rightTray_);
     addDockWidget(Qt::RightDockWidgetArea, rightDock_);
 
@@ -2329,6 +2600,9 @@ void MainWindow::createRightDock()
         environmentPanel->setSettings(sunSettings);
         connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
     }
+
+    if (rightTray_)
+        rightTray_->refreshPanels();
 }
 
 void MainWindow::createTerminalDock()
@@ -2520,6 +2794,10 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("tools.scale"), scaleAction);
 
     hotkeys.registerAction(QStringLiteral("tools.extrude"), extrudeAction);
+
+    hotkeys.registerAction(QStringLiteral("tools.chamfer"), chamferAction);
+
+    hotkeys.registerAction(QStringLiteral("tools.loft"), loftAction);
 
     hotkeys.registerAction(QStringLiteral("tools.section"), sectionAction);
 
@@ -2714,6 +2992,8 @@ void MainWindow::setActiveTool(QAction* action, const QString& toolId, const QSt
 
         measurementWidget->setHint(measurementHintForKind(kind));
 
+    updateToolOptionsPanel(toolId);
+
 }
 
 void MainWindow::updateThemeActionIcon()
@@ -2727,6 +3007,224 @@ void MainWindow::updateThemeActionIcon()
     const QString iconPath = darkTheme ? QStringLiteral(":/icons/theme_light.svg") : QStringLiteral(":/icons/theme_dark.svg");
 
     actionToggleTheme->setIcon(QIcon(iconPath));
+
+}
+
+void MainWindow::updateToolOptionsPanel(const QString& toolId)
+
+{
+
+    if (!toolOptionsStack)
+
+        return;
+
+    QWidget* target = toolOptionsPlaceholder ? toolOptionsPlaceholder : nullptr;
+
+    if (toolId == QLatin1String("ChamferTool") && chamferOptionsWidget)
+
+        target = chamferOptionsWidget;
+
+    else if (toolId == QLatin1String("LoftTool") && loftOptionsWidget)
+
+        target = loftOptionsWidget;
+
+    if (target)
+
+        toolOptionsStack->setCurrentWidget(target);
+
+    syncActiveToolOptions();
+
+}
+
+void MainWindow::syncActiveToolOptions()
+
+{
+
+    if (!toolManager)
+
+        return;
+
+    Tool* active = toolManager->getActiveTool();
+
+    if (auto* chamfer = dynamic_cast<ChamferTool*>(active)) {
+
+        chamferDefaults_ = chamfer->roundCornerOptions();
+
+        updateChamferControls(chamferDefaults_);
+
+    } else if (auto* loft = dynamic_cast<LoftTool*>(active)) {
+
+        loftDefaults_ = loft->loftOptions();
+
+        updateLoftControls(loftDefaults_);
+
+    }
+
+}
+
+void MainWindow::updateChamferControls(const Phase6::RoundCornerOptions& options)
+
+{
+
+    if (chamferRadiusSpin) {
+
+        QSignalBlocker blocker(chamferRadiusSpin);
+
+        chamferRadiusSpin->setValue(options.radius);
+
+    }
+
+    if (chamferSegmentsSpin) {
+
+        QSignalBlocker blocker(chamferSegmentsSpin);
+
+        chamferSegmentsSpin->setValue(std::max(1, options.segments));
+
+    }
+
+    if (chamferStyleCombo) {
+
+        QSignalBlocker blocker(chamferStyleCombo);
+
+        int index = chamferStyleCombo->findData(static_cast<int>(options.style));
+
+        chamferStyleCombo->setCurrentIndex(index < 0 ? 0 : index);
+
+    }
+
+    if (chamferHardEdgeCheck) {
+
+        QSignalBlocker blocker(chamferHardEdgeCheck);
+
+        chamferHardEdgeCheck->setChecked(options.tagHardEdges);
+
+    }
+
+}
+
+void MainWindow::updateLoftControls(const Phase6::LoftOptions& options)
+
+{
+
+    if (loftSectionsSpin) {
+
+        QSignalBlocker blocker(loftSectionsSpin);
+
+        loftSectionsSpin->setValue(std::max(2, options.sections));
+
+    }
+
+    if (loftTwistSpin) {
+
+        QSignalBlocker blocker(loftTwistSpin);
+
+        loftTwistSpin->setValue(options.twistDegrees);
+
+    }
+
+    if (loftSmoothingSpin) {
+
+        QSignalBlocker blocker(loftSmoothingSpin);
+
+        loftSmoothingSpin->setValue(std::max(0, options.smoothingPasses));
+
+    }
+
+    if (loftCloseRailsCheck) {
+
+        QSignalBlocker blocker(loftCloseRailsCheck);
+
+        loftCloseRailsCheck->setChecked(options.closeRails);
+
+    }
+
+    if (loftSmoothNormalsCheck) {
+
+        QSignalBlocker blocker(loftSmoothNormalsCheck);
+
+        loftSmoothNormalsCheck->setChecked(options.smoothNormals);
+
+    }
+
+    if (loftSymmetryCheck) {
+
+        QSignalBlocker blocker(loftSymmetryCheck);
+
+        loftSymmetryCheck->setChecked(options.symmetricPairing);
+
+    }
+
+}
+
+void MainWindow::applyChamferDefaults()
+
+{
+
+    chamferDefaults_.radius = std::max(chamferDefaults_.radius, 0.001f);
+
+    chamferDefaults_.segments = std::max(1, chamferDefaults_.segments);
+
+    if (toolManager) {
+
+        if (auto* chamfer = dynamic_cast<ChamferTool*>(toolManager->getActiveTool()))
+
+            chamfer->setRoundCornerOptions(chamferDefaults_);
+
+    }
+
+    updateChamferControls(chamferDefaults_);
+
+}
+
+void MainWindow::applyLoftDefaults()
+
+{
+
+    loftDefaults_.sections = std::max(2, loftDefaults_.sections);
+
+    loftDefaults_.smoothingPasses = std::max(0, loftDefaults_.smoothingPasses);
+
+    if (toolManager) {
+
+        if (auto* loft = dynamic_cast<LoftTool*>(toolManager->getActiveTool()))
+
+            loft->setLoftOptions(loftDefaults_);
+
+    }
+
+    updateLoftControls(loftDefaults_);
+
+}
+
+void MainWindow::populateAdvancedToolsMenu()
+
+{
+
+    if (!advancedToolsMenu)
+
+        return;
+
+    advancedToolsMenu->clear();
+
+    if (chamferAction)
+
+        advancedToolsMenu->addAction(chamferAction);
+
+    if (loftAction)
+
+        advancedToolsMenu->addAction(loftAction);
+
+    if ((chamferOptionsAction || loftOptionsAction) && (!advancedToolsMenu->isEmpty()))
+
+        advancedToolsMenu->addSeparator();
+
+    if (chamferOptionsAction)
+
+        advancedToolsMenu->addAction(chamferOptionsAction);
+
+    if (loftOptionsAction)
+
+        advancedToolsMenu->addAction(loftOptionsAction);
 
 }
 
@@ -3731,6 +4229,30 @@ void MainWindow::activateExtrude()
 
 }
 
+void MainWindow::activateChamfer()
+
+{
+
+    setActiveTool(chamferAction,
+                  QStringLiteral("ChamferTool"),
+                  tr("Chamfer: Select a closed curve, adjust radius, then click Apply."));
+
+    applyChamferDefaults();
+
+}
+
+void MainWindow::activateLoft()
+
+{
+
+    setActiveTool(loftAction,
+                  QStringLiteral("LoftTool"),
+                  tr("Loft: Select two profiles, adjust sections, then click Apply."));
+
+    applyLoftDefaults();
+
+}
+
 void MainWindow::activateSection()
 
 {
@@ -3985,6 +4507,46 @@ void MainWindow::showViewSettingsDialog()
 
 }
 
+void MainWindow::showChamferOptionsDialog()
+
+{
+
+    ChamferOptionsDialog dialog(this);
+
+    dialog.setOptions(chamferDefaults_);
+
+    if (dialog.exec() == QDialog::Accepted) {
+
+        chamferDefaults_ = dialog.options();
+
+        updateChamferControls(chamferDefaults_);
+
+        applyChamferDefaults();
+
+    }
+
+}
+
+void MainWindow::showLoftOptionsDialog()
+
+{
+
+    LoftOptionsDialog dialog(this);
+
+    dialog.setOptions(loftDefaults_);
+
+    if (dialog.exec() == QDialog::Accepted) {
+
+        loftDefaults_ = dialog.options();
+
+        updateLoftControls(loftDefaults_);
+
+        applyLoftDefaults();
+
+    }
+
+}
+
 void MainWindow::updateCursor(double x, double y, double z)
 
 {
@@ -4095,6 +4657,8 @@ void MainWindow::handleMeasurementCommit(const QString& value, const QString& un
         return;
 
     }
+
+    syncActiveToolOptions();
 
     if (measurementWidget)
 

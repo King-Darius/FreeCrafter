@@ -99,6 +99,8 @@ public:
     void synchronizeWithGeometry();
     void pruneInvalidObjects();
 
+    bool removeObject(ObjectId objectId);
+
     ObjectId createGroup(const std::vector<ObjectId>& childIds, const std::string& name);
     bool moveObject(ObjectId objectId, ObjectId newParentId, std::size_t index);
     bool setObjectVisible(ObjectId objectId, bool visible);
@@ -146,6 +148,26 @@ public:
     bool importExternalModel(const std::string& path, FileFormat fmt = FileFormat::Auto);
     const std::string& lastImportError() const { return lastImportErrorMessage; }
     const std::unordered_map<ObjectId, ImportMetadata>& importedObjectMetadata() const { return importedProvenance; }
+
+    struct ImagePlaneMetadata {
+        std::string sourcePath;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+
+    struct ExternalReferenceMetadata {
+        std::string sourcePath;
+        std::string displayName;
+        std::chrono::system_clock::time_point linkedAt{};
+    };
+
+    void setImagePlaneMetadata(ObjectId id, const ImagePlaneMetadata& metadata);
+    void clearImagePlaneMetadata(ObjectId id);
+    const std::unordered_map<ObjectId, ImagePlaneMetadata>& imagePlanes() const { return imagePlaneMetadata; }
+
+    void setExternalReferenceMetadata(ObjectId id, const ExternalReferenceMetadata& metadata);
+    void clearExternalReferenceMetadata(ObjectId id);
+    const std::unordered_map<ObjectId, ExternalReferenceMetadata>& externalReferences() const { return externalReferenceMetadata; }
 
 private:
     struct PrototypeNode {
@@ -224,6 +246,8 @@ private:
     std::vector<ObjectId> isolationIds;
 
     std::unordered_map<ObjectId, ImportMetadata> importedProvenance;
+    std::unordered_map<ObjectId, ImagePlaneMetadata> imagePlaneMetadata;
+    std::unordered_map<ObjectId, ExternalReferenceMetadata> externalReferenceMetadata;
     std::string lastImportErrorMessage;
 };
 

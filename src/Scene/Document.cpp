@@ -109,6 +109,15 @@ void Document::pruneInvalidObjects()
     synchronizeWithGeometry();
 }
 
+bool Document::removeObject(ObjectId objectId)
+{
+    ObjectNode* node = findMutable(objectId);
+    if (!node)
+        return false;
+    removeNode(node);
+    return true;
+}
+
 Document::ObjectId Document::createGroup(const std::vector<ObjectId>& childIds, const std::string& name)
 {
     if (childIds.empty())
@@ -461,6 +470,8 @@ void Document::resetInternal(bool clearGeometry)
     colorByTagEnabled = false;
     isolationIds.clear();
     importedProvenance.clear();
+    imagePlaneMetadata.clear();
+    externalReferenceMetadata.clear();
     lastImportErrorMessage.clear();
     nextObjectId = 1;
     nextTagId = 1;
@@ -598,6 +609,34 @@ bool Document::importExternalModel(const std::string& path, FileFormat fmt)
 
     updateVisibility();
     return true;
+}
+
+void Document::setImagePlaneMetadata(ObjectId id, const ImagePlaneMetadata& metadata)
+{
+    if (id == 0)
+        return;
+    imagePlaneMetadata[id] = metadata;
+}
+
+void Document::clearImagePlaneMetadata(ObjectId id)
+{
+    if (id == 0)
+        return;
+    imagePlaneMetadata.erase(id);
+}
+
+void Document::setExternalReferenceMetadata(ObjectId id, const ExternalReferenceMetadata& metadata)
+{
+    if (id == 0)
+        return;
+    externalReferenceMetadata[id] = metadata;
+}
+
+void Document::clearExternalReferenceMetadata(ObjectId id)
+{
+    if (id == 0)
+        return;
+    externalReferenceMetadata.erase(id);
 }
 
 void Document::removeNode(ObjectNode* node)
@@ -851,6 +890,8 @@ void Document::unregisterGeometry(GeometryObject* geometry)
 void Document::clearImportMetadata(ObjectId id)
 {
     importedProvenance.erase(id);
+    imagePlaneMetadata.erase(id);
+    externalReferenceMetadata.erase(id);
 }
 
 void Document::detachFromParent(ObjectNode* node)

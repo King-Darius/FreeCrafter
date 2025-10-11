@@ -117,6 +117,18 @@ void testTagsAndVisibility()
     assert(doc.colorByTag());
 }
 
+void testMaterialAssignments()
+{
+    Document doc;
+    GeometryObject* a = doc.geometry().addCurve(makeRectangle(2.0f, 2.0f));
+    Document::ObjectId idA = doc.ensureObjectForGeometry(a, "MaterialA");
+    (void)idA;
+    doc.geometry().assignMaterial(a, "Concrete");
+    assert(doc.geometry().getMaterial(a) == "Concrete");
+    doc.geometry().assignMaterial(a, "");
+    assert(doc.geometry().getMaterial(a).empty());
+}
+
 void testIsolation()
 {
     Document doc;
@@ -215,6 +227,7 @@ int main()
     testGroupingAndOutliner();
     testComponents();
     testTagsAndVisibility();
+    testMaterialAssignments();
     testIsolation();
     testScenes();
     testSerializationRoundTrip();

@@ -893,6 +893,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     QString storedProjection = QStringLiteral("perspective");
     bool storedGridVisible = true;
+    Scene::SceneSettings& sceneSettingsRef = viewport->getDocument()->settings();
+    Scene::SceneSettings::GridSettings gridDefaults = sceneSettingsRef.grid();
+    Scene::SceneSettings::ShadowSettings shadowDefaults = sceneSettingsRef.shadows();
+    bool storedSectionPlanesVisible = sceneSettingsRef.sectionPlanesVisible();
+    bool storedSectionFillsVisible = sceneSettingsRef.sectionFillsVisible();
+    bool storedGuidesVisible = sceneSettingsRef.guidesVisible();
+    double storedGridSpacing = gridDefaults.majorSpacing;
+    int storedGridDivisions = gridDefaults.minorDivisions;
+    int storedGridExtent = gridDefaults.majorExtent;
+    bool storedShadowsEnabled = shadowDefaults.enabled;
+    int storedShadowQuality = static_cast<int>(shadowDefaults.quality);
+    double storedShadowStrength = shadowDefaults.strength;
+    double storedShadowBias = shadowDefaults.bias;
 
     {
 
@@ -915,9 +928,53 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         storedProjection = settings.value(QStringLiteral("%1/viewProjection").arg(kSettingsGroup), storedProjection).toString();
         storedGridVisible = settings.value(QStringLiteral("%1/showGrid").arg(kSettingsGroup), storedGridVisible).toBool();
         showFrameStatsHud = settings.value(QStringLiteral("%1/showFrameStatsHud").arg(kSettingsGroup), showFrameStatsHud).toBool();
+        storedSectionPlanesVisible = settings.value(QStringLiteral("%1/showSectionPlanes").arg(kSettingsGroup), storedSectionPlanesVisible).toBool();
+        storedSectionFillsVisible = settings.value(QStringLiteral("%1/showSectionFills").arg(kSettingsGroup), storedSectionFillsVisible).toBool();
+        storedGuidesVisible = settings.value(QStringLiteral("%1/showGuides").arg(kSettingsGroup), storedGuidesVisible).toBool();
+        storedGridSpacing = settings.value(QStringLiteral("%1/gridSpacing").arg(kSettingsGroup), storedGridSpacing).toDouble();
+        storedGridDivisions = settings.value(QStringLiteral("%1/gridDivisions").arg(kSettingsGroup), storedGridDivisions).toInt();
+        storedGridExtent = settings.value(QStringLiteral("%1/gridExtent").arg(kSettingsGroup), storedGridExtent).toInt();
+        storedShadowsEnabled = settings.value(QStringLiteral("%1/shadowEnabled").arg(kSettingsGroup), storedShadowsEnabled).toBool();
+        storedShadowQuality = settings.value(QStringLiteral("%1/shadowQuality").arg(kSettingsGroup), storedShadowQuality).toInt();
+        storedShadowStrength = settings.value(QStringLiteral("%1/shadowStrength").arg(kSettingsGroup), storedShadowStrength).toDouble();
+        storedShadowBias = settings.value(QStringLiteral("%1/shadowBias").arg(kSettingsGroup), storedShadowBias).toDouble();
 
         sunSettings.load(settings, QStringLiteral("Environment"));
 
+    }
+
+    Scene::SceneSettings& sceneSettings = viewport->getDocument()->settings();
+    Scene::SceneSettings::GridSettings grid = sceneSettings.grid();
+    grid.majorSpacing = static_cast<float>(std::max(0.001, storedGridSpacing));
+    grid.minorDivisions = std::max(1, storedGridDivisions);
+    grid.majorExtent = std::max(1, storedGridExtent);
+    sceneSettings.setGrid(grid);
+    sceneSettings.setSectionPlanesVisible(storedSectionPlanesVisible);
+    sceneSettings.setSectionFillsVisible(storedSectionFillsVisible);
+    sceneSettings.setGuidesVisible(storedGuidesVisible);
+
+    Scene::SceneSettings::ShadowSettings sceneShadow = sceneSettings.shadows();
+    storedShadowQuality = std::clamp(storedShadowQuality, 0, 2);
+    sceneShadow.enabled = storedShadowsEnabled;
+    sceneShadow.quality = static_cast<Scene::SceneSettings::ShadowQuality>(storedShadowQuality);
+    sceneShadow.strength = static_cast<float>(std::clamp(storedShadowStrength, 0.0, 1.0));
+    sceneShadow.bias = static_cast<float>(std::max(0.00005, storedShadowBias));
+    sceneSettings.setShadows(sceneShadow);
+
+    sunSettings.shadowsEnabled = sceneShadow.enabled;
+    sunSettings.shadowStrength = sceneShadow.strength;
+    sunSettings.shadowBias = sceneShadow.bias;
+    switch (sceneShadow.quality) {
+    case Scene::SceneSettings::ShadowQuality::Low:
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::Low;
+        break;
+    case Scene::SceneSettings::ShadowQuality::High:
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::High;
+        break;
+    case Scene::SceneSettings::ShadowQuality::Medium:
+    default:
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::Medium;
+        break;
     }
 
     viewport->setRenderStyle(renderStyleChoice);
@@ -1247,21 +1304,137 @@ void MainWindow::createMenus()
     actionViewRight->setStatusTip(tr("Look from the model's right side"));
     connect(actionViewRight, &QAction::triggered, this, [this]() { applyStandardView(ViewPresetManager::StandardView::Right); });
 
-    actionToggleProjection = viewMenu->addAction(tr("Parallel Projection"));
+    projectionModeGroup = new QActionGroup(this);
+    projectionModeGroup->setExclusive(true);
+
+    actionPerspectiveProjection = viewMenu->addAction(tr("Perspective Projection"));
+    actionPerspectiveProjection->setCheckable(true);
+    actionPerspectiveProjection->setObjectName(QStringLiteral("actionPerspectiveProjection"));
+    actionPerspectiveProjection->setStatusTip(tr("Use perspective projection for the camera"));
+    projectionModeGroup->addAction(actionPerspectiveProjection);
+    connect(actionPerspectiveProjection, &QAction::triggered, this, [this]() {
+        setProjectionMode(CameraController::ProjectionMode::Perspective);
+    });
+
+    actionParallelProjection = viewMenu->addAction(tr("Parallel Projection"));
+    actionParallelProjection->setCheckable(true);
+    actionParallelProjection->setObjectName(QStringLiteral("actionParallelProjection"));
+    actionParallelProjection->setStatusTip(tr("Use parallel projection for the camera"));
+    projectionModeGroup->addAction(actionParallelProjection);
+    connect(actionParallelProjection, &QAction::triggered, this, [this]() {
+        setProjectionMode(CameraController::ProjectionMode::Parallel);
+    });
+
+    actionToggleProjection = viewMenu->addAction(tr("Toggle Projection"));
     actionToggleProjection->setCheckable(true);
     actionToggleProjection->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+O")));
     actionToggleProjection->setStatusTip(tr("Toggle between perspective and parallel projections"));
     if (viewport) {
-        QSignalBlocker blocker(actionToggleProjection);
-        actionToggleProjection->setChecked(viewport->projectionMode() == CameraController::ProjectionMode::Parallel);
+        const bool isParallel = viewport->projectionMode() == CameraController::ProjectionMode::Parallel;
+        {
+            QSignalBlocker toggleBlocker(actionToggleProjection);
+            actionToggleProjection->setChecked(isParallel);
+        }
+        {
+            QSignalBlocker perspectiveBlocker(actionPerspectiveProjection);
+            QSignalBlocker parallelBlocker(actionParallelProjection);
+            actionPerspectiveProjection->setChecked(!isParallel);
+            actionParallelProjection->setChecked(isParallel);
+        }
     }
     connect(actionToggleProjection, &QAction::toggled, this, [this](bool checked) {
         setProjectionMode(checked ? CameraController::ProjectionMode::Parallel : CameraController::ProjectionMode::Perspective);
     });
 
-    actionViewSettings = viewMenu->addAction(tr("Camera Settings..."), this, &MainWindow::showViewSettingsDialog);
+    actionViewSettings = viewMenu->addAction(tr("View Settings..."), this, &MainWindow::showViewSettingsDialog);
     actionViewSettings->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
-    actionViewSettings->setStatusTip(tr("Adjust field of view and projection settings"));
+    actionViewSettings->setStatusTip(tr("Adjust camera, grid, and shadow settings"));
+    actionViewSettings->setObjectName(QStringLiteral("actionViewSettings"));
+
+    actionGridSettings = viewMenu->addAction(tr("Grid & Shadows..."), this, &MainWindow::showViewSettingsDialog);
+    actionGridSettings->setStatusTip(tr("Configure grid spacing, divisions, and shadow parameters"));
+    actionGridSettings->setObjectName(QStringLiteral("actionGridSettings"));
+
+    Scene::Document* menuDocument = viewport ? viewport->getDocument() : nullptr;
+    Scene::SceneSettings* menuSceneSettings = menuDocument ? &menuDocument->settings() : nullptr;
+
+    actionShowSectionPlanes = viewMenu->addAction(tr("Show Section Planes"));
+    actionShowSectionPlanes->setCheckable(true);
+    actionShowSectionPlanes->setObjectName(QStringLiteral("actionShowSectionPlanes"));
+    actionShowSectionPlanes->setStatusTip(tr("Toggle visibility of section plane overlays"));
+    if (menuSceneSettings) {
+        QSignalBlocker blocker(actionShowSectionPlanes);
+        actionShowSectionPlanes->setChecked(menuSceneSettings->sectionPlanesVisible());
+    }
+    connect(actionShowSectionPlanes, &QAction::toggled, this, [this](bool checked) {
+        if (!viewport)
+            return;
+        if (Scene::Document* document = viewport->getDocument()) {
+            document->settings().setSectionPlanesVisible(checked);
+            viewport->update();
+            if (statusBar())
+                statusBar()->showMessage(checked ? tr("Section planes shown") : tr("Section planes hidden"), 1500);
+            persistViewSettings();
+        }
+    });
+
+    actionShowSectionFills = viewMenu->addAction(tr("Show Section Fills"));
+    actionShowSectionFills->setCheckable(true);
+    actionShowSectionFills->setObjectName(QStringLiteral("actionShowSectionFills"));
+    actionShowSectionFills->setStatusTip(tr("Toggle filling of section plane cut surfaces"));
+    if (menuSceneSettings) {
+        QSignalBlocker blocker(actionShowSectionFills);
+        actionShowSectionFills->setChecked(menuSceneSettings->sectionFillsVisible());
+    }
+    connect(actionShowSectionFills, &QAction::toggled, this, [this](bool checked) {
+        if (!viewport)
+            return;
+        if (Scene::Document* document = viewport->getDocument()) {
+            document->settings().setSectionFillsVisible(checked);
+            viewport->update();
+            if (statusBar())
+                statusBar()->showMessage(checked ? tr("Section fills enabled") : tr("Section fills disabled"), 1500);
+            persistViewSettings();
+        }
+    });
+
+    actionShowGuides = viewMenu->addAction(tr("Show Guides"));
+    actionShowGuides->setCheckable(true);
+    actionShowGuides->setObjectName(QStringLiteral("actionShowGuides"));
+    actionShowGuides->setStatusTip(tr("Toggle visibility of drawing guides"));
+    if (menuSceneSettings) {
+        QSignalBlocker blocker(actionShowGuides);
+        actionShowGuides->setChecked(menuSceneSettings->guidesVisible());
+    }
+    connect(actionShowGuides, &QAction::toggled, this, [this](bool checked) {
+        if (!viewport)
+            return;
+        if (Scene::Document* document = viewport->getDocument()) {
+            document->settings().setGuidesVisible(checked);
+            viewport->update();
+            if (statusBar())
+                statusBar()->showMessage(checked ? tr("Guides shown") : tr("Guides hidden"), 1500);
+            persistViewSettings();
+        }
+    });
+
+    actionEnableShadows = viewMenu->addAction(tr("Enable Shadows"));
+    actionEnableShadows->setCheckable(true);
+    actionEnableShadows->setObjectName(QStringLiteral("actionEnableShadows"));
+    actionEnableShadows->setStatusTip(tr("Toggle sun shadows in the viewport"));
+    actionEnableShadows->setChecked(sunSettings.shadowsEnabled);
+    connect(actionEnableShadows, &QAction::toggled, this, [this](bool enabled) {
+        if (!viewport)
+            return;
+        Scene::Document* document = viewport->getDocument();
+        if (!document)
+            return;
+        const Scene::SceneSettings::ShadowSettings& currentShadow = document->settings().shadows();
+        applyShadowParameters(enabled,
+                              static_cast<int>(currentShadow.quality),
+                              static_cast<double>(currentShadow.strength * 100.0f),
+                              currentShadow.bias);
+    });
 
     QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
         statusBar()->showMessage(tr("Split view is coming soon"), 2000);
@@ -1344,6 +1517,7 @@ void MainWindow::createMenus()
     gridAction = viewMenu->addAction(tr("Show Grid"));
     gridAction->setCheckable(true);
     gridAction->setIcon(QIcon(QStringLiteral(":/icons/grid.svg")));
+    gridAction->setObjectName(QStringLiteral("actionShowGrid"));
     gridAction->setStatusTip(tr("Toggle the modeling grid visibility."));
     if (viewport) {
         gridAction->setChecked(viewport->showGrid());
@@ -1888,9 +2062,23 @@ void MainWindow::createToolbars()
 
     viewPresetMenu->addSeparator();
 
+    if (actionPerspectiveProjection)
+
+        viewPresetMenu->addAction(actionPerspectiveProjection);
+
+    if (actionParallelProjection)
+
+        viewPresetMenu->addAction(actionParallelProjection);
+
     viewPresetMenu->addAction(actionToggleProjection);
 
+    viewPresetMenu->addSeparator();
+
     viewPresetMenu->addAction(actionViewSettings);
+
+    if (actionGridSettings)
+
+        viewPresetMenu->addAction(actionGridSettings);
 
     viewPresetToolButton->setMenu(viewPresetMenu);
 
@@ -2289,6 +2477,20 @@ void MainWindow::registerShortcuts()
     hotkeys.registerAction(QStringLiteral("view.right"), actionViewRight);
 
     hotkeys.registerAction(QStringLiteral("view.toggleProjection"), actionToggleProjection);
+
+    hotkeys.registerAction(QStringLiteral("view.projectionPerspective"), actionPerspectiveProjection);
+
+    hotkeys.registerAction(QStringLiteral("view.projectionParallel"), actionParallelProjection);
+
+    hotkeys.registerAction(QStringLiteral("view.sectionPlanes"), actionShowSectionPlanes);
+
+    hotkeys.registerAction(QStringLiteral("view.sectionFills"), actionShowSectionFills);
+
+    hotkeys.registerAction(QStringLiteral("view.guides"), actionShowGuides);
+
+    hotkeys.registerAction(QStringLiteral("view.shadows"), actionEnableShadows);
+
+    hotkeys.registerAction(QStringLiteral("view.gridSettings"), actionGridSettings);
 
     hotkeys.registerAction(QStringLiteral("view.cameraSettings"), actionViewSettings);
 
@@ -2698,11 +2900,25 @@ void MainWindow::setProjectionMode(CameraController::ProjectionMode mode, bool s
 
     viewport->setProjectionMode(mode);
 
+    const bool isParallel = mode == CameraController::ProjectionMode::Parallel;
+
     if (actionToggleProjection) {
 
         QSignalBlocker blocker(actionToggleProjection);
 
-        actionToggleProjection->setChecked(mode == CameraController::ProjectionMode::Parallel);
+        actionToggleProjection->setChecked(isParallel);
+
+    }
+
+    if (actionPerspectiveProjection && actionParallelProjection) {
+
+        QSignalBlocker blockPerspective(actionPerspectiveProjection);
+
+        QSignalBlocker blockParallel(actionParallelProjection);
+
+        actionPerspectiveProjection->setChecked(!isParallel);
+
+        actionParallelProjection->setChecked(isParallel);
 
     }
 
@@ -2778,6 +2994,36 @@ void MainWindow::persistViewSettings() const
 
     settings.setValue(QStringLiteral("showFrameStatsHud"), showFrameStatsHud);
 
+    if (Scene::Document* document = viewport->getDocument()) {
+
+        const Scene::SceneSettings& sceneSettings = document->settings();
+
+        settings.setValue(QStringLiteral("showSectionPlanes"), sceneSettings.sectionPlanesVisible());
+
+        settings.setValue(QStringLiteral("showSectionFills"), sceneSettings.sectionFillsVisible());
+
+        settings.setValue(QStringLiteral("showGuides"), sceneSettings.guidesVisible());
+
+        const Scene::SceneSettings::GridSettings& grid = sceneSettings.grid();
+
+        settings.setValue(QStringLiteral("gridSpacing"), grid.majorSpacing);
+
+        settings.setValue(QStringLiteral("gridDivisions"), grid.minorDivisions);
+
+        settings.setValue(QStringLiteral("gridExtent"), grid.majorExtent);
+
+        const Scene::SceneSettings::ShadowSettings& shadow = sceneSettings.shadows();
+
+        settings.setValue(QStringLiteral("shadowEnabled"), shadow.enabled);
+
+        settings.setValue(QStringLiteral("shadowQuality"), static_cast<int>(shadow.quality));
+
+        settings.setValue(QStringLiteral("shadowStrength"), shadow.strength);
+
+        settings.setValue(QStringLiteral("shadowBias"), shadow.bias);
+
+    }
+
     settings.endGroup();
     persistAutosaveSettings();
 
@@ -2817,6 +3063,20 @@ void MainWindow::syncViewSettingsUI()
 
     }
 
+    if (actionPerspectiveProjection && actionParallelProjection && viewport) {
+
+        const bool isParallel = viewport->projectionMode() == CameraController::ProjectionMode::Parallel;
+
+        QSignalBlocker blockPerspective(actionPerspectiveProjection);
+
+        QSignalBlocker blockParallel(actionParallelProjection);
+
+        actionPerspectiveProjection->setChecked(!isParallel);
+
+        actionParallelProjection->setChecked(isParallel);
+
+    }
+
     if (actionViewHiddenGeometry && viewport) {
 
         QSignalBlocker blocker(actionViewHiddenGeometry);
@@ -2841,6 +3101,50 @@ void MainWindow::syncViewSettingsUI()
 
     }
 
+    if (viewport) {
+
+        if (Scene::Document* document = viewport->getDocument()) {
+
+            const Scene::SceneSettings& sceneSettings = document->settings();
+
+            if (actionShowSectionPlanes) {
+
+                QSignalBlocker blocker(actionShowSectionPlanes);
+
+                actionShowSectionPlanes->setChecked(sceneSettings.sectionPlanesVisible());
+
+            }
+
+            if (actionShowSectionFills) {
+
+                QSignalBlocker blocker(actionShowSectionFills);
+
+                actionShowSectionFills->setChecked(sceneSettings.sectionFillsVisible());
+
+            }
+
+            if (actionShowGuides) {
+
+                QSignalBlocker blocker(actionShowGuides);
+
+                actionShowGuides->setChecked(sceneSettings.guidesVisible());
+
+            }
+
+        }
+
+        showFrameStatsHud = viewport->frameStatsVisible();
+
+    }
+
+    if (actionEnableShadows) {
+
+        QSignalBlocker blocker(actionEnableShadows);
+
+        actionEnableShadows->setChecked(sunSettings.shadowsEnabled);
+
+    }
+
     if (viewport)
         showFrameStatsHud = viewport->frameStatsVisible();
 
@@ -2856,15 +3160,67 @@ void MainWindow::handleSunSettingsChanged(const SunSettings& settings)
 
     sunSettings = settings;
 
-    if (viewport)
+    if (viewport) {
+
+        if (Scene::Document* document = viewport->getDocument()) {
+
+            Scene::SceneSettings::ShadowSettings shadow = document->settings().shadows();
+
+            shadow.enabled = settings.shadowsEnabled;
+
+            switch (settings.shadowQuality) {
+
+            case SunSettings::ShadowQuality::Low:
+
+                shadow.quality = Scene::SceneSettings::ShadowQuality::Low;
+
+                break;
+
+            case SunSettings::ShadowQuality::High:
+
+                shadow.quality = Scene::SceneSettings::ShadowQuality::High;
+
+                break;
+
+            case SunSettings::ShadowQuality::Medium:
+
+            default:
+
+                shadow.quality = Scene::SceneSettings::ShadowQuality::Medium;
+
+                break;
+
+            }
+
+            shadow.strength = settings.shadowStrength;
+
+            shadow.bias = settings.shadowBias;
+
+            document->settings().setShadows(shadow);
+
+        }
 
         viewport->setSunSettings(sunSettings);
+
+    }
+
+    if (actionEnableShadows) {
+
+        QSignalBlocker blocker(actionEnableShadows);
+
+        actionEnableShadows->setChecked(settings.shadowsEnabled);
+
+    }
 
     QSettings settingsStore("FreeCrafter", "FreeCrafter");
 
     sunSettings.save(settingsStore, QStringLiteral("Environment"));
 
     updateShadowStatus(previous, sunSettings);
+
+    persistViewSettings();
+
+    syncViewSettingsUI();
 
 }
 
@@ -3441,6 +3797,140 @@ void MainWindow::toggleGrid(bool enabled)
 
 }
 
+void MainWindow::applyGridSettings(double majorSpacing, int minorDivisions, int majorExtent)
+
+{
+
+    if (!viewport)
+
+        return;
+
+    Scene::Document* document = viewport->getDocument();
+
+    if (!document)
+
+        return;
+
+    Scene::SceneSettings::GridSettings grid = document->settings().grid();
+
+    const float clampedSpacing = static_cast<float>(std::max(0.001, majorSpacing));
+
+    const int clampedDivisions = std::max(1, minorDivisions);
+
+    const int clampedExtent = std::max(1, majorExtent);
+
+    const bool changed = std::fabs(grid.majorSpacing - clampedSpacing) > 1e-6f
+
+        || grid.minorDivisions != clampedDivisions || grid.majorExtent != clampedExtent;
+
+    grid.majorSpacing = clampedSpacing;
+
+    grid.minorDivisions = clampedDivisions;
+
+    grid.majorExtent = clampedExtent;
+
+    document->settings().setGrid(grid);
+
+    if (changed) {
+
+        viewport->update();
+
+        if (statusBar())
+
+            statusBar()->showMessage(
+
+                tr("Grid spacing set to %1 (%2 divisions)").arg(grid.majorSpacing, 0, 'f', 3).arg(grid.minorDivisions),
+
+                2000);
+
+    }
+
+    persistViewSettings();
+
+}
+
+void MainWindow::applyShadowParameters(bool enabled, int qualityIndex, double strengthPercent, double biasValue)
+
+{
+
+    if (!viewport)
+
+        return;
+
+    Scene::Document* document = viewport->getDocument();
+
+    if (!document)
+
+        return;
+
+    Scene::SceneSettings::ShadowSettings shadow = document->settings().shadows();
+
+    SunSettings previous = sunSettings;
+
+    qualityIndex = std::clamp(qualityIndex, 0, 2);
+
+    shadow.enabled = enabled;
+
+    shadow.quality = static_cast<Scene::SceneSettings::ShadowQuality>(qualityIndex);
+
+    shadow.strength = static_cast<float>(std::clamp(strengthPercent / 100.0, 0.0, 1.0));
+
+    shadow.bias = static_cast<float>(std::max(0.00005, biasValue));
+
+    document->settings().setShadows(shadow);
+
+    sunSettings.shadowsEnabled = shadow.enabled;
+
+    sunSettings.shadowStrength = shadow.strength;
+
+    sunSettings.shadowBias = shadow.bias;
+
+    switch (shadow.quality) {
+
+    case Scene::SceneSettings::ShadowQuality::Low:
+
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::Low;
+
+        break;
+
+    case Scene::SceneSettings::ShadowQuality::High:
+
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::High;
+
+        break;
+
+    case Scene::SceneSettings::ShadowQuality::Medium:
+
+    default:
+
+        sunSettings.shadowQuality = SunSettings::ShadowQuality::Medium;
+
+        break;
+
+    }
+
+    if (actionEnableShadows) {
+
+        QSignalBlocker blocker(actionEnableShadows);
+
+        actionEnableShadows->setChecked(shadow.enabled);
+
+    }
+
+    viewport->setSunSettings(sunSettings);
+
+    updateShadowStatus(previous, sunSettings);
+
+    QSettings settings("FreeCrafter", "FreeCrafter");
+
+    sunSettings.save(settings, QStringLiteral("Environment"));
+
+    persistViewSettings();
+
+    syncViewSettingsUI();
+
+}
+
 void MainWindow::showViewSettingsDialog()
 
 {
@@ -3455,6 +3945,11 @@ void MainWindow::showViewSettingsDialog()
 
     dialog.setProjectionMode(viewport->projectionMode());
 
+    if (Scene::Document* document = viewport->getDocument()) {
+        dialog.setGridSettings(document->settings().grid());
+        dialog.setShadowSettings(document->settings().shadows());
+    }
+
     if (dialog.exec() != QDialog::Accepted)
 
         return;
@@ -3462,6 +3957,15 @@ void MainWindow::showViewSettingsDialog()
     viewport->setFieldOfView(dialog.fieldOfView());
 
     setProjectionMode(dialog.projectionMode(), false);
+
+    Scene::SceneSettings::GridSettings gridSettings = dialog.gridSettings();
+    applyGridSettings(gridSettings.majorSpacing, gridSettings.minorDivisions, gridSettings.majorExtent);
+
+    Scene::SceneSettings::ShadowSettings shadowSettings = dialog.shadowSettings();
+    applyShadowParameters(shadowSettings.enabled,
+                          static_cast<int>(shadowSettings.quality),
+                          static_cast<double>(shadowSettings.strength * 100.0f),
+                          shadowSettings.bias);
 
     const QString projectionText = dialog.projectionMode() == CameraController::ProjectionMode::Parallel ? tr("Parallel")
 

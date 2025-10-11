@@ -4,8 +4,6 @@
 
 #include "SunSettings.h"
 
-class QDateEdit;
-class QTimeEdit;
 class QSlider;
 class QDoubleSpinBox;
 class QCheckBox;
@@ -27,19 +25,18 @@ private:
     void syncControls();
     void emitChanges();
 
-    void handleTimeSlider(int minutes);
-    void handleTimeChanged(const QTime& time);
+    void handleElevationSlider(int sliderValue);
+    void handleElevationSpin(double degrees);
+    void handleAzimuthSlider(int sliderValue);
+    void handleAzimuthSpin(double degrees);
 
     SunSettings current;
     bool updating = false;
 
-    QDateEdit* dateEdit = nullptr;
-    QTimeEdit* timeEdit = nullptr;
-    QSlider* timeSlider = nullptr;
-    QDoubleSpinBox* latitudeSpin = nullptr;
-    QDoubleSpinBox* longitudeSpin = nullptr;
-    QDoubleSpinBox* timezoneSpin = nullptr;
-    QCheckBox* dstCheck = nullptr;
+    QSlider* elevationSlider = nullptr;
+    QDoubleSpinBox* elevationSpin = nullptr;
+    QSlider* azimuthSlider = nullptr;
+    QDoubleSpinBox* azimuthSpin = nullptr;
     QCheckBox* shadowsCheck = nullptr;
     QComboBox* qualityCombo = nullptr;
     QSlider* strengthSlider = nullptr;

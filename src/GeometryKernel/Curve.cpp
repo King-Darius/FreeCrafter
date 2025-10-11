@@ -6,6 +6,60 @@
 
 namespace {
 constexpr float kDefaultTolerance = 1e-4f;
+
+std::vector<Vector3> sanitizePoints(const std::vector<Vector3>& pts)
+{
+    auto welded = MeshUtils::weldSequential(pts, kDefaultTolerance);
+    return MeshUtils::collapseTinyEdges(welded, kDefaultTolerance);
+}
+
+bool hasMeaningfulLength(const std::vector<Vector3>& pts)
+{
+    if (pts.size() < 2)
+        return false;
+    const float minSegmentSq = kDefaultTolerance * kDefaultTolerance;
+    for (size_t i = 1; i < pts.size(); ++i) {
+        if (MeshUtils::distanceSquared(pts[i], pts[i - 1]) > minSegmentSq)
+            return true;
+    }
+    return false;
+}
+
+bool populatePolylineData(std::vector<Vector3>&& sanitized,
+                          const std::vector<bool>& hardnessOverride,
+                          std::vector<Vector3>& boundaryOut,
+                          HalfEdgeMesh& meshOut,
+                          std::vector<bool>& hardnessOut)
+{
+    if (sanitized.size() < 2)
+        return false;
+    if (!hasMeaningfulLength(sanitized))
+        return false;
+
+    meshOut.clear();
+    for (const auto& point : sanitized)
+        meshOut.addVertex(point);
+
+    boundaryOut = std::move(sanitized);
+    if (!hardnessOverride.empty()) {
+        hardnessOut = hardnessOverride;
+        hardnessOut.resize(boundaryOut.size(), false);
+    } else {
+        hardnessOut.assign(boundaryOut.size(), false);
+    }
+    return true;
+}
+
+std::unique_ptr<Curve> makePolyline(std::vector<Vector3>&& sanitized,
+                                    const std::vector<bool>& hardnessOverride)
+{
+    std::vector<Vector3> boundary;
+    HalfEdgeMesh mesh;
+    std::vector<bool> hardness;
+    if (!populatePolylineData(std::move(sanitized), hardnessOverride, boundary, mesh, hardness))
+        return nullptr;
+    return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
+}
 }
 
 Curve::Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness)
@@ -25,8 +79,7 @@ namespace {
 bool buildCurve(const std::vector<Vector3>& pts, std::vector<Vector3>& outLoop, HalfEdgeMesh& outMesh,
     std::vector<bool>& hardness)
 {
-    auto welded = MeshUtils::weldSequential(pts, kDefaultTolerance);
-    auto healed = MeshUtils::collapseTinyEdges(welded, kDefaultTolerance);
+    auto healed = sanitizePoints(pts);
     if (healed.size() < 3) {
         return false;
     }
@@ -64,11 +117,19 @@ bool buildCurve(const std::vector<Vector3>& pts, std::vector<Vector3>& outLoop, 
 }
 
 std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts, const std::vector<bool>& edgeHardness) {
+    auto sanitized = sanitizePoints(pts);
+    if (sanitized.size() < 2)
+        return nullptr;
+
+    if (sanitized.size() < 3) {
+        return makePolyline(std::move(sanitized), edgeHardness);
+    }
+
     std::vector<Vector3> loop;
     HalfEdgeMesh mesh;
     std::vector<bool> hardness;
-    if (!buildCurve(pts, loop, mesh, hardness)) {
-        return nullptr;
+    if (!buildCurve(sanitized, loop, mesh, hardness)) {
+        return makePolyline(std::move(sanitized), edgeHardness);
     }
     if (!edgeHardness.empty()) {
         hardness = edgeHardness;
@@ -79,15 +140,27 @@ std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts, 
 
 bool Curve::rebuildFromPoints(const std::vector<Vector3>& pts, const std::vector<bool>& edgeHardness)
 {
-    std::vector<Vector3> loop;
-    HalfEdgeMesh mesh;
-    std::vector<bool> hardness;
-    if (!buildCurve(pts, loop, mesh, hardness)) {
+    auto sanitized = sanitizePoints(pts);
+    if (sanitized.size() < 2)
         return false;
+
+    if (sanitized.size() < 3) {
+        if (!populatePolylineData(std::move(sanitized), edgeHardness, boundaryLoop, mesh, hardnessFlags))
+            return false;
+        return true;
+    }
+
+    std::vector<Vector3> loop;
+    HalfEdgeMesh rebuiltMesh;
+    std::vector<bool> hardness;
+    if (!buildCurve(sanitized, loop, rebuiltMesh, hardness)) {
+        if (!populatePolylineData(std::move(sanitized), edgeHardness, boundaryLoop, mesh, hardnessFlags))
+            return false;
+        return true;
     }
     boundaryLoop = std::move(loop);
-    mesh.heal(kDefaultTolerance, kDefaultTolerance);
-    this->mesh = std::move(mesh);
+    rebuiltMesh.heal(kDefaultTolerance, kDefaultTolerance);
+    mesh = std::move(rebuiltMesh);
     if (!edgeHardness.empty()) {
         hardness = edgeHardness;
         hardness.resize(boundaryLoop.size(), false);
@@ -96,6 +169,15 @@ bool Curve::rebuildFromPoints(const std::vector<Vector3>& pts, const std::vector
     }
     hardnessFlags = std::move(hardness);
     return true;
+}
+
+std::unique_ptr<Curve> Curve::createOpenPolyline(const std::vector<Vector3>& pts,
+    const std::vector<bool>& edgeHardness)
+{
+    auto sanitized = sanitizePoints(pts);
+    if (sanitized.size() < 2)
+        return nullptr;
+    return makePolyline(std::move(sanitized), edgeHardness);
 }
 
 std::unique_ptr<GeometryObject> Curve::clone() const

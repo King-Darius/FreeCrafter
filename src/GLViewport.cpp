@@ -13,6 +13,7 @@
 
 #include <QByteArray>
 #include <QFont>
+#include <QStringList>
 #include <QtMath>
 #include <limits>
 
@@ -245,6 +246,15 @@ void GLViewport::setShowGrid(bool show)
     update();
 }
 
+void GLViewport::setFrameStatsVisible(bool visible)
+{
+    if (frameStatsHudVisible == visible)
+        return;
+
+    frameStatsHudVisible = visible;
+    update();
+}
+
 void GLViewport::setSunSettings(const SunSettings& settings)
 {
     environmentSettings = settings;
@@ -400,18 +410,35 @@ void GLViewport::paintGL()
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     drawInferenceOverlay(painter, projectionMatrix, viewMatrix);
-    painter.setPen(QColor(206, 214, 224));
-    painter.setBrush(QColor(255, 255, 255, 225));
-    QRect hudRect(12, 12, 200, 60);
-    painter.setOpacity(0.9);
-    painter.drawRoundedRect(hudRect, 10, 10);
-    painter.setOpacity(1.0);
-    painter.setPen(QColor(60, 72, 86));
-    painter.drawText(hudRect.adjusted(12, 12, -12, -12), Qt::AlignLeft | Qt::AlignTop,
-                     tr("FPS: %1\nFrame: %2 ms\nDraw Calls: %3")
-                         .arg(smoothedFps, 0, 'f', 1)
-                         .arg(smoothedFrameMs, 0, 'f', 2)
-                         .arg(lastDrawCalls));
+
+    if (frameStatsHudVisible) {
+        const QString statsText = tr("FPS: %1\nFrame: %2 ms\nDraw Calls: %3")
+                                      .arg(smoothedFps, 0, 'f', 1)
+                                      .arg(smoothedFrameMs, 0, 'f', 2)
+                                      .arg(lastDrawCalls);
+        const QStringList lines = statsText.split('\n');
+        const QFontMetrics metrics = painter.fontMetrics();
+        int textWidth = 0;
+        for (const QString& line : lines)
+            textWidth = std::max(textWidth, metrics.horizontalAdvance(line));
+        const int lineHeight = metrics.lineSpacing();
+        const int textHeight = lineHeight * lines.size();
+        const int padding = 12;
+        const int margin = 12;
+
+        QRect hudRect(0, 0, textWidth + padding * 2, textHeight + padding * 2);
+        hudRect.moveBottomRight(QPoint(width() - margin, height() - margin));
+
+        painter.setPen(QColor(206, 214, 224));
+        painter.setBrush(QColor(255, 255, 255, 225));
+        painter.setOpacity(0.9);
+        painter.drawRoundedRect(hudRect, 10, 10);
+        painter.setOpacity(1.0);
+        painter.setPen(QColor(60, 72, 86));
+        painter.drawText(hudRect.adjusted(padding, padding, -padding, -padding),
+                         Qt::AlignLeft | Qt::AlignTop,
+                         statsText);
+    }
 
     refreshCursorShape();
 }

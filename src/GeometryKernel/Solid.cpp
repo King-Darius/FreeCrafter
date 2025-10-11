@@ -4,6 +4,7 @@
 #include "MeshUtils.h"
 #include "TransformUtils.h"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace {
@@ -19,13 +20,25 @@ std::vector<Vector3> prepareProfile(const std::vector<Vector3>& baseProfile) {
 Solid::Solid(std::vector<Vector3> base, float h, HalfEdgeMesh meshData)
     : baseLoop(std::move(base)), height(h), mesh(std::move(meshData)) {}
 
-std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& baseProfile, float height) {
-    if (height <= kDefaultTolerance) {
+std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& baseProfile, float height,
+    bool capStart, bool capEnd)
+{
+    if (std::fabs(height) <= kDefaultTolerance) {
+        return nullptr;
+    }
+    return createFromProfileWithVector(baseProfile, Vector3(0.0f, height, 0.0f), capStart, capEnd);
+}
+
+std::unique_ptr<Solid> Solid::createFromProfileWithVector(const std::vector<Vector3>& baseProfile,
+    const Vector3& direction, bool capStart, bool capEnd)
+{
+    auto profile = prepareProfile(baseProfile);
+    if (profile.size() < 3) {
         return nullptr;
     }
 
-    auto profile = prepareProfile(baseProfile);
-    if (profile.size() < 3) {
+    float directionLength = direction.length();
+    if (directionLength <= kDefaultTolerance) {
         return nullptr;
     }
 
@@ -33,8 +46,11 @@ std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& base
     if (normal.length() <= 1e-6f) {
         return nullptr;
     }
-    if (normal.y < 0.0f) {
+
+    Vector3 directionUnit = direction / directionLength;
+    if (normal.dot(directionUnit) < 0.0f) {
         std::reverse(profile.begin(), profile.end());
+        normal = -normal;
     }
 
     HalfEdgeMesh mesh;
@@ -42,21 +58,27 @@ std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& base
     std::vector<int> topIndices;
     bottomIndices.reserve(profile.size());
     topIndices.reserve(profile.size());
+
     for (const auto& p : profile) {
-        bottomIndices.push_back(mesh.addVertex(Vector3(p.x, 0.0f, p.z)));
+        bottomIndices.push_back(mesh.addVertex(p));
     }
     for (const auto& p : profile) {
-        topIndices.push_back(mesh.addVertex(Vector3(p.x, height, p.z)));
+        Vector3 topPoint = p + direction;
+        topIndices.push_back(mesh.addVertex(topPoint));
     }
 
-    std::vector<int> bottomLoop = bottomIndices;
-    std::reverse(bottomLoop.begin(), bottomLoop.end());
-    if (mesh.addFace(bottomLoop) < 0) {
-        return nullptr;
+    if (capStart) {
+        std::vector<int> bottomLoop = bottomIndices;
+        std::reverse(bottomLoop.begin(), bottomLoop.end());
+        if (mesh.addFace(bottomLoop) < 0) {
+            return nullptr;
+        }
     }
 
-    if (mesh.addFace(topIndices) < 0) {
-        return nullptr;
+    if (capEnd) {
+        if (mesh.addFace(topIndices) < 0) {
+            return nullptr;
+        }
     }
 
     for (size_t i = 0; i < profile.size(); ++i) {
@@ -78,11 +100,18 @@ std::unique_ptr<Solid> Solid::createFromProfile(const std::vector<Vector3>& base
         return nullptr;
     }
 
-    return std::unique_ptr<Solid>(new Solid(std::move(profile), height, std::move(mesh)));
+    return std::unique_ptr<Solid>(new Solid(std::move(profile), directionLength, std::move(mesh)));
 }
 
-std::unique_ptr<Solid> Solid::createFromCurve(const Curve& curve, float height) {
-    return createFromProfile(curve.getBoundaryLoop(), height);
+std::unique_ptr<Solid> Solid::createFromCurve(const Curve& curve, float height, bool capStart, bool capEnd)
+{
+    return createFromProfile(curve.getBoundaryLoop(), height, capStart, capEnd);
+}
+
+std::unique_ptr<Solid> Solid::createFromCurveWithVector(const Curve& curve, const Vector3& direction,
+    bool capStart, bool capEnd)
+{
+    return createFromProfileWithVector(curve.getBoundaryLoop(), direction, capStart, capEnd);
 }
 
 std::unique_ptr<Solid> Solid::createFromMesh(HalfEdgeMesh meshData)

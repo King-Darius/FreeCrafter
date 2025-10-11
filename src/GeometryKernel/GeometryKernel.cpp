@@ -27,10 +27,38 @@ GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
     return raw;
 }
 
-GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float height) {
-    if (!curveObj || curveObj->getType() != ObjectType::Curve) return nullptr;
+GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float height)
+{
+    return extrudeCurve(curveObj, height, ExtrudeOptions{});
+}
+
+GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float height, const ExtrudeOptions& options)
+{
+    if (!curveObj || curveObj->getType() != ObjectType::Curve)
+        return nullptr;
     auto* curve = static_cast<Curve*>(curveObj);
-    auto obj = Solid::createFromCurve(*curve, height);
+    auto obj = Solid::createFromCurve(*curve, height, options.capStart, options.capEnd);
+    if (!obj) {
+        return nullptr;
+    }
+    GeometryObject* raw = obj.get();
+    objects.push_back(std::move(obj));
+    markModified();
+    return raw;
+}
+
+GeometryObject* GeometryKernel::extrudeCurveAlongVector(GeometryObject* curveObj, const Vector3& direction)
+{
+    return extrudeCurveAlongVector(curveObj, direction, ExtrudeOptions{});
+}
+
+GeometryObject* GeometryKernel::extrudeCurveAlongVector(GeometryObject* curveObj, const Vector3& direction,
+    const ExtrudeOptions& options)
+{
+    if (!curveObj || curveObj->getType() != ObjectType::Curve)
+        return nullptr;
+    auto* curve = static_cast<Curve*>(curveObj);
+    auto obj = Solid::createFromCurveWithVector(*curve, direction, options.capStart, options.capEnd);
     if (!obj) {
         return nullptr;
     }

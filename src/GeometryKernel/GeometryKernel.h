@@ -16,7 +16,16 @@ class GeometryKernel {
 public:
     GeometryKernel() = default;
     GeometryObject* addCurve(const std::vector<Vector3>& points);
+    struct ExtrudeOptions {
+        bool capStart = true;
+        bool capEnd = true;
+    };
+
     GeometryObject* extrudeCurve(GeometryObject* curveObj, float height);
+    GeometryObject* extrudeCurve(GeometryObject* curveObj, float height, const ExtrudeOptions& options);
+    GeometryObject* extrudeCurveAlongVector(GeometryObject* curveObj, const Vector3& direction);
+    GeometryObject* extrudeCurveAlongVector(GeometryObject* curveObj, const Vector3& direction,
+        const ExtrudeOptions& options);
     GeometryObject* addObject(std::unique_ptr<GeometryObject> object);
     GeometryObject* cloneObject(const GeometryObject& source);
     void deleteObject(GeometryObject* obj);

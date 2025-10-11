@@ -59,6 +59,8 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c, Core::Comman
     tools.push_back(std::make_unique<ProtractorTool>(gPtr, c));
     tools.push_back(std::make_unique<AxesTool>(gPtr, c));
     tools.push_back(std::make_unique<ExtrudeTool>(gPtr, c));
+    tools.push_back(std::make_unique<ChamferTool>(gPtr, c));
+    tools.push_back(std::make_unique<LoftTool>(gPtr, c));
     tools.push_back(std::make_unique<SectionTool>(geometry, c, document));
     tools.push_back(std::make_unique<OrbitTool>(gPtr, c));
     tools.push_back(std::make_unique<PanTool>(gPtr, c));

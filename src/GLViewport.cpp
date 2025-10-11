@@ -127,6 +127,7 @@ Qt::CursorShape cursorShapeForTool(const Tool* tool)
 GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
 {
+    setObjectName(QStringLiteral("MainViewport"));
     setFocusPolicy(Qt::StrongFocus);
     // small timer to keep UI responsive during drags
     repaintTimer.setInterval(16);
@@ -480,10 +481,12 @@ void GLViewport::drawAxes()
 
 void GLViewport::drawGrid()
 {
-    const float majorSpacing = 1.0f;
-    const float minorSpacing = 0.25f;
-    const int majorExtent = 50;
-    const float gridExtent = majorSpacing * majorExtent;
+    const Scene::SceneSettings::GridSettings& gridSettings = document.settings().grid();
+    const float majorSpacing = std::max(0.001f, gridSettings.majorSpacing);
+    const int minorDivisions = std::max(1, gridSettings.minorDivisions);
+    const int majorExtent = std::max(1, gridSettings.majorExtent);
+    const float minorSpacing = majorSpacing / static_cast<float>(minorDivisions);
+    const float gridExtent = majorSpacing * static_cast<float>(majorExtent);
     const float fadeScale = 0.035f;
 
     const QVector4D axisXColor(0.93f, 0.18f, 0.18f, 1.0f);
@@ -512,8 +515,7 @@ void GLViewport::drawGrid()
     const float majorWidth = 1.35f;
     const float minorWidth = 1.05f;
 
-    const int minorSteps = std::max(1, static_cast<int>(std::round(majorSpacing / minorSpacing)));
-    const int totalSteps = majorExtent * minorSteps;
+    const int totalSteps = majorExtent * minorDivisions;
 
     auto addLine = [&](const QVector3D& a, const QVector3D& b, float distance, bool major) {
         const QVector3D& rgb = major ? majorColor : minorColor;
@@ -533,7 +535,7 @@ void GLViewport::drawGrid()
     for (int i = -totalSteps; i <= totalSteps; ++i) {
         if (i == 0)
             continue;
-        const bool major = (i % minorSteps) == 0;
+        const bool major = (i % minorDivisions) == 0;
         const float coord = i * minorSpacing;
 
         addLine(QVector3D(coord, 0.0f, -gridExtent), QVector3D(coord, 0.0f, gridExtent), coord, major);
@@ -1050,6 +1052,81 @@ void GLViewport::drawSceneOverlays()
                                          false,
                                          8.0f);
             }
+        }
+    }
+
+    if (settings.guidesVisible()) {
+        const auto& guides = document.geometry().getGuides();
+        std::vector<QVector3D> lineSegments;
+        lineSegments.reserve(guides.lines.size() * 2);
+        for (const auto& line : guides.lines) {
+            lineSegments.emplace_back(line.start.x, line.start.y, line.start.z);
+            lineSegments.emplace_back(line.end.x, line.end.y, line.end.z);
+        }
+        const Scene::SceneSettings::GridSettings& gridSettings = settings.grid();
+        const float baseSize = std::max(0.1f, gridSettings.majorSpacing * 0.1f);
+        const QVector4D guideLineColor(0.18f, 0.62f, 0.85f, 0.9f);
+        if (!lineSegments.empty()) {
+            renderer.addLineSegments(lineSegments,
+                                     guideLineColor,
+                                     1.6f,
+                                     false,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
+        }
+
+        std::vector<QVector3D> pointSegments;
+        pointSegments.reserve(guides.points.size() * 6);
+        for (const auto& point : guides.points) {
+            QVector3D origin(point.position.x, point.position.y, point.position.z);
+            QVector3D offsetX(baseSize, 0.0f, 0.0f);
+            QVector3D offsetY(0.0f, baseSize, 0.0f);
+            QVector3D offsetZ(0.0f, 0.0f, baseSize);
+            pointSegments.push_back(origin - offsetX);
+            pointSegments.push_back(origin + offsetX);
+            pointSegments.push_back(origin - offsetY);
+            pointSegments.push_back(origin + offsetY);
+            pointSegments.push_back(origin - offsetZ);
+            pointSegments.push_back(origin + offsetZ);
+        }
+        if (!pointSegments.empty()) {
+            renderer.addLineSegments(pointSegments,
+                                     QVector4D(0.95f, 0.55f, 0.2f, 0.9f),
+                                     1.6f,
+                                     false,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
+        }
+
+        std::vector<QVector3D> angleSegments;
+        angleSegments.reserve(guides.angles.size() * 4);
+        for (const auto& angle : guides.angles) {
+            QVector3D origin(angle.origin.x, angle.origin.y, angle.origin.z);
+            QVector3D start(angle.startDirection.x, angle.startDirection.y, angle.startDirection.z);
+            QVector3D end(angle.endDirection.x, angle.endDirection.y, angle.endDirection.z);
+            if (!start.isNull())
+                start.normalize();
+            if (!end.isNull())
+                end.normalize();
+            const float rayLength = std::max(gridSettings.majorSpacing, baseSize * 4.0f);
+            angleSegments.push_back(origin);
+            angleSegments.push_back(origin + start * rayLength);
+            angleSegments.push_back(origin);
+            angleSegments.push_back(origin + end * rayLength);
+        }
+        if (!angleSegments.empty()) {
+            renderer.addLineSegments(angleSegments,
+                                     QVector4D(0.6f, 0.3f, 0.9f, 0.85f),
+                                     1.8f,
+                                     false,
+                                     true,
+                                     Renderer::LineCategory::Generic,
+                                     false,
+                                     8.0f);
         }
     }
 

@@ -129,6 +129,8 @@ public:
     void resetAxes();
     const AxesState& getAxesState() const { return axes; }
 
+    std::uint64_t revision() const { return revisionCounter; }
+
     struct MeshBuffer {
         std::vector<Vector3> positions;
         std::vector<Vector3> normals;
@@ -141,6 +143,8 @@ public:
                                            const std::vector<std::uint32_t>& indices);
 
 private:
+    void markModified();
+
     std::vector<std::unique_ptr<GeometryObject>> objects;
     std::unordered_map<const GeometryObject*, std::string> materialAssignments;
     std::unordered_map<const GeometryObject*, ShapeMetadata> metadataMap;
@@ -148,4 +152,5 @@ private:
     std::vector<LinearDimension> dimensions;
     GuideState guides;
     AxesState axes;
+    std::uint64_t revisionCounter = 0;
 };

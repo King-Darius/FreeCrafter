@@ -67,6 +67,7 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
         lastModelingTool = active;
     }
     propagateViewport();
+    geometryRevision = geometry ? geometry->revision() : 0;
     pushInferenceToActive();
     if (active) {
         Tool::ModifierState mods{ shiftPressed, ctrlPressed, altPressed };
@@ -149,6 +150,46 @@ void ToolManager::setViewportSize(int w, int h)
     viewportWidth = std::max(1, w);
     viewportHeight = std::max(1, h);
     propagateViewport();
+}
+
+void ToolManager::handlePointerDown(const Tool::PointerInput& input)
+{
+    if (!active)
+        return;
+    active->handleMouseDown(input);
+    handleToolInteraction();
+}
+
+void ToolManager::handlePointerMove(const Tool::PointerInput& input)
+{
+    if (!active)
+        return;
+    active->handleMouseMove(input);
+    handleToolInteraction();
+}
+
+void ToolManager::handlePointerUp(const Tool::PointerInput& input)
+{
+    if (!active)
+        return;
+    active->handleMouseUp(input);
+    handleToolInteraction();
+}
+
+void ToolManager::commitActiveTool()
+{
+    if (!active)
+        return;
+    active->commit();
+    handleToolInteraction();
+}
+
+void ToolManager::cancelActiveTool()
+{
+    if (!active)
+        return;
+    active->cancel();
+    handleToolInteraction();
 }
 
 void ToolManager::updateInference(const ToolInferenceUpdateRequest& request)
@@ -254,6 +295,7 @@ void ToolManager::handleKeyPress(int key)
         }
         break;
     }
+    handleToolInteraction();
 }
 
 void ToolManager::handleKeyRelease(int key)
@@ -297,6 +339,7 @@ void ToolManager::handleKeyRelease(int key)
         }
         break;
     }
+    handleToolInteraction();
 }
 
 void ToolManager::updatePointerModifiers(const Tool::ModifierState& modifiers)
@@ -341,7 +384,13 @@ bool ToolManager::applyMeasurementOverride(double value)
     if (result == Tool::OverrideResult::Commit) {
         active->commit();
     }
+    handleToolInteraction();
     return true;
+}
+
+void ToolManager::setGeometryChangedCallback(std::function<void()> callback)
+{
+    geometryChangedCallback = std::move(callback);
 }
 
 void ToolManager::propagateViewport()
@@ -485,5 +534,19 @@ void ToolManager::setAxisLock(const Vector3& direction)
         axisAnchor = Vector3();
         axisAnchorValid = true;
     }
+}
+
+void ToolManager::handleToolInteraction()
+{
+    if (!geometry)
+        return;
+    std::uint64_t current = geometry->revision();
+    if (current == geometryRevision)
+        return;
+    geometryRevision = current;
+    if (document)
+        document->synchronizeWithGeometry();
+    if (geometryChangedCallback)
+        geometryChangedCallback();
 }
 

@@ -1,38 +1,23 @@
 #include "SunSettings.h"
 
-#include <QDateTime>
 #include <QtGlobal>
 #include <QtMath>
 
 SunSettings::SunSettings()
 {
-    const QDateTime now = QDateTime::currentDateTime();
-    date = now.date();
-    time = now.time();
-    latitude = 37.7749; // default to San Francisco
-    longitude = -122.4194;
-    timezoneMinutes = now.offsetFromUtc() / 60;
-    daylightSaving = false;
+    elevationDegrees = 45.0f;
+    azimuthDegrees = 135.0f;
     shadowsEnabled = false;
     shadowQuality = ShadowQuality::Medium;
     shadowStrength = 0.65f;
     shadowBias = 0.0035f;
 }
 
-int SunSettings::effectiveTimezoneMinutes() const
-{
-    return timezoneMinutes + (daylightSaving ? 60 : 0);
-}
-
 void SunSettings::save(QSettings& settings, const QString& groupName) const
 {
     settings.beginGroup(groupName);
-    settings.setValue(QStringLiteral("date"), date);
-    settings.setValue(QStringLiteral("time"), time);
-    settings.setValue(QStringLiteral("latitude"), latitude);
-    settings.setValue(QStringLiteral("longitude"), longitude);
-    settings.setValue(QStringLiteral("timezoneMinutes"), timezoneMinutes);
-    settings.setValue(QStringLiteral("daylightSaving"), daylightSaving);
+    settings.setValue(QStringLiteral("elevation"), static_cast<double>(elevationDegrees));
+    settings.setValue(QStringLiteral("azimuth"), static_cast<double>(azimuthDegrees));
     settings.setValue(QStringLiteral("shadowsEnabled"), shadowsEnabled);
     settings.setValue(QStringLiteral("shadowQuality"), static_cast<int>(shadowQuality));
     settings.setValue(QStringLiteral("shadowStrength"), static_cast<double>(shadowStrength));
@@ -43,14 +28,13 @@ void SunSettings::save(QSettings& settings, const QString& groupName) const
 void SunSettings::load(QSettings& settings, const QString& groupName)
 {
     settings.beginGroup(groupName);
-    if (settings.contains(QStringLiteral("date")))
-        date = settings.value(QStringLiteral("date"), date).toDate();
-    if (settings.contains(QStringLiteral("time")))
-        time = settings.value(QStringLiteral("time"), time).toTime();
-    latitude = settings.value(QStringLiteral("latitude"), latitude).toDouble();
-    longitude = settings.value(QStringLiteral("longitude"), longitude).toDouble();
-    timezoneMinutes = settings.value(QStringLiteral("timezoneMinutes"), timezoneMinutes).toInt();
-    daylightSaving = settings.value(QStringLiteral("daylightSaving"), daylightSaving).toBool();
+    elevationDegrees = static_cast<float>(settings.value(QStringLiteral("elevation"), static_cast<double>(elevationDegrees)).toDouble());
+    elevationDegrees = qBound(-90.0f, elevationDegrees, 90.0f);
+    azimuthDegrees = static_cast<float>(settings.value(QStringLiteral("azimuth"), static_cast<double>(azimuthDegrees)).toDouble());
+    while (azimuthDegrees < 0.0f)
+        azimuthDegrees += 360.0f;
+    while (azimuthDegrees >= 360.0f)
+        azimuthDegrees -= 360.0f;
     shadowsEnabled = settings.value(QStringLiteral("shadowsEnabled"), shadowsEnabled).toBool();
     const int quality = settings.value(QStringLiteral("shadowQuality"), static_cast<int>(shadowQuality)).toInt();
     if (quality >= static_cast<int>(ShadowQuality::Low) && quality <= static_cast<int>(ShadowQuality::High)) {

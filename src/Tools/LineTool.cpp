@@ -48,20 +48,30 @@ private:
 };
 
 }
-
-
-
-
-
-LineTool::LineTool(GeometryKernel* g, CameraController* c)
-    : Tool(g, c)
-{
-}
-
-void LineTool::onPointerDown(const PointerInput& input)
-{
-    lastX = input.x;
-    lastY = input.y;
+    if (points.empty()) {
+        setState(State::Active);
+        points.push_back(point);
+    } else {
+        if ((point - points.back()).lengthSquared() > 1e-8f) {
+            points.push_back(point);
+
+    previewPoint = point;
+    previewValid = true;
+void LineTool::onCommit()
+{
+    if (geometry && points.size() >= 2) {
+        std::vector<Vector3> chain = points;
+        if (auto* stack = getUndoStack()) {
+            stack->push(new AddCurveCommand(*geometry, getDocument(), std::move(chain)));
+        } else {
+            geometry->addCurve(chain);
+            if (auto* doc = getDocument())
+                doc->synchronizeWithGeometry();
+        }
+    }
+    resetChain();
+}
+
 
     Vector3 point;
     if (!resolvePoint(input, point)) {

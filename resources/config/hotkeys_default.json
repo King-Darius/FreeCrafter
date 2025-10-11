@@ -3,6 +3,7 @@
   "actions": {
     "file.new": "Ctrl+N",
     "file.open": "Ctrl+O",
+    "file.import": "Ctrl+I",
     "file.save": "Ctrl+S",
     "file.saveAs": "Ctrl+Shift+S",
     "file.export": "Ctrl+E",

@@ -14,6 +14,7 @@
 #include "Scene/SceneCommands.h"
 #include "SunModel.h"
 #include "Tools/ToolManager.h"
+#include "app/AutosaveManager.h"
 #include "ui/ExternalReferenceDialog.h"
 #include "ui/GuideManagerDialog.h"
 #include "ui/ImageImportDialog.h"
@@ -37,6 +38,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QDir>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
@@ -46,6 +48,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QStatusBar>
 #include <QTabBar>
 #include <QUndoStack>
@@ -850,6 +853,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     viewport->setToolManager(toolManager.get());
 
     viewport->setNavigationPreferences(navigationPrefs.get());
+    initializeAutosave();
 
     connect(viewport, &GLViewport::cursorPositionChanged, this, &MainWindow::updateCursor);
 
@@ -955,11 +959,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     restoreWindowState();
 
+    maybeRestoreAutosave();
+
 }
 
 MainWindow::~MainWindow()
 
 {
+
+    if (autosaveManager)
+        autosaveManager->shutdown();
 
     persistWindowState();
 
@@ -971,7 +980,138 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
     persistWindowState();
 
+    if (autosaveManager)
+        autosaveManager->shutdown();
+
     QMainWindow::closeEvent(event);
+
+}
+
+void MainWindow::initializeAutosave()
+
+{
+
+    autosaveManager = std::make_unique<AutosaveManager>(this);
+
+    if (!viewport)
+
+        return;
+
+    autosaveManager->setDocument(viewport->getDocument());
+
+    QSettings settings("FreeCrafter", "FreeCrafter");
+
+    settings.beginGroup(QStringLiteral("Autosave"));
+
+    const int interval = settings.value(QStringLiteral("intervalMinutes"), 5).toInt();
+
+    const int retention = settings.value(QStringLiteral("retentionCount"), 5).toInt();
+
+    currentDocumentPath = settings.value(QStringLiteral("lastSourcePath")).toString();
+
+    settings.endGroup();
+
+    autosaveManager->setIntervalMinutes(interval);
+
+    autosaveManager->setRetentionCount(retention);
+
+    autosaveManager->setSourcePath(currentDocumentPath);
+
+    autosaveManager->setDocument(viewport->getDocument());
+
+}
+
+void MainWindow::maybeRestoreAutosave()
+
+{
+
+    if (!autosaveManager || !viewport)
+
+        return;
+
+    const auto latest = autosaveManager->latestAutosave();
+
+    if (!latest)
+
+        return;
+
+    const QString timestamp = latest->timestamp.toLocalTime().toString(Qt::DefaultLocaleLongDate);
+
+    QString prompt;
+
+    if (currentDocumentPath.isEmpty()) {
+
+        prompt = tr("An autosave from %1 was found. Do you want to restore it?").arg(timestamp);
+
+    } else {
+
+        prompt = tr("An autosave for %1 from %2 was found. Do you want to restore it?")
+
+                     .arg(QFileInfo(currentDocumentPath).fileName(), timestamp);
+
+    }
+
+    const QMessageBox::StandardButton choice = QMessageBox::question(this,
+
+                                                                      tr("Restore Autosave"),
+
+                                                                      prompt,
+
+                                                                      QMessageBox::Yes | QMessageBox::No,
+
+                                                                      QMessageBox::Yes);
+
+    if (choice != QMessageBox::Yes)
+
+        return;
+
+    Scene::Document* doc = viewport->getDocument();
+
+    if (!doc)
+
+        return;
+
+    if (autosaveManager->restoreLatest(doc)) {
+
+        viewport->update();
+
+        updateSelectionStatus();
+
+        if (statusBar())
+
+            statusBar()->showMessage(tr("Autosave restored"), 3000);
+
+    } else {
+
+        QMessageBox::warning(this, tr("Restore Autosave"), tr("Failed to restore the autosave file."));
+
+    }
+
+}
+
+void MainWindow::updateAutosaveSource(const QString& path, bool purgePreviousPrefix)
+
+{
+
+    QString previousPrefix;
+
+    if (autosaveManager)
+
+        previousPrefix = autosaveManager->currentPrefix();
+
+    currentDocumentPath = path;
+
+    if (autosaveManager) {
+
+        if (purgePreviousPrefix && !previousPrefix.isEmpty())
+
+            autosaveManager->clearAutosavesForPrefix(previousPrefix);
+
+        autosaveManager->setSourcePath(currentDocumentPath);
+
+    }
+
+    persistAutosaveSettings();
 
 }
 
@@ -2639,6 +2779,29 @@ void MainWindow::persistViewSettings() const
     settings.setValue(QStringLiteral("showFrameStatsHud"), showFrameStatsHud);
 
     settings.endGroup();
+    persistAutosaveSettings();
+
+}
+
+void MainWindow::persistAutosaveSettings() const
+
+{
+
+    QSettings settings("FreeCrafter", "FreeCrafter");
+
+    settings.beginGroup(QStringLiteral("Autosave"));
+
+    if (autosaveManager) {
+
+        settings.setValue(QStringLiteral("intervalMinutes"), autosaveManager->intervalMinutes());
+
+        settings.setValue(QStringLiteral("retentionCount"), autosaveManager->retentionCount());
+
+    }
+
+    settings.setValue(QStringLiteral("lastSourcePath"), currentDocumentPath);
+
+    settings.endGroup();
 
 }
 
@@ -2768,6 +2931,8 @@ void MainWindow::newFile()
 
     }
 
+    updateAutosaveSource(QString(), true);
+
     viewport->update();
 
     statusBar()->showMessage(tr("New document created"), 1500);
@@ -2787,6 +2952,8 @@ void MainWindow::openFile()
     viewport->update();
 
     if (ok) {
+
+        updateAutosaveSource(fn, false);
 
         statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(fn).fileName()), 1500);
 
@@ -2809,6 +2976,12 @@ void MainWindow::saveFile()
     bool ok = viewport->getDocument() && viewport->getDocument()->saveToFile(fn.toStdString());
 
     if (ok) {
+
+        updateAutosaveSource(fn, true);
+
+        if (autosaveManager)
+
+            autosaveManager->clearAutosaves();
 
         statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(fn).fileName()), 1500);
 
@@ -2880,6 +3053,52 @@ void MainWindow::showPreferences()
 
     layout->addWidget(invertCheck);
 
+    auto* autosaveIntervalLabel = new QLabel(tr("Autosave every (minutes, 0 disables)"), &dialog);
+
+    autosaveIntervalLabel->setWordWrap(true);
+
+    layout->addWidget(autosaveIntervalLabel);
+
+    auto* autosaveIntervalSpin = new QSpinBox(&dialog);
+
+    autosaveIntervalSpin->setRange(0, 120);
+
+    autosaveIntervalSpin->setSuffix(tr(" min"));
+
+    autosaveIntervalSpin->setValue(autosaveManager ? autosaveManager->intervalMinutes() : 5);
+
+    layout->addWidget(autosaveIntervalSpin);
+
+    auto* autosaveRetentionLabel = new QLabel(tr("Keep autosave revisions"), &dialog);
+
+    autosaveRetentionLabel->setWordWrap(true);
+
+    layout->addWidget(autosaveRetentionLabel);
+
+    auto* autosaveRetentionSpin = new QSpinBox(&dialog);
+
+    autosaveRetentionSpin->setRange(1, 50);
+
+    autosaveRetentionSpin->setValue(autosaveManager ? autosaveManager->retentionCount() : 5);
+
+    layout->addWidget(autosaveRetentionSpin);
+
+    if (autosaveManager) {
+
+        const QString autosavePath = QDir::toNativeSeparators(autosaveManager->autosaveDirectory());
+
+        if (!autosavePath.isEmpty()) {
+
+            auto* autosavePathLabel = new QLabel(tr("Autosaves are stored in %1").arg(autosavePath), &dialog);
+
+            autosavePathLabel->setWordWrap(true);
+
+            layout->addWidget(autosavePathLabel);
+
+        }
+
+    }
+
     auto* shortcutsButton = new QPushButton(tr("Customize Shortcuts…"), &dialog);
 
     layout->addWidget(shortcutsButton);
@@ -2949,6 +3168,16 @@ void MainWindow::showPreferences()
     if (dialog.exec() != QDialog::Accepted)
 
         return;
+
+    if (autosaveManager) {
+
+        autosaveManager->setIntervalMinutes(autosaveIntervalSpin->value());
+
+        autosaveManager->setRetentionCount(autosaveRetentionSpin->value());
+
+    }
+
+    persistAutosaveSettings();
 
     if (!navigationPrefs)
 

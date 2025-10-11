@@ -22,6 +22,7 @@
 #include "ui/InspectorPanel.h"
 #include "ui/MeasurementWidget.h"
 #include "ui/PluginManagerDialog.h"
+#include "ui/TerminalDock.h"
 #include "ui/ViewSettingsDialog.h"
 
 #include <QAction>
@@ -1662,6 +1663,8 @@ void MainWindow::createToolbars()
     actionTerminal = primaryToolbar->addAction(QIcon(QStringLiteral(":/icons/terminal.svg")), tr("Terminal"), this, &MainWindow::toggleTerminalDock);
 
     actionTerminal->setStatusTip(tr("Toggle terminal dock"));
+    actionTerminal->setCheckable(true);
+
 
     actionGit = primaryToolbar->addAction(QIcon(QStringLiteral(":/icons/git.svg")), tr("Git"), this, &MainWindow::showGitPopover);
 
@@ -1871,6 +1874,7 @@ void MainWindow::createDockPanels()
 {
     createLeftDock();
     createRightDock();
+    createTerminalDock();
     customizeViewport();
 }
 
@@ -1977,6 +1981,45 @@ void MainWindow::createRightDock()
         environmentPanel->setSettings(sunSettings);
         connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
     }
+}
+
+void MainWindow::createTerminalDock()
+{
+    if (terminalDock_) {
+        removeDockWidget(terminalDock_);
+        terminalDock_->deleteLater();
+        terminalDock_ = nullptr;
+        terminalWidget_ = nullptr;
+    }
+
+    initializingTerminalDock_ = true;
+
+    terminalDock_ = new QDockWidget(tr("Terminal"), this);
+    terminalDock_->setObjectName(QStringLiteral("TerminalDock"));
+    terminalDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    terminalDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    terminalDock_->setMinimumHeight(200);
+
+    terminalWidget_ = new TerminalDock(terminalDock_);
+    terminalDock_->setWidget(terminalWidget_);
+    addDockWidget(Qt::BottomDockWidgetArea, terminalDock_);
+
+    connect(terminalDock_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (actionTerminal) {
+            QSignalBlocker blocker(actionTerminal);
+            actionTerminal->setChecked(visible);
+        }
+
+        if (visible && terminalWidget_)
+            terminalWidget_->focusCommandInput();
+
+        if (!initializingTerminalDock_ && !isRestoringWindowState_)
+            persistWindowState();
+    });
+
+    terminalDock_->hide();
+
+    initializingTerminalDock_ = false;
 }
 
 void MainWindow::customizeViewport()
@@ -2091,6 +2134,8 @@ void MainWindow::registerShortcuts()
 
     hotkeys.registerAction(QStringLiteral("view.toggleRightDock"), actionToggleRightDock);
 
+    hotkeys.registerAction(QStringLiteral("view.terminal"), actionTerminal);
+
     hotkeys.registerAction(QStringLiteral("theme.toggle"), actionToggleTheme);
 
     hotkeys.registerAction(QStringLiteral("tools.select"), selectAction);
@@ -2155,6 +2200,8 @@ void MainWindow::registerShortcuts()
         if (actionRedo) actionRedo->setToolTip(format(actionRedo, tr("Redo")));
 
         if (actionPalette) actionPalette->setToolTip(format(actionPalette, tr("Command Palette")));
+
+        if (actionTerminal) actionTerminal->setToolTip(format(actionTerminal, tr("Terminal")));
 
         if (actionToggleTheme) actionToggleTheme->setToolTip(format(actionToggleTheme, tr("Toggle Dark Mode")));
 
@@ -2231,6 +2278,8 @@ void MainWindow::restoreWindowState()
 
     const QByteArray state = settings.value("state").toByteArray();
 
+    isRestoringWindowState_ = true;
+
     if (!geometry.isEmpty())
 
         restoreGeometry(geometry);
@@ -2238,6 +2287,8 @@ void MainWindow::restoreWindowState()
     if (!state.isEmpty())
 
         restoreState(state);
+
+    isRestoringWindowState_ = false;
 
     if (!storedTheme.isValid())
         darkTheme = settings.value("darkTheme", darkTheme).toBool();
@@ -2945,7 +2996,18 @@ void MainWindow::toggleTerminalDock()
 
 {
 
-    statusBar()->showMessage(tr("Terminal dock not implemented"), 2000);
+    if (!terminalDock_)
+        return;
+
+    const bool shouldShow = !terminalDock_->isVisible();
+    terminalDock_->setVisible(shouldShow);
+
+    if (shouldShow) {
+        terminalDock_->raise();
+        terminalDock_->activateWindow();
+        if (terminalWidget_)
+            terminalWidget_->focusCommandInput();
+    }
 
 }
 

@@ -25,6 +25,7 @@ class QSize;
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
 #include "CameraController.h"
+#include "Core/CommandStack.h"
 #include "Navigation/ViewPresetManager.h"
 #include "SunSettings.h"
 #include "ui/LeftToolPalette.h"
@@ -121,6 +122,7 @@ private:
 
     GLViewport* viewport = nullptr;
     std::unique_ptr<ToolManager> toolManager;
+    std::unique_ptr<Core::CommandStack> commandStack;
     std::unique_ptr<NavigationPreferences> navigationPrefs;
     std::unique_ptr<PalettePreferences> palettePrefs;
     MeasurementWidget* measurementWidget = nullptr;

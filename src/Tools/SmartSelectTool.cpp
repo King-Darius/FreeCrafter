@@ -1,8 +1,16 @@
-#include "SmartSelectTool.h"
-
-#include <QtCore/Qt>
-
-#include <cmath>
+#include <QtCore/Qt>
+
+#include <cmath>
+#include <limits>
+#include <memory>
+
+#include "ToolCommands.h"
+#include "ToolGeometryUtils.h"
+#include "../GeometryKernel/Curve.h"
+#include "../GeometryKernel/Solid.h"
+#include "../GeometryKernel/HalfEdgeMesh.h"
+#include <QString>
+
 #include <limits>
 
 #include "ToolGeometryUtils.h"
@@ -47,12 +55,43 @@ bool rayToGround(CameraController* cam, int sx, int sy, int viewportW, int viewp
     return true;
 }
 
-bool pointInsideXZ(const BoundingBox& box, float minX, float maxX, float minZ, float maxZ)
-{
-    return box.valid && box.min.x >= minX && box.max.x <= maxX && box.min.z >= minZ && box.max.z <= maxZ;
-}
-
-bool boxIntersectsXZ(const BoundingBox& box, float minX, float maxX, float minZ, float maxZ)
+    if (key == Qt::Key_Delete || key == Qt::Key_Backspace) {
+        std::vector<GeometryObject*> toDelete;
+        for (const auto& object : geometry->getObjects()) {
+            if (object->isSelected()) {
+                toDelete.push_back(object.get());
+            }
+        }
+        if (toDelete.empty())
+            return;
+
+        bool executed = false;
+        if (auto* stack = getCommandStack()) {
+            Scene::Document* doc = getDocument();
+            if (doc) {
+                std::vector<Scene::Document::ObjectId> ids;
+                ids.reserve(toDelete.size());
+                for (GeometryObject* obj : toDelete) {
+                    if (!obj)
+                        continue;
+                    Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+                    if (id != 0)
+                        ids.push_back(id);
+                }
+                if (!ids.empty()) {
+                    auto command = std::make_unique<Tools::DeleteObjectsCommand>(ids, QStringLiteral("Delete Selection"));
+                    stack->push(std::move(command));
+                    executed = true;
+                }
+            }
+        }
+        if (!executed) {
+            for (GeometryObject* obj : toDelete) {
+                geometry->deleteObject(obj);
+            }
+        }
+    }
+}
 {
     if (!box.valid)
         return false;

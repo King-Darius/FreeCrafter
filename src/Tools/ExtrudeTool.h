@@ -28,8 +28,21 @@ private:
         Path
     };
 
-    bool prepareExtrusionContext();
+    enum class Stage {
+        SelectingProfile,
+        SelectingPathOrHeight,
+        Dragging
+    };
+
+    bool computeExtrusionFrame();
     bool projectPointerToPlane(const PointerInput& input, Vector3& out) const;
+    bool computePointerRay(const PointerInput& input, Vector3& origin, Vector3& direction) const;
+    bool pickCurveAtPointer(const PointerInput& input, Curve*& outCurve,
+        Scene::Document::ObjectId& outId, bool requireFace, bool requireNoFace) const;
+    bool trySelectProfile(const PointerInput& input);
+    bool trySelectPath(const PointerInput& input);
+    void beginDrag(const PointerInput& input);
+    void updateDragPreview(const PointerInput& input);
     void reset();
     float clampDistance(float value) const;
 
@@ -38,9 +51,11 @@ private:
     Scene::Document::ObjectId profileId = 0;
     Scene::Document::ObjectId pathId = 0;
     Mode mode = Mode::None;
+    Stage stage = Stage::SelectingProfile;
     Vector3 anchorPoint{ 0.0f, 0.0f, 0.0f };
     Vector3 baseDirection{ 0.0f, 1.0f, 0.0f };
     float previewDistance = 0.0f;
     float defaultDistance = 0.0f;
+    bool pathClosed = false;
     bool dragging = false;
 };

@@ -11,6 +11,7 @@
 #include "Core/CommandStack.h"
 #include "GeometryKernel/Vector3.h"
 #include "Scene/Document.h"
+#include "Scene/SceneGraphCommands.h"
 #include "Tools/ToolCommands.h"
 #include "Tools/ToolGeometryUtils.h"
 
@@ -88,6 +89,62 @@ int main(int argc, char** argv)
     BoundingBox afterDeletionUndo = computeBoundingBox(*restored);
     assert(afterDeletionUndo.valid);
     assert(std::fabs(afterDeletionUndo.min.x - redoBounds.min.x) < 1e-4f);
+
+    // Scene graph commands
+    Scene::Document::ObjectId renameId = document.objectIdForGeometry(restored);
+    commandStack.push(std::make_unique<Scene::RenameObjectCommand>(renameId, QStringLiteral("Renamed")));
+    const Scene::Document::ObjectNode* renamedNode = document.findObject(renameId);
+    assert(renamedNode && renamedNode->name == "Renamed");
+    undoStack.undo();
+    renamedNode = document.findObject(renameId);
+    assert(renamedNode && renamedNode->name != "Renamed");
+    undoStack.redo();
+    renamedNode = document.findObject(renameId);
+    assert(renamedNode && renamedNode->name == "Renamed");
+
+    commandStack.push(std::make_unique<Scene::AssignMaterialCommand>(std::vector<Scene::Document::ObjectId> { renameId }, QStringLiteral("Brick")));
+    assert(document.geometry().getMaterial(restored) == "Brick");
+    undoStack.undo();
+    assert(document.geometry().getMaterial(restored).empty());
+    undoStack.redo();
+    assert(document.geometry().getMaterial(restored) == "Brick");
+
+    Scene::SceneSettings::Color tagColor { 0.8f, 0.1f, 0.1f, 1.0f };
+    commandStack.push(std::make_unique<Scene::CreateTagCommand>(QStringLiteral("Exterior"), tagColor));
+    assert(!document.tags().empty());
+    Scene::Document::TagId createdTag = 0;
+    for (const auto& entry : document.tags()) {
+        if (entry.second.name == "Exterior") {
+            createdTag = entry.first;
+            break;
+        }
+    }
+    assert(createdTag != 0);
+
+    commandStack.push(std::make_unique<Scene::RenameTagCommand>(createdTag, QStringLiteral("Facade")));
+    assert(document.tags().at(createdTag).name == "Facade");
+    undoStack.undo();
+    assert(document.tags().at(createdTag).name == "Exterior");
+    undoStack.redo();
+    assert(document.tags().at(createdTag).name == "Facade");
+
+    commandStack.push(std::make_unique<Scene::SetTagVisibilityCommand>(createdTag, false));
+    assert(!document.tags().at(createdTag).visible);
+    undoStack.undo();
+    assert(document.tags().at(createdTag).visible);
+    undoStack.redo();
+    assert(!document.tags().at(createdTag).visible);
+
+    Scene::SceneSettings::Color newColor { 0.2f, 0.4f, 0.6f, 1.0f };
+    commandStack.push(std::make_unique<Scene::SetTagColorCommand>(createdTag, newColor));
+    auto currentColor = document.tags().at(createdTag).color;
+    assert(std::fabs(currentColor.r - newColor.r) < 1e-5f);
+    undoStack.undo();
+    currentColor = document.tags().at(createdTag).color;
+    assert(std::fabs(currentColor.r - tagColor.r) < 1e-5f);
+    undoStack.redo();
+    currentColor = document.tags().at(createdTag).color;
+    assert(std::fabs(currentColor.r - newColor.r) < 1e-5f);
 
     return 0;
 }

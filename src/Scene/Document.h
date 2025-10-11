@@ -104,6 +104,8 @@ public:
     void pruneInvalidObjects();
 
     bool removeObject(ObjectId objectId);
+    bool renameObject(ObjectId objectId, const std::string& name);
+    bool setObjectExpanded(ObjectId objectId, bool expanded);
 
     ObjectId createGroup(const std::vector<ObjectId>& childIds, const std::string& name);
     bool moveObject(ObjectId objectId, ObjectId newParentId, std::size_t index);
@@ -120,6 +122,8 @@ public:
     bool setTagVisible(TagId id, bool visible);
     bool assignTag(ObjectId objectId, TagId tagId);
     bool removeTag(ObjectId objectId, TagId tagId);
+    bool deleteTag(TagId id, std::vector<ObjectId>* affectedObjects = nullptr);
+    bool restoreTag(const Tag& tag, const std::vector<ObjectId>& assignments);
     const std::unordered_map<TagId, Tag>& tags() const { return tagMap; }
     bool colorByTag() const { return colorByTagEnabled; }
     void setColorByTag(bool enabled);

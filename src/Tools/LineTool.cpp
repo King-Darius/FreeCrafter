@@ -1,8 +1,11 @@
 ﻿#include "LineTool.h"
 
 #include "GroundProjection.h"
+#include "ToolCommands.h"
 
 #include <cmath>
+#include <memory>
+#include <QString>
 
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
@@ -34,9 +37,17 @@ void LineTool::onPointerDown(const PointerInput& input)
         if ((point - points.back()).lengthSquared() > 1e-8f) {
             points.push_back(point);
         }
-    }
-
-    previewPoint = point;
+    if (points.size() >= 2) {
+        if (auto* stack = getCommandStack()) {
+            auto command = std::make_unique<Tools::CreateCurveCommand>(points, QStringLiteral("Draw Line"));
+            stack->push(std::move(command));
+        } else if (geometry) {
+            geometry->addCurve(points);
+        }
+    }
+    resetChain();
+}
+
     previewValid = true;
 }
 

@@ -5,10 +5,13 @@
 #endif
 
 #include "GroundProjection.h"
+#include "ToolCommands.h"
 #include "../GeometryKernel/ShapeBuilder.h"
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <QString>
 
 namespace {
 
@@ -910,8 +913,15 @@ void RectangleTool::finalizeRectangle(const Vector3& oppositeCorner)
         return;
 
     std::vector<Vector3> polyline = buildAxisAlignedRectangle(firstCorner, oppositeCorner);
-    if (!polyline.empty())
+    if (polyline.empty())
+        return;
+
+    if (auto* stack = getCommandStack()) {
+        auto command = std::make_unique<Tools::CreateCurveCommand>(polyline, QStringLiteral("Draw Rectangle"));
+        stack->push(std::move(command));
+    } else if (geometry) {
         geometry->addCurve(polyline);
+    }
 
     hasFirstCorner = false;
     previewValid = false;

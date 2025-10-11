@@ -144,6 +144,24 @@ bool Document::removeObject(ObjectId objectId)
     return true;
 }
 
+bool Document::renameObject(ObjectId objectId, const std::string& name)
+{
+    ObjectNode* node = findMutable(objectId);
+    if (!node)
+        return false;
+    node->name = name;
+    return true;
+}
+
+bool Document::setObjectExpanded(ObjectId objectId, bool expanded)
+{
+    ObjectNode* node = findMutable(objectId);
+    if (!node)
+        return false;
+    node->expanded = expanded;
+    return true;
+}
+
 Document::ObjectId Document::createGroup(const std::vector<ObjectId>& childIds, const std::string& name)
 {
     if (childIds.empty())
@@ -359,8 +377,8 @@ bool Document::assignTag(ObjectId objectId, TagId tagId)
         return false;
     if (!contains(node->tags, tagId)) {
         node->tags.push_back(tagId);
-        updateVisibility();
     }
+    updateVisibility();
     return true;
 }
 
@@ -373,6 +391,45 @@ bool Document::removeTag(ObjectId objectId, TagId tagId)
     if (it == node->tags.end())
         return false;
     node->tags.erase(it, node->tags.end());
+    updateVisibility();
+    return true;
+}
+
+bool Document::deleteTag(TagId id, std::vector<ObjectId>* affectedObjects)
+{
+    auto it = tagMap.find(id);
+    if (it == tagMap.end())
+        return false;
+    tagMap.erase(it);
+
+    forEachNode([&](ObjectNode& node) {
+        if (node.id == 0)
+            return;
+        auto tagIt = std::remove(node.tags.begin(), node.tags.end(), id);
+        if (tagIt != node.tags.end()) {
+            if (affectedObjects)
+                affectedObjects->push_back(node.id);
+            node.tags.erase(tagIt, node.tags.end());
+        }
+    });
+    updateVisibility();
+    return true;
+}
+
+bool Document::restoreTag(const Tag& tag, const std::vector<ObjectId>& assignments)
+{
+    if (tag.id == 0)
+        return false;
+    tagMap[tag.id] = tag;
+    nextTagId = std::max(nextTagId, tag.id + 1);
+
+    for (ObjectId objectId : assignments) {
+        ObjectNode* node = findMutable(objectId);
+        if (!node)
+            continue;
+        if (!contains(node->tags, tag.id))
+            node->tags.push_back(tag.id);
+    }
     updateVisibility();
     return true;
 }

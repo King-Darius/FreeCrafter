@@ -846,6 +846,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         updateSelectionStatus();
         if (viewport)
             viewport->update();
+        if (rightTray_)
+            rightTray_->refreshPanels();
     });
 
     if (commandStack) {
@@ -855,11 +857,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         context.geometryChanged = [this]() {
             if (toolManager)
                 toolManager->notifyExternalGeometryChange();
+            if (rightTray_)
+                rightTray_->refreshPanels();
         };
         context.selectionChanged = [this](const std::vector<Scene::Document::ObjectId>&) {
             updateSelectionStatus();
             if (viewport)
                 viewport->update();
+            if (rightTray_)
+                rightTray_->refreshPanels();
         };
         commandStack->setContext(context);
     }
@@ -2385,7 +2391,10 @@ void MainWindow::createRightDock()
     rightDock_->setMinimumWidth(320);
     rightDock_->setMaximumWidth(420);
 
-    rightTray_ = new RightTray(undoStack, rightDock_);
+    Scene::Document* document = viewport ? viewport->getDocument() : nullptr;
+    GeometryKernel* geometry = viewport ? viewport->getGeometry() : nullptr;
+    Core::CommandStack* stack = commandStack.get();
+    rightTray_ = new RightTray(document, geometry, stack, undoStack, rightDock_);
     rightDock_->setWidget(rightTray_);
     addDockWidget(Qt::RightDockWidgetArea, rightDock_);
 
@@ -2403,6 +2412,9 @@ void MainWindow::createRightDock()
         environmentPanel->setSettings(sunSettings);
         connect(environmentPanel, &EnvironmentPanel::settingsChanged, this, &MainWindow::handleSunSettingsChanged);
     }
+
+    if (rightTray_)
+        rightTray_->refreshPanels();
 }
 
 void MainWindow::createTerminalDock()

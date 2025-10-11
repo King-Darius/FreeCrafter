@@ -90,16 +90,19 @@
 
 - Tree of Groups/Components/Sections. Drag to reparent (preserve world transform). Eye/Lock toggles; Alt-click isolate. Context actions: Make Group/Component, Explode, Rename.
 - **Files:** `src/ui/OutlinerPanel.*`
+- Edits (rename, visibility) must emit `Scene::RenameObjectCommand`/`Scene::SetObjectVisibilityCommand` through `Core::CommandStack` so undo/redo stays consistent.
 
 ### 3.3 Materials
 
 - Swatch grid (search/import texture). Eyedropper routed from Paint tool (Alt). Apply by click/drag; respects component-vs-face override rules.
 - **Files:** `src/ui/MaterialsPanel.*`
+- Applying a swatch triggers `Scene::AssignMaterialCommand` so material overrides participate in the undo stack.
 
 ### 3.4 Tags/Layers
 
 - Create/rename/delete; color chip; visibility and lock. Assign via Inspector or context bar selector.
 - **Files:** `src/ui/TagsPanel.*`
+- Tag creation/rename/color/visibility flow through `Scene::CreateTagCommand` et al. to keep history and shared state in sync.
 
 ### 3.5 Environment & View Settings
 

@@ -343,11 +343,8 @@ void GLViewport::paintGL()
 
     QMatrix4x4 viewMatrix = buildViewMatrix();
 
-    SunModel::Result sunResult = SunModel::computeSunDirection(environmentSettings.date,
-                                                      environmentSettings.time,
-                                                      environmentSettings.latitude,
-                                                      environmentSettings.longitude,
-                                                      environmentSettings.effectiveTimezoneMinutes());
+    SunModel::Result sunResult = SunModel::computeSunDirection(environmentSettings.elevationDegrees,
+                                                               environmentSettings.azimuthDegrees);
     Renderer::LightingOptions lightingOptions;
     lightingOptions.sunDirection = sunResult.valid ? sunResult.direction : QVector3D(0.3f, 0.8f, 0.6f);
     lightingOptions.sunValid = sunResult.valid;
@@ -1379,9 +1376,7 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
             input.modifiers = toModifierState(e->modifiers());
             input.devicePixelRatio = ratio;
             toolManager->updatePointerModifiers(input.modifiers);
-            if (Tool* tool = toolManager->getActiveTool()) {
-                tool->handleMouseDown(input);
-            }
+            toolManager->handlePointerDown(input);
             update();
             refreshCursorShape();
             return;
@@ -1389,15 +1384,13 @@ void GLViewport::mousePressEvent(QMouseEvent* e)
     }
 
     if (toolManager && e->button() == Qt::LeftButton) {
-        if (auto* t = toolManager->getActiveTool()) {
-            Tool::PointerInput input;
-            input.x = std::lround(devicePos.x());
-            input.y = std::lround(devicePos.y());
-            input.modifiers = toModifierState(e->modifiers());
-            input.devicePixelRatio = ratio;
-            toolManager->updatePointerModifiers(input.modifiers);
-            t->handleMouseDown(input);
-        }
+        Tool::PointerInput input;
+        input.x = std::lround(devicePos.x());
+        input.y = std::lround(devicePos.y());
+        input.modifiers = toModifierState(e->modifiers());
+        input.devicePixelRatio = ratio;
+        toolManager->updatePointerModifiers(input.modifiers);
+        toolManager->handlePointerDown(input);
     }
 
     refreshCursorShape();
@@ -1424,26 +1417,20 @@ void GLViewport::mouseMoveEvent(QMouseEvent* e)
         toolManager->updatePointerModifiers(input.modifiers);
         if (activeNavigationBinding) {
             if (!e->buttons().testFlag(navigationButton)) {
-                if (Tool* tool = toolManager->getActiveTool()) {
-                    tool->handleMouseUp(input);
-                }
+                toolManager->handlePointerUp(input);
                 if (activeNavigationBinding->temporary && toolManager) {
                     toolManager->restorePreviousTool();
                 }
                 activeNavigationBinding.reset();
                 navigationButton = Qt::NoButton;
             } else {
-                if (Tool* tool = toolManager->getActiveTool()) {
-                    tool->handleMouseMove(input);
-                }
+                toolManager->handlePointerMove(input);
                 navigationHandled = true;
             }
         }
 
         if (!navigationHandled) {
-            if (Tool* tool = toolManager->getActiveTool()) {
-                tool->handleMouseMove(input);
-            }
+            toolManager->handlePointerMove(input);
         }
     }
 
@@ -1476,9 +1463,7 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 
     if (activeNavigationBinding && e->button() == navigationButton) {
         if (toolManager) {
-            if (Tool* tool = toolManager->getActiveTool()) {
-                tool->handleMouseUp(input);
-            }
+            toolManager->handlePointerUp(input);
             if (activeNavigationBinding->temporary)
                 toolManager->restorePreviousTool();
         }
@@ -1490,10 +1475,8 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
     }
 
     if (toolManager && e->button() == Qt::LeftButton) {
-        if (auto* t = toolManager->getActiveTool()) {
-            toolManager->updatePointerModifiers(input.modifiers);
-            t->handleMouseUp(input);
-        }
+        toolManager->updatePointerModifiers(input.modifiers);
+        toolManager->handlePointerUp(input);
     }
 
     refreshCursorShape();
@@ -1537,18 +1520,15 @@ void GLViewport::keyPressEvent(QKeyEvent* e)
 {
     bool consumed = false;
     if (toolManager) {
-        if (Tool* tool = toolManager->getActiveTool()) {
-            if (e->key() == Qt::Key_Escape) {
-                tool->cancel();
-                consumed = true;
-            } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
-                tool->commit();
-                consumed = true;
-            }
+        if (e->key() == Qt::Key_Escape) {
+            toolManager->cancelActiveTool();
+            consumed = true;
+        } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+            toolManager->commitActiveTool();
+            consumed = true;
         }
-        if (!consumed) {
+        if (!consumed)
             toolManager->handleKeyPress(e->key());
-        }
     }
     if (!consumed) {
         QOpenGLWidget::keyPressEvent(e);

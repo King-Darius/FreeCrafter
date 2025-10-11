@@ -8,31 +8,50 @@
 #include <QGroupBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
-#include <QDateEdit>
-#include <QTimeEdit>
 #include <QSlider>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QVariant>
-#include <cmath>
+
 #include <algorithm>
+#include <cmath>
 
 namespace {
-int timeToSliderMinutes(const QTime& time)
+
+constexpr float kElevationMin = -10.0f;
+constexpr float kElevationMax = 90.0f;
+constexpr int kAngleMultiplier = 10; // 0.1° increments
+
+int elevationToSlider(float degrees)
 {
-    if (!time.isValid())
-        return 12 * 60;
-    return time.hour() * 60 + time.minute();
+    float clamped = std::clamp(degrees, kElevationMin, kElevationMax);
+    return static_cast<int>(std::round((clamped - kElevationMin) * kAngleMultiplier));
 }
 
-QTime sliderToTime(int minutes)
+float sliderToElevation(int sliderValue)
 {
-    minutes = std::clamp(minutes, 0, 24 * 60 - 1);
-    const int hour = minutes / 60;
-    const int minute = minutes % 60;
-    return QTime(hour, minute, 0);
+    float value = static_cast<float>(sliderValue) / kAngleMultiplier + kElevationMin;
+    return std::clamp(value, kElevationMin, kElevationMax);
+}
+
+int azimuthToSlider(float degrees)
+{
+    float normalized = std::fmod(degrees, 360.0f);
+    if (normalized < 0.0f)
+        normalized += 360.0f;
+    return static_cast<int>(std::round(normalized * kAngleMultiplier));
+}
+
+float sliderToAzimuth(int sliderValue)
+{
+    float degrees = static_cast<float>(sliderValue) / kAngleMultiplier;
+    while (degrees < 0.0f)
+        degrees += 360.0f;
+    while (degrees >= 360.0f)
+        degrees -= 360.0f;
+    return degrees;
 }
 
 QString qualityLabel(SunSettings::ShadowQuality quality)
@@ -61,38 +80,35 @@ EnvironmentPanel::EnvironmentPanel(QWidget* parent)
     auto* sunLayout = new QFormLayout(sunGroup);
     sunLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 
-    dateEdit = new QDateEdit(this);
-    dateEdit->setCalendarPopup(true);
-    sunLayout->addRow(tr("Date"), dateEdit);
+    elevationSlider = new QSlider(Qt::Horizontal, this);
+    elevationSlider->setRange(0, elevationToSlider(kElevationMax));
+    elevationSpin = new QDoubleSpinBox(this);
+    elevationSpin->setRange(kElevationMin, kElevationMax);
+    elevationSpin->setDecimals(1);
+    elevationSpin->setSingleStep(0.5);
 
-    timeEdit = new QTimeEdit(this);
-    timeEdit->setDisplayFormat(QStringLiteral("HH:mm"));
-    sunLayout->addRow(tr("Time"), timeEdit);
+    auto* elevationContainer = new QWidget(this);
+    auto* elevationLayout = new QHBoxLayout(elevationContainer);
+    elevationLayout->setContentsMargins(0, 0, 0, 0);
+    elevationLayout->setSpacing(6);
+    elevationLayout->addWidget(elevationSlider, 1);
+    elevationLayout->addWidget(elevationSpin, 0);
+    sunLayout->addRow(tr("Elevation"), elevationContainer);
 
-    timeSlider = new QSlider(Qt::Horizontal, this);
-    timeSlider->setRange(0, 24 * 60 - 1);
-    sunLayout->addRow(tr("Time Slider"), timeSlider);
+    azimuthSlider = new QSlider(Qt::Horizontal, this);
+    azimuthSlider->setRange(0, azimuthToSlider(360.0f));
+    azimuthSpin = new QDoubleSpinBox(this);
+    azimuthSpin->setRange(0.0, 360.0);
+    azimuthSpin->setDecimals(1);
+    azimuthSpin->setSingleStep(1.0);
 
-    latitudeSpin = new QDoubleSpinBox(this);
-    latitudeSpin->setRange(-90.0, 90.0);
-    latitudeSpin->setDecimals(4);
-    latitudeSpin->setSingleStep(0.1);
-    sunLayout->addRow(tr("Latitude"), latitudeSpin);
-
-    longitudeSpin = new QDoubleSpinBox(this);
-    longitudeSpin->setRange(-180.0, 180.0);
-    longitudeSpin->setDecimals(4);
-    longitudeSpin->setSingleStep(0.1);
-    sunLayout->addRow(tr("Longitude"), longitudeSpin);
-
-    timezoneSpin = new QDoubleSpinBox(this);
-    timezoneSpin->setRange(-12.0, 14.0);
-    timezoneSpin->setDecimals(2);
-    timezoneSpin->setSingleStep(0.5);
-    sunLayout->addRow(tr("UTC Offset"), timezoneSpin);
-
-    dstCheck = new QCheckBox(tr("Daylight Saving (+1h)"), this);
-    sunLayout->addRow(QString(), dstCheck);
+    auto* azimuthContainer = new QWidget(this);
+    auto* azimuthLayout = new QHBoxLayout(azimuthContainer);
+    azimuthLayout->setContentsMargins(0, 0, 0, 0);
+    azimuthLayout->setSpacing(6);
+    azimuthLayout->addWidget(azimuthSlider, 1);
+    azimuthLayout->addWidget(azimuthSpin, 0);
+    sunLayout->addRow(tr("Azimuth"), azimuthContainer);
 
     layout->addWidget(sunGroup);
 
@@ -130,28 +146,10 @@ EnvironmentPanel::EnvironmentPanel(QWidget* parent)
     layout->addWidget(shadowGroup);
     layout->addStretch(1);
 
-    connect(dateEdit, &QDateEdit::dateChanged, this, [this](const QDate& date) {
-        current.date = date;
-        emitChanges();
-    });
-    connect(timeEdit, &QTimeEdit::timeChanged, this, &EnvironmentPanel::handleTimeChanged);
-    connect(timeSlider, &QSlider::valueChanged, this, &EnvironmentPanel::handleTimeSlider);
-    connect(latitudeSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value) {
-        current.latitude = value;
-        emitChanges();
-    });
-    connect(longitudeSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value) {
-        current.longitude = value;
-        emitChanges();
-    });
-    connect(timezoneSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double value) {
-        current.timezoneMinutes = static_cast<int>(std::round(value * 60.0));
-        emitChanges();
-    });
-    connect(dstCheck, &QCheckBox::toggled, this, [this](bool enabled) {
-        current.daylightSaving = enabled;
-        emitChanges();
-    });
+    connect(elevationSlider, &QSlider::valueChanged, this, &EnvironmentPanel::handleElevationSlider);
+    connect(elevationSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EnvironmentPanel::handleElevationSpin);
+    connect(azimuthSlider, &QSlider::valueChanged, this, &EnvironmentPanel::handleAzimuthSlider);
+    connect(azimuthSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &EnvironmentPanel::handleAzimuthSpin);
     connect(shadowsCheck, &QCheckBox::toggled, this, [this](bool enabled) {
         current.shadowsEnabled = enabled;
         emitChanges();
@@ -186,13 +184,10 @@ void EnvironmentPanel::setSettings(const SunSettings& settings)
 void EnvironmentPanel::syncControls()
 {
     updating = true;
-    dateEdit->setDate(current.date);
-    timeEdit->setTime(current.time.isValid() ? current.time : QTime(12, 0, 0));
-    timeSlider->setValue(timeToSliderMinutes(timeEdit->time()));
-    latitudeSpin->setValue(current.latitude);
-    longitudeSpin->setValue(current.longitude);
-    timezoneSpin->setValue(static_cast<double>(current.timezoneMinutes) / 60.0);
-    dstCheck->setChecked(current.daylightSaving);
+    elevationSlider->setValue(elevationToSlider(current.elevationDegrees));
+    elevationSpin->setValue(current.elevationDegrees);
+    azimuthSlider->setValue(azimuthToSlider(current.azimuthDegrees));
+    azimuthSpin->setValue(current.azimuthDegrees);
     shadowsCheck->setChecked(current.shadowsEnabled);
 
     int qualityIndex = qualityCombo->findData(static_cast<int>(current.shadowQuality));
@@ -214,26 +209,49 @@ void EnvironmentPanel::emitChanges()
     emit settingsChanged(current);
 }
 
-void EnvironmentPanel::handleTimeSlider(int minutes)
+void EnvironmentPanel::handleElevationSlider(int sliderValue)
 {
     if (updating)
         return;
     updating = true;
-    const QTime newTime = sliderToTime(minutes);
-    timeEdit->setTime(newTime);
+    float degrees = sliderToElevation(sliderValue);
+    elevationSpin->setValue(degrees);
     updating = false;
-    current.time = newTime;
-    emit settingsChanged(current);
+    current.elevationDegrees = degrees;
+    emitChanges();
 }
 
-void EnvironmentPanel::handleTimeChanged(const QTime& time)
+void EnvironmentPanel::handleElevationSpin(double degrees)
 {
     if (updating)
         return;
     updating = true;
-    const int minutes = timeToSliderMinutes(time);
-    timeSlider->setValue(minutes);
+    elevationSlider->setValue(elevationToSlider(static_cast<float>(degrees)));
     updating = false;
-    current.time = time;
-    emit settingsChanged(current);
+    current.elevationDegrees = static_cast<float>(degrees);
+    emitChanges();
 }
+
+void EnvironmentPanel::handleAzimuthSlider(int sliderValue)
+{
+    if (updating)
+        return;
+    updating = true;
+    float degrees = sliderToAzimuth(sliderValue);
+    azimuthSpin->setValue(degrees);
+    updating = false;
+    current.azimuthDegrees = degrees;
+    emitChanges();
+}
+
+void EnvironmentPanel::handleAzimuthSpin(double degrees)
+{
+    if (updating)
+        return;
+    updating = true;
+    azimuthSlider->setValue(azimuthToSlider(static_cast<float>(degrees)));
+    updating = false;
+    current.azimuthDegrees = static_cast<float>(degrees);
+    emitChanges();
+}
+

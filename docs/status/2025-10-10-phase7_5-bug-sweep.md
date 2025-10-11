@@ -12,8 +12,8 @@
 - `RightTray` includes `EnvironmentPanel` directly (alias removed), eliminating the forward declaration collision.
 
 ### Undo/Redo, Autosave, Recovery
-- No `QUndoStack`, `QUndoCommand`, or equivalent command objects exist in the project outside the UI stubs.
-- `MainWindow::onUndo()` / `onRedo()` functions are missing in the translation unit because of the corrupted View menu block.
+- `MainWindow` now instantiates a shared `QUndoStack`, exposes it to `ToolManager`, and wires the Edit ▸ Undo/Redo actions to concrete slot implementations.
+- Line drawing and curve extrusion both push undoable commands; other modeling tools remain non-undoable for now.
 - No autosave manager, timer, or recovery prompt is present; searches for `autosave`, `AutoSave`, and `restoreAutosave` return docs only.
 - Crash recovery pathways (checkpoint files, session resume) are absent from both `src/` and `scripts/`.
 

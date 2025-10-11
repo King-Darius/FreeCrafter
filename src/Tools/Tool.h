@@ -7,6 +7,12 @@
 #include <algorithm>
 #include <vector>
 
+class QUndoStack;
+
+namespace Scene {
+class Document;
+}
+
 class Tool {
 public:
     struct ModifierState {
@@ -77,6 +83,12 @@ public:
 
     virtual ~Tool() = default;
 
+    void setCommandContext(Scene::Document* documentContext, QUndoStack* undoContext)
+    {
+        document = documentContext;
+        undoStack = undoContext;
+    }
+
     void setViewportSize(int w, int h)
     {
         viewportWidth = std::max(1, w);
@@ -125,11 +137,15 @@ protected:
 
     void setState(State newState);
     const ModifierState& getModifiers() const { return modifiers; }
+    Scene::Document* getDocument() const { return document; }
+    QUndoStack* getUndoStack() const { return undoStack; }
 
     int viewportWidth = 1;
     int viewportHeight = 1;
     GeometryKernel* geometry;
     CameraController* camera;
+    Scene::Document* document = nullptr;
+    QUndoStack* undoStack = nullptr;
 
 private:
     void updateModifiers(const ModifierState& modifiers);

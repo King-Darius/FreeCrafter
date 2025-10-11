@@ -1,11 +1,53 @@
 ﻿#include "LineTool.h"
 
 #include "GroundProjection.h"
+#include "../Scene/Document.h"
 
+#include <QObject>
+#include <QUndoCommand>
+#include <QUndoStack>
 #include <cmath>
 
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
+
+namespace {
+
+class AddCurveCommand : public QUndoCommand {
+public:
+    AddCurveCommand(GeometryKernel& kernel, Scene::Document* document, std::vector<Vector3> curvePoints)
+        : geometryKernel(kernel)
+        , sceneDocument(document)
+        , points(std::move(curvePoints))
+    {
+        setText(QObject::tr("Draw Line"));
+    }
+
+    void redo() override
+    {
+        createdObject = geometryKernel.addCurve(points);
+        if (sceneDocument)
+            sceneDocument->synchronizeWithGeometry();
+    }
+
+    void undo() override
+    {
+        if (!createdObject)
+            return;
+        geometryKernel.deleteObject(createdObject);
+        createdObject = nullptr;
+        if (sceneDocument)
+            sceneDocument->synchronizeWithGeometry();
+    }
+
+private:
+    GeometryKernel& geometryKernel;
+    Scene::Document* sceneDocument = nullptr;
+    std::vector<Vector3> points;
+    GeometryObject* createdObject = nullptr;
+};
+
+}
 
 
 
@@ -33,10 +75,21 @@ void LineTool::onPointerDown(const PointerInput& input)
     } else {
         if ((point - points.back()).lengthSquared() > 1e-8f) {
             points.push_back(point);
-        }
-    }
-
-    previewPoint = point;
+void LineTool::onCommit()
+{
+    if (geometry && points.size() >= 2) {
+        std::vector<Vector3> chain = points;
+        if (auto* stack = getUndoStack()) {
+            stack->push(new AddCurveCommand(*geometry, getDocument(), std::move(chain)));
+        } else {
+            geometry->addCurve(chain);
+            if (auto* doc = getDocument())
+                doc->synchronizeWithGeometry();
+        }
+    }
+    resetChain();
+}
+
     previewValid = true;
 }
 

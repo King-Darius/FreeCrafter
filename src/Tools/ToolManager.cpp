@@ -28,10 +28,11 @@ Vector3 normalizeOrZero(const Vector3& value)
 }
 }
 
-ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
+ToolManager::ToolManager(Scene::Document* doc, CameraController* c, QUndoStack* stack)
     : geometry(doc ? &doc->geometry() : nullptr)
     , camera(c)
     , document(doc)
+    , undoStack(stack)
 {
     GeometryKernel* gPtr = geometry;
     tools.push_back(std::make_unique<SmartSelectTool>(gPtr, c));
@@ -62,6 +63,10 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c)
     tools.push_back(std::make_unique<OrbitTool>(gPtr, c));
     tools.push_back(std::make_unique<PanTool>(gPtr, c));
     tools.push_back(std::make_unique<ZoomTool>(gPtr, c));
+
+    for (auto& tool : tools) {
+        tool->setCommandContext(document, undoStack);
+    }
     active = tools.empty() ? nullptr : tools.front().get();
     if (active && !active->isNavigationTool()) {
         lastModelingTool = active;

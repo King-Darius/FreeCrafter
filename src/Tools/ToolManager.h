@@ -20,6 +20,8 @@
 #include "../Interaction/InferenceEngine.h"
 #include "../NavigationConfig.h"
 
+class QUndoStack;
+
 struct ToolInferenceUpdateRequest {
     bool hasRay = false;
     Interaction::PickRay ray;
@@ -28,7 +30,7 @@ struct ToolInferenceUpdateRequest {
 
 class ToolManager {
 public:
-    ToolManager(Scene::Document* document, CameraController* c);
+    ToolManager(Scene::Document* document, CameraController* c, QUndoStack* undoStack = nullptr);
     Tool* getActiveTool() const { return active; }
     void activateTool(const char* name, bool temporary = false);
     void restorePreviousTool();
@@ -62,6 +64,7 @@ private:
     GeometryKernel* geometry = nullptr;
     CameraController* camera = nullptr;
     Scene::Document* document = nullptr;
+    QUndoStack* undoStack = nullptr;
     Interaction::InferenceEngine inferenceEngine;
     Interaction::InferenceResult currentInference;
     Interaction::InferenceResult stickyInference;

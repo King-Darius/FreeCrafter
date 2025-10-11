@@ -792,8 +792,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     navigationPrefs = std::make_unique<NavigationPreferences>(this);
 
-    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera());
     undoStack = new QUndoStack(this);
+    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera(), undoStack);
 
     toolManager->setNavigationConfig(navigationPrefs->config());
 
@@ -1332,6 +1332,8 @@ void MainWindow::onUndo()
 
     const QString label = undoStack->undoText();
     undoStack->undo();
+    if (viewport)
+        viewport->update();
     updateUndoRedoActionText();
     statusBar()->showMessage(label.isEmpty() ? tr("Undid last action") : tr("Undid %1").arg(label), 1500);
 }
@@ -1350,6 +1352,8 @@ void MainWindow::onRedo()
 
     const QString label = undoStack->redoText();
     undoStack->redo();
+    if (viewport)
+        viewport->update();
     updateUndoRedoActionText();
     statusBar()->showMessage(label.isEmpty() ? tr("Redid last action") : tr("Redid %1").arg(label), 1500);
 }

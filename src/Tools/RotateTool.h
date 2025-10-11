@@ -26,6 +26,7 @@ private:
     std::vector<GeometryObject*> gatherSelection() const;
     Vector3 determineAxis() const;
     void applyRotation(float angleRadians);
+    std::vector<Scene::Document::ObjectId> selectionIds() const;
 
     bool dragging = false;
     Vector3 pivot;

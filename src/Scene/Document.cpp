@@ -63,6 +63,32 @@ Document::ObjectNode* Document::findObject(ObjectId id)
     return findMutable(id);
 }
 
+Document::ObjectId Document::objectIdForGeometry(const GeometryObject* object) const
+{
+    if (!object)
+        return 0;
+    auto it = geometryIndex.find(const_cast<GeometryObject*>(object));
+    if (it == geometryIndex.end())
+        return 0;
+    return it->second;
+}
+
+GeometryObject* Document::geometryForObject(ObjectId id)
+{
+    ObjectNode* node = findMutable(id);
+    if (!node)
+        return nullptr;
+    return node->geometry;
+}
+
+const GeometryObject* Document::geometryForObject(ObjectId id) const
+{
+    const ObjectNode* node = findConst(id);
+    if (!node)
+        return nullptr;
+    return node->geometry;
+}
+
 Document::ObjectId Document::ensureObjectForGeometry(GeometryObject* object, const std::string& name)
 {
     if (!object)

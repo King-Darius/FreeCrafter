@@ -23,6 +23,7 @@ public:
         Auto,
         Obj,
         Stl,
+        Gltf,
         Fbx,
         Dxf,
         Dwg

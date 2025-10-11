@@ -91,6 +91,8 @@ private slots:
     void updateFrameStats(double fps, double frameMs, int drawCalls);
     void handleMeasurementCommit(const QString& value, const QString& unitSystem);
     void showViewSettingsDialog();
+    void applyGridSettings(double majorSpacing, int minorDivisions, int majorExtent);
+    void applyShadowParameters(bool enabled, int qualityIndex, double strengthPercent, double biasValue);
 
 private:
     void createMenus();
@@ -176,8 +178,15 @@ private:
     QAction* actionViewBack = nullptr;
     QAction* actionViewLeft = nullptr;
     QAction* actionViewRight = nullptr;
+    QAction* actionPerspectiveProjection = nullptr;
+    QAction* actionParallelProjection = nullptr;
     QAction* actionToggleProjection = nullptr;
     QAction* actionViewSettings = nullptr;
+    QAction* actionShowSectionPlanes = nullptr;
+    QAction* actionShowSectionFills = nullptr;
+    QAction* actionShowGuides = nullptr;
+    QAction* actionEnableShadows = nullptr;
+    QAction* actionGridSettings = nullptr;
     QAction* actionRun = nullptr;
     QAction* actionTerminal = nullptr;
     QAction* actionGit = nullptr;
@@ -187,6 +196,7 @@ private:
 
     QString currentDocumentPath;
 
+    QActionGroup* projectionModeGroup = nullptr;
     QAction* selectAction = nullptr;
     QAction* lineAction = nullptr;
     QAction* rectangleAction = nullptr;

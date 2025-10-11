@@ -3,8 +3,10 @@
 #include <vector>
 
 #include "CameraController.h"
-#include "Scene/Document.h"
+#include "GeometryKernel/Curve.h"
+#include "GeometryKernel/GeometryKernel.h"
 #include "GeometryKernel/Vector3.h"
+#include "Scene/Document.h"
 
 using Scene::Document;
 
@@ -48,6 +50,21 @@ void testGroupingAndOutliner()
         }
     }
     assert(foundA);
+}
+
+void testOpenPolylineCreation()
+{
+    GeometryKernel kernel;
+    std::vector<Vector3> segment = {
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f }
+    };
+    GeometryObject* object = kernel.addCurve(segment);
+    assert(object != nullptr);
+    assert(object->getType() == ObjectType::Curve);
+    const Curve* curve = static_cast<const Curve*>(object);
+    assert(curve->getBoundaryLoop().size() == 2);
+    assert(curve->getMesh().getFaces().empty());
 }
 
 void testComponents()
@@ -194,6 +211,7 @@ void testSerializationRoundTrip()
 
 int main()
 {
+    testOpenPolylineCreation();
     testGroupingAndOutliner();
     testComponents();
     testTagsAndVisibility();

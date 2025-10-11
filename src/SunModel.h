@@ -1,7 +1,5 @@
 #pragma once
 
-#include <QDate>
-#include <QTime>
 #include <QVector3D>
 
 class SunModel
@@ -14,9 +12,5 @@ public:
         bool valid = false;
     };
 
-    static Result computeSunDirection(const QDate& date,
-                                      const QTime& time,
-                                      double latitudeDegrees,
-                                      double longitudeDegrees,
-                                      int timezoneMinutes);
+    static Result computeSunDirection(float altitudeDegrees, float azimuthDegrees);
 };

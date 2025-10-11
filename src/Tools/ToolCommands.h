@@ -2,6 +2,7 @@
 
 #include "Core/Command.h"
 #include "GeometryKernel/Vector3.h"
+#include "Phase6/AdvancedModeling.h"
 
 #include <memory>
 #include <optional>
@@ -119,6 +120,40 @@ private:
 
     std::vector<Scene::Document::ObjectId> requestedIds_;
     std::vector<Entry> entries_;
+};
+
+class ApplyChamferCommand : public Core::Command {
+public:
+    ApplyChamferCommand(Scene::Document::ObjectId curveId, Phase6::RoundCornerOptions options, const QString& description);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Scene::Document::ObjectId curveId_ = 0;
+    Phase6::RoundCornerOptions options_;
+    std::vector<Vector3> originalLoop_;
+    std::vector<bool> originalHardness_;
+    bool captured_ = false;
+};
+
+class CreateLoftCommand : public Core::Command {
+public:
+    CreateLoftCommand(Scene::Document::ObjectId startId, Scene::Document::ObjectId endId,
+                      Phase6::LoftOptions options, const QString& description, std::string name = {});
+
+protected:
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Scene::Document::ObjectId startId_ = 0;
+    Scene::Document::ObjectId endId_ = 0;
+    Phase6::LoftOptions options_;
+    std::string name_;
+    Scene::Document::ObjectId createdId_ = 0;
 };
 
 } // namespace Tools

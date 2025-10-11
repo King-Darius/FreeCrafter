@@ -18,6 +18,8 @@
 #include "GeometryKernel/HalfEdgeMesh.h"
 #include "GeometryKernel/Vector3.h"
 #include "GeometryKernel/Vector2.h"
+#include "Scene/Document.h"
+#include "FileIO/Importers/SceneImporter.h"
 
 namespace FileIO::Importers {
 namespace {
@@ -34,6 +36,8 @@ Scene::Document::FileFormat detectFormat(const QString& path, Scene::Document::F
         return Scene::Document::FileFormat::Obj;
     if (suffix == QLatin1String("stl"))
         return Scene::Document::FileFormat::Stl;
+    if (suffix == QLatin1String("gltf"))
+        return Scene::Document::FileFormat::Gltf;
     if (suffix == QLatin1String("fbx"))
         return Scene::Document::FileFormat::Fbx;
     if (suffix == QLatin1String("dxf"))
@@ -370,6 +374,73 @@ bool importStl(const QString& path, Document& document, ImportResult& result)
     return true;
 }
 
+bool importGltf(const QString& path, Document& document, ImportResult& result)
+{
+    Scene::Document tempDocument;
+    std::string errorMessage;
+    if (!importScene(tempDocument, path.toStdString(), FileIO::SceneFormat::GLTF, &errorMessage)) {
+        if (!errorMessage.empty()) {
+            result.errorMessage = QString::fromStdString(errorMessage);
+        } else {
+            result.errorMessage = QObject::tr("Failed to parse glTF file: %1").arg(path);
+        }
+        return false;
+    }
+
+    const auto& imported = tempDocument.geometry().getObjects();
+    if (imported.empty()) {
+        result.errorMessage = QObject::tr("glTF file did not contain importable meshes: %1").arg(path);
+        return false;
+    }
+
+    std::unordered_map<const GeometryObject*, std::string> nameMap;
+    tempDocument.forEachNode([&](Scene::Document::ObjectNode& node) {
+        if (node.geometry) {
+            nameMap[node.geometry] = node.name;
+        }
+    });
+
+    const auto& sourceMaterials = tempDocument.geometry().getMaterials();
+    for (const auto& objectPtr : imported) {
+        if (!objectPtr)
+            continue;
+
+        std::unique_ptr<GeometryObject> clone = objectPtr->clone();
+        if (!clone) {
+            result.errorMessage = QObject::tr("Failed to clone glTF geometry: %1").arg(path);
+            return false;
+        }
+
+        GeometryObject* target = document.geometry().addObject(std::move(clone));
+        if (!target) {
+            result.errorMessage = QObject::tr("Failed to register glTF geometry: %1").arg(path);
+            return false;
+        }
+
+        auto materialIt = sourceMaterials.find(objectPtr.get());
+        if (materialIt != sourceMaterials.end()) {
+            document.geometry().assignMaterial(target, materialIt->second);
+        }
+
+        std::string nodeName;
+        if (auto nameIt = nameMap.find(objectPtr.get()); nameIt != nameMap.end()) {
+            nodeName = nameIt->second;
+        } else {
+            nodeName = QFileInfo(path).completeBaseName().toStdString();
+        }
+
+        Scene::Document::ObjectId objectId = document.ensureObjectForGeometry(target, nodeName);
+        ImportedObjectSummary summary;
+        summary.objectId = objectId;
+        if (materialIt != sourceMaterials.end()) {
+            summary.materialSlots.push_back(materialIt->second);
+        }
+        result.objects.push_back(std::move(summary));
+    }
+
+    return !result.objects.empty();
+}
+
 } // namespace
 
 ImportResult FileImporter::import(const QString& filePath, Scene::Document& document, Scene::Document::FileFormat hint)
@@ -396,6 +467,9 @@ ImportResult FileImporter::import(const QString& filePath, Scene::Document& docu
         break;
     case Scene::Document::FileFormat::Stl:
         ok = importStl(filePath, document, result);
+        break;
+    case Scene::Document::FileFormat::Gltf:
+        ok = importGltf(filePath, document, result);
         break;
     case Scene::Document::FileFormat::Fbx:
     case Scene::Document::FileFormat::Dxf:

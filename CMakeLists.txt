@@ -92,11 +92,14 @@ add_library(freecrafter_lib
     src/ui/PluginManagerDialog.cpp
     src/ui/LeftToolPalette.cpp
     src/ui/CollapsibleSection.cpp
-    src/ui/ExplorerPanel.cpp
+    src/ui/OutlinerPanel.cpp
+    src/ui/MaterialsPanel.cpp
+    src/ui/TagsPanel.cpp
     src/ui/HistoryPanel.cpp
     src/ui/RightTray.cpp
     src/ui/TerminalDock.cpp
     src/ui/ViewportOverlay.cpp
+    src/Scene/SceneGraphCommands.cpp
     resources.qrc
 )
 

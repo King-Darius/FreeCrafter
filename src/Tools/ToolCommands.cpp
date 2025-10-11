@@ -46,6 +46,58 @@ void CreateCurveCommand::performUndo()
     createdId_ = 0;
 }
 
+ExtrudeProfileCommand::ExtrudeProfileCommand(Scene::Document::ObjectId profileId,
+    std::optional<Scene::Document::ObjectId> pathId, Vector3 direction, bool capStart, bool capEnd,
+    const QString& description, std::string name)
+    : Core::Command(description)
+    , profileId_(profileId)
+    , pathId_(std::move(pathId))
+    , direction_(direction)
+    , capStart_(capStart)
+    , capEnd_(capEnd)
+    , name_(std::move(name))
+{
+    if (name_.empty()) {
+        name_ = "Extrusion";
+    }
+}
+
+void ExtrudeProfileCommand::performRedo()
+{
+    if (!geometry() || !document())
+        return;
+
+    if (direction_.lengthSquared() <= 1e-10f)
+        return;
+
+    GeometryObject* profile = document()->geometryForObject(profileId_);
+    if (!profile || profile->getType() != ObjectType::Curve)
+        return;
+
+    GeometryKernel::ExtrudeOptions options;
+    options.capStart = capStart_;
+    options.capEnd = capEnd_;
+
+    GeometryObject* created = geometry()->extrudeCurveAlongVector(profile, direction_, options);
+    if (!created)
+        return;
+
+    createdId_ = document()->ensureObjectForGeometry(created, name_);
+    if (createdId_ != 0)
+        setFinalSelection({ createdId_ });
+    else
+        setFinalSelection({});
+}
+
+void ExtrudeProfileCommand::performUndo()
+{
+    if (!document())
+        return;
+    if (createdId_ != 0)
+        document()->removeObject(createdId_);
+    createdId_ = 0;
+}
+
 TranslateObjectsCommand::TranslateObjectsCommand(std::vector<Scene::Document::ObjectId> ids, Vector3 delta,
                                                  const QString& description)
     : Core::Command(description)

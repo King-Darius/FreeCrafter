@@ -1,5 +1,6 @@
 #pragma once
 #include "Tool.h"
+#include "../Scene/Document.h"
 
 class Curve;
 

@@ -1433,11 +1433,15 @@ void MainWindow::showInsertShapesDialog()
 
     Scene::PrimitiveOptions options = dialog.selectedOptions();
     auto* command = new Scene::AddPrimitiveCommand(*document, options);
-    undoStack->push(command);
-    if (!command->error().empty()) {
-        statusBar()->showMessage(tr("Failed to insert shape: %1").arg(QString::fromStdString(command->error())), 5000);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to insert shape: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
         return;
     }
+    command->undo();
+    undoStack->push(command);
 
     viewport->update();
     statusBar()->showMessage(tr("Inserted %1").arg(primitiveDisplayName(options.type)), 2500);
@@ -1499,11 +1503,15 @@ void MainWindow::showImageImportDialog()
     }
 
     auto* command = new Scene::AddImagePlaneCommand(*document, options);
-    undoStack->push(command);
-    if (!command->error().empty()) {
-        statusBar()->showMessage(tr("Failed to insert image: %1").arg(QString::fromStdString(command->error())), 5000);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to insert image: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
         return;
     }
+    command->undo();
+    undoStack->push(command);
 
     viewport->update();
     statusBar()->showMessage(tr("Inserted image plane \"%1\"").arg(QFileInfo(QString::fromStdString(options.filePath)).fileName()), 2500);
@@ -1540,11 +1548,15 @@ void MainWindow::showExternalReferenceDialog()
     }
 
     auto* command = new Scene::LinkExternalReferenceCommand(*document, options);
-    undoStack->push(command);
-    if (!command->error().empty()) {
-        statusBar()->showMessage(tr("Failed to link reference: %1").arg(QString::fromStdString(command->error())), 5000);
+    command->redo();
+    const std::string error = command->error();
+    if (!error.empty()) {
+        statusBar()->showMessage(tr("Failed to link reference: %1").arg(QString::fromStdString(error)), 5000);
+        delete command;
         return;
     }
+    command->undo();
+    undoStack->push(command);
 
     viewport->update();
     statusBar()->showMessage(tr("Linked external reference \"%1\"").arg(QString::fromStdString(options.displayName)), 2500);

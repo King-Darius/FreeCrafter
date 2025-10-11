@@ -7,6 +7,14 @@
 #include <algorithm>
 #include <vector>
 
+namespace Core {
+class CommandStack;
+}
+
+namespace Scene {
+class Document;
+}
+
 class Tool {
 public:
     struct ModifierState {
@@ -109,6 +117,9 @@ public:
     virtual OverrideResult applyMeasurementOverride(double) { return OverrideResult::Ignored; }
     virtual bool isNavigationTool() const { return false; }
 
+    void setDocument(Scene::Document* doc) { document = doc; }
+    void setCommandStack(Core::CommandStack* stack) { commandStack = stack; }
+
 protected:
     virtual void onPointerDown(const PointerInput&) {}
     virtual void onPointerMove(const PointerInput&) {}
@@ -125,6 +136,8 @@ protected:
 
     void setState(State newState);
     const ModifierState& getModifiers() const { return modifiers; }
+    Scene::Document* getDocument() const { return document; }
+    Core::CommandStack* getCommandStack() const { return commandStack; }
 
     int viewportWidth = 1;
     int viewportHeight = 1;
@@ -137,6 +150,8 @@ private:
     Interaction::InferenceResult currentInference;
     ModifierState modifiers;
     State state = State::Idle;
+    Scene::Document* document = nullptr;
+    Core::CommandStack* commandStack = nullptr;
 };
 
 class PointerDragTool : public Tool {

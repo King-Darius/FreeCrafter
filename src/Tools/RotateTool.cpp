@@ -1,6 +1,12 @@
-#include "RotateTool.h"
-
-#include <cmath>
+#include "RotateTool.h"
+
+#include <cmath>
+#include <memory>
+
+#include "ToolCommands.h"
+#include "ToolGeometryUtils.h"
+#include <QString>
+
 
 #include "ToolGeometryUtils.h"
 
@@ -59,10 +65,42 @@ void RotateTool::onPointerDown(const PointerInput& input)
     if (selection.empty()) {
         dragging = false;
         return;
-    }
-
-    pivot = Vector3();
-    for (GeometryObject* obj : selection) {
+    bool executed = false;
+    if (auto* stack = getCommandStack()) {
+        auto ids = selectionIds();
+        if (!ids.empty()) {
+            auto command = std::make_unique<Tools::RotateObjectsCommand>(ids, pivot, axis, currentAngle, QStringLiteral("Rotate"));
+            stack->push(std::move(command));
+            executed = true;
+        }
+    }
+    if (!executed) {
+        applyRotation(currentAngle);
+    }
+    dragging = false;
+    selection.clear();
+    currentAngle = 0.0f;
+}
+Vector3 RotateTool::determineAxis() const
+{
+}
+
+std::vector<Scene::Document::ObjectId> RotateTool::selectionIds() const
+{
+    std::vector<Scene::Document::ObjectId> ids;
+    Scene::Document* doc = getDocument();
+    if (!doc)
+        return ids;
+    ids.reserve(selection.size());
+    for (GeometryObject* obj : selection) {
+        if (!obj)
+            continue;
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
+    }
+    return ids;
+}
         pivot += computeCentroid(*obj);
     }
     pivot = pivot / static_cast<float>(selection.size());

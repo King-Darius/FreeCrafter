@@ -171,5 +171,34 @@ Run this checklist before promoting any build to teammates or users:
 - [ ] **Artifacts archived:** keep the PyInstaller output, bootstrap logs,
       smoke-test notes, and any regression logs with the release hand-off.
 
+## 7. Viewport bring-up checklist
+
+Use this checklist when the 3D area looks empty or unresponsive after a build.
+Each item points to the existing wiring so you can spot anything that drifted
+while integrating new features:
+
+- **Confirm the viewport is actually ticking.** `GLViewport` starts a 16 ms
+  timer that calls `update()` and keeps `paintGL()` running; if the widget is
+  not the central window content or the timer is stopped, nothing will refresh.
+  Check the constructor for the `QTimer` setup and `update()` connection before
+  debugging deeper.
+- **Verify the default draw path.** On every frame the viewport clears the
+  framebuffer, renders the sky band, then draws the grid and axes before any
+  scene geometry. If you see only a clear color, the draw routine is still
+  alive—look at the grid toggle or camera state next.
+- **Ensure input reaches the camera and tools.** Mouse and keyboard handlers in
+  the viewport hand events to the `ToolManager`, which in turn drives camera
+  navigation bindings. If `setToolManager()` was never called, orbit/pan/zoom
+  will not move even though the math is implemented.
+- **Propagate document changes back to the viewport.** The main window registers
+  callbacks that call `viewport->update()` whenever geometry or selection
+  changes. When adding new tool flows, use the same pattern so the renderer
+  knows to upload new meshes.
+- **Double-check visibility flags.** The renderer skips hidden geometry unless
+  the “show hidden” flag is enabled, and it exits early if the grid visibility
+  toggle is off. If you are creating objects via the geometry kernel, make sure
+  they are marked visible and registered with the document so the draw loop can
+  find them.
+
 Keep this document handy during release cycles so the "one-click installer"
 promise remains measurable and trustworthy.

@@ -5,6 +5,8 @@
 - **Qt 6 (LGPL/commercial):** Using LGPL build. We statically link only permissible modules (Widgets, OpenGL, Svg). Dynamic linking maintained with deployment instructions in installer scripts.
 - **OpenGL:** Core spec licensing is permissive; ensure attribution in docs if using sample shaders from Khronos.
 - **Geometry libraries:** Planned integration with CGAL or libIGL. CGAL dual-license (GPL/commercial); prefer libIGL (MPL2) for base features and isolate CGAL-dependent features behind optional module pending commercial license decision.
+- **Geogram (BSD-3-Clause):** Permissive license keeps it compatible with MIT core. Provides computational geometry kernels (Delaunay, parameterization, Boolean repair) that could backfill robustness gaps without GPL risk. Track as optional Phase 2+ enhancement, ensuring abstraction layers allow swapping between libIGL/Geogram/CGAL implementations.
+- **Industry reference points:** Blender ships with its own permissively-licensed `BMesh` topology/Boolean kernel (supplemented by OpenVDB-based volumetric booleans) instead of CGAL, while FreeCAD relies on the LGPL-style Open CASCADE Technology (OCCT) solid modeling kernel. These precedents reinforce our plan to keep FreeCrafter’s CGAL usage optional and explore permissive kernels first.
 - **File formats:** Native `.fcm` uses MIT-licensed serializer. Import/export for OBJ/STL/FBX/DAE rely on Assimp (BSD). DXF/DWG import requires Teigha/ODA (commercial) — scheduled for Phase 7 research.
 
 ## Patent/IP Considerations

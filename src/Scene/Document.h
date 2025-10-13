@@ -225,7 +225,7 @@ private:
     void applySceneState(const SceneState& state, CameraController& camera);
     void serializeObjectTree(std::ostream& os) const;
     void serializeNode(std::ostream& os, const ObjectNode& node,
-                       const std::unordered_map<const GeometryObject*, std::size_t>& geometryLookup) const;
+                       const std::unordered_map<GeometryObject::StableId, std::size_t>& geometryLookup) const;
     bool deserializeObjectTree(std::istream& is, int version, const std::vector<GeometryObject*>& geometryObjects);
     bool deserializeNode(std::istream& is, ObjectNode* parent, const std::vector<GeometryObject*>& geometryObjects, int version);
     void serializeTags(std::ostream& os) const;
@@ -251,7 +251,7 @@ private:
     SceneId nextSceneId = 1;
 
     std::unordered_map<ObjectId, ObjectNode*> nodeIndex;
-    std::unordered_map<const GeometryObject*, ObjectId> geometryIndex;
+    std::unordered_map<GeometryObject::StableId, ObjectId> geometryIndex;
     std::unordered_map<TagId, Tag> tagMap;
     std::unordered_map<ComponentDefinitionId, ComponentDefinition> componentDefinitions;
     std::unordered_map<ComponentDefinitionId, std::vector<ObjectId>> componentInstances;

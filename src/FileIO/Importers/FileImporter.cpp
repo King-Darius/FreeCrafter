@@ -394,7 +394,7 @@ bool importGltf(const QString& path, Document& document, ImportResult& result)
         return false;
     }
 
-    std::unordered_map<const GeometryObject*, std::string> nameMap;
+    std::unordered_map<GeometryObject::StableId, std::string> nameMap;
     std::vector<const Scene::Document::ObjectNode*> stack;
     stack.push_back(&tempDocument.objectTree());
     while (!stack.empty()) {
@@ -403,7 +403,9 @@ bool importGltf(const QString& path, Document& document, ImportResult& result)
         if (!node)
             continue;
         if (node->geometry) {
-            nameMap[node->geometry] = node->name;
+            GeometryObject::StableId id = node->geometry->getStableId();
+            if (id != 0)
+                nameMap[id] = node->name;
         }
         for (const auto& child : node->children) {
             stack.push_back(child.get());
@@ -427,13 +429,14 @@ bool importGltf(const QString& path, Document& document, ImportResult& result)
             return false;
         }
 
-        auto materialIt = sourceMaterials.find(objectPtr.get());
+        GeometryObject::StableId sourceId = objectPtr->getStableId();
+        auto materialIt = sourceMaterials.find(sourceId);
         if (materialIt != sourceMaterials.end()) {
             document.geometry().assignMaterial(target, materialIt->second);
         }
 
         std::string nodeName;
-        if (auto nameIt = nameMap.find(objectPtr.get()); nameIt != nameMap.end()) {
+        if (auto nameIt = nameMap.find(sourceId); nameIt != nameMap.end()) {
             nodeName = nameIt->second;
         } else {
             nodeName = QFileInfo(path).completeBaseName().toStdString();

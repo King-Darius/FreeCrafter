@@ -343,13 +343,14 @@ Document::SceneState::CameraState cameraStateFromJson(const QJsonObject& obj)
 }
 
 QJsonObject prototypeToJson(const Document::PrototypeNode& proto,
-                            const std::unordered_map<const GeometryObject*, std::size_t>& lookup)
+                            const std::unordered_map<GeometryObject::StableId, std::size_t>& lookup)
 {
     QJsonObject obj;
     obj.insert(QStringLiteral("kind"), nodeKindToString(proto.kind));
     obj.insert(QStringLiteral("name"), QString::fromStdString(proto.name));
     if (proto.geometry) {
-        auto it = lookup.find(proto.geometry);
+        GeometryObject::StableId id = proto.geometry->getStableId();
+        auto it = lookup.find(id);
         if (it != lookup.end())
             obj.insert(QStringLiteral("geometry"), static_cast<double>(it->second));
     }
@@ -397,7 +398,7 @@ std::unique_ptr<Document::PrototypeNode> prototypeFromJson(
 }
 
 QJsonObject objectNodeToJson(const Document::ObjectNode& node,
-                             const std::unordered_map<const GeometryObject*, std::size_t>& geometryLookup)
+                             const std::unordered_map<GeometryObject::StableId, std::size_t>& geometryLookup)
 {
     QJsonObject obj;
     obj.insert(QStringLiteral("id"), static_cast<double>(node.id));
@@ -408,7 +409,8 @@ QJsonObject objectNodeToJson(const Document::ObjectNode& node,
     if (node.definitionId != 0)
         obj.insert(QStringLiteral("definitionId"), static_cast<double>(node.definitionId));
     if (node.geometry) {
-        auto it = geometryLookup.find(node.geometry);
+        GeometryObject::StableId id = node.geometry->getStableId();
+        auto it = geometryLookup.find(id);
         if (it != geometryLookup.end())
             obj.insert(QStringLiteral("geometry"), static_cast<double>(it->second));
     }
@@ -593,11 +595,16 @@ SceneSerializer::Result SceneSerializer::saveToStream(const Document& document, 
     document.geometryKernel.saveToStream(geometryStream);
     const std::string geometryPayload = geometryStream.str();
 
-    std::unordered_map<const GeometryObject*, std::size_t> geometryLookup;
+    std::unordered_map<GeometryObject::StableId, std::size_t> geometryLookup;
     const auto& objects = document.geometryKernel.getObjects();
     geometryLookup.reserve(objects.size());
-    for (std::size_t i = 0; i < objects.size(); ++i)
-        geometryLookup.emplace(objects[i].get(), i);
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+        if (!objects[i])
+            continue;
+        GeometryObject::StableId id = objects[i]->getStableId();
+        if (id != 0)
+            geometryLookup.emplace(id, i);
+    }
 
     QJsonObject root;
     root.insert(QStringLiteral("format"), QStringLiteral("FreeCrafterScene"));
@@ -636,8 +643,8 @@ SceneSerializer::Result SceneSerializer::saveToStream(const Document& document, 
 
     QJsonArray materialsArray;
     const auto& materials = document.geometryKernel.getMaterials();
-    for (const auto& [geom, name] : materials) {
-        auto it = geometryLookup.find(geom);
+    for (const auto& [geometryId, name] : materials) {
+        auto it = geometryLookup.find(geometryId);
         if (it == geometryLookup.end())
             continue;
         QJsonObject matObj;
@@ -657,11 +664,16 @@ SceneSerializer::Result SceneSerializer::saveToStream(const Document& document, 
         definition.geometry.saveToStream(defGeometryStream);
         defObj.insert(QStringLiteral("geometry"), QString::fromStdString(defGeometryStream.str()));
 
-        std::unordered_map<const GeometryObject*, std::size_t> defLookup;
+        std::unordered_map<GeometryObject::StableId, std::size_t> defLookup;
         const auto& defObjects = definition.geometry.getObjects();
         defLookup.reserve(defObjects.size());
-        for (std::size_t i = 0; i < defObjects.size(); ++i)
-            defLookup.emplace(defObjects[i].get(), i);
+        for (std::size_t i = 0; i < defObjects.size(); ++i) {
+            if (!defObjects[i])
+                continue;
+            GeometryObject::StableId id = defObjects[i]->getStableId();
+            if (id != 0)
+                defLookup.emplace(id, i);
+        }
 
         QJsonArray rootsArray;
         for (const auto& proto : definition.roots)

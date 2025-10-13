@@ -26,6 +26,7 @@ int main() {
     assert(curveObj);
     assert(kernel.getObjects().size() == 1);
     assert(curveObj->getType() == ObjectType::Curve);
+    assert(curveObj->getStableId() != 0);
     auto* curve = static_cast<Curve*>(curveObj);
     const auto& boundary = curve->getBoundaryLoop();
     assert(boundary.size() == 4); // duplicates and tiny edges collapsed
@@ -41,6 +42,8 @@ int main() {
     assert(solidObj);
     assert(solidObj->getType() == ObjectType::Solid);
     assert(kernel.getObjects().size() == 2);
+    assert(solidObj->getStableId() != 0);
+    assert(solidObj->getStableId() != curveObj->getStableId());
     auto* solid = static_cast<Solid*>(solidObj);
     assert(std::fabs(solid->getHeight() - height) < 1e-6f);
     assert(solid->getBaseLoop().size() == boundary.size());
@@ -85,7 +88,41 @@ int main() {
     // tiny extrusion ignored
     assert(kernel.extrudeCurve(curveObj, 1e-5f) == nullptr);
 
+    kernel.assignMaterial(curveObj, "TestMaterial");
+    GeometryKernel::ShapeMetadata circleMeta;
+    circleMeta.type = GeometryKernel::ShapeMetadata::Type::Circle;
+    circleMeta.circle.radius = 1.0f;
+    circleMeta.circle.direction = Vector3(0.0f, 1.0f, 0.0f);
+    kernel.setShapeMetadata(curveObj, circleMeta);
+    assert(kernel.hasShapeMetadata(curveObj->getStableId()));
+
+    GeometryObject::StableId originalCurveId = curveObj->getStableId();
+    GeometryObject* clonedCurve = kernel.cloneObject(*curveObj);
+    assert(clonedCurve);
+    assert(clonedCurve->getStableId() != 0);
+    assert(clonedCurve->getStableId() != originalCurveId);
+    assert(kernel.getMaterial(clonedCurve) == "TestMaterial");
+    auto clonedMetadata = kernel.shapeMetadata(clonedCurve);
+    assert(clonedMetadata.has_value());
+    assert(clonedMetadata->type == GeometryKernel::ShapeMetadata::Type::Circle);
+
+    const auto& preDeletionMaterials = kernel.getMaterials();
+    assert(preDeletionMaterials.count(originalCurveId) == 1);
+    assert(preDeletionMaterials.count(clonedCurve->getStableId()) == 1);
+
     kernel.deleteObject(curveObj);
+    const auto& postDeletionMaterials = kernel.getMaterials();
+    assert(postDeletionMaterials.count(originalCurveId) == 0);
+    assert(postDeletionMaterials.count(clonedCurve->getStableId()) == 1);
+    assert(!kernel.hasShapeMetadata(originalCurveId));
+    assert(kernel.hasShapeMetadata(clonedCurve->getStableId()));
+
+    GeometryObject::StableId clonedId = clonedCurve->getStableId();
+    kernel.deleteObject(clonedCurve);
+    const auto& afterCloneRemovalMaterials = kernel.getMaterials();
+    assert(afterCloneRemovalMaterials.count(clonedId) == 0);
+    assert(!kernel.hasShapeMetadata(clonedId));
+
     assert(kernel.getObjects().size() == 1);
     assert(kernel.getObjects()[0].get() == solidObj);
     kernel.deleteObject(solidObj);

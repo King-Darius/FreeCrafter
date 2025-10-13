@@ -6,23 +6,11 @@
 #include <cstdint>
 
 #include "Tool.h"
-#include "LineTool.h"
-#include "SmartSelectTool.h"
-#include "MoveTool.h"
-#include "RotateTool.h"
-#include "ScaleTool.h"
-#include "ExtrudeTool.h"
-#include "ChamferTool.h"
-#include "LoftTool.h"
-#include "DrawingTools.h"
-#include "ModificationTools.h"
-#include "SectionTool.h"
-#include "OrbitTool.h"
-#include "PanTool.h"
-#include "ZoomTool.h"
 
 #include "../Interaction/InferenceEngine.h"
 #include "../NavigationConfig.h"
+
+#include <QString>
 
 namespace Core {
 class CommandStack;
@@ -62,6 +50,9 @@ public:
     void setGeometryChangedCallback(std::function<void()> callback);
     void setCommandStack(Core::CommandStack* stack);
     void notifyExternalGeometryChange();
+
+    bool hasTool(const QString& name) const;
+    bool hasTool(const char* name) const;
 
 private:
     void propagateViewport();

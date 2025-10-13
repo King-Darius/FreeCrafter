@@ -1,10 +1,15 @@
 #include "ToolManager.h"
 
+#include "ToolRegistry.h"
+#include "ZoomTool.h"
+
 #ifdef _MSC_VER
 #pragma execution_character_set("utf-8")
 #endif
 
+#include <QtCore/QByteArray>
 #include <QtCore/Qt>
+#include <QtCore/QtGlobal>
 
 #include <algorithm>
 #include <cmath>
@@ -34,44 +39,23 @@ ToolManager::ToolManager(Scene::Document* doc, CameraController* c, Core::Comman
     , document(doc)
     , commandStack(stack)
 {
-    GeometryKernel* gPtr = geometry;
-    tools.push_back(std::make_unique<SmartSelectTool>(gPtr, c));
-    tools.push_back(std::make_unique<LineTool>(gPtr, c));
-    tools.push_back(std::make_unique<RectangleTool>(gPtr, c));
-    tools.push_back(std::make_unique<ArcTool>(gPtr, c));
-    tools.push_back(std::make_unique<CenterArcTool>(gPtr, c));
-    tools.push_back(std::make_unique<TangentArcTool>(gPtr, c));
-    tools.push_back(std::make_unique<CircleTool>(gPtr, c));
-    tools.push_back(std::make_unique<PolygonTool>(gPtr, c));
-    tools.push_back(std::make_unique<RotatedRectangleTool>(gPtr, c));
-    tools.push_back(std::make_unique<FreehandTool>(gPtr, c));
-    tools.push_back(std::make_unique<BezierTool>(gPtr, c));
-    tools.push_back(std::make_unique<MoveTool>(gPtr, c));
-    tools.push_back(std::make_unique<RotateTool>(gPtr, c));
-    tools.push_back(std::make_unique<ScaleTool>(gPtr, c));
-    tools.push_back(std::make_unique<OffsetTool>(gPtr, c));
-    tools.push_back(std::make_unique<PushPullTool>(gPtr, c));
-    tools.push_back(std::make_unique<FollowMeTool>(gPtr, c));
-    tools.push_back(std::make_unique<PaintBucketTool>(gPtr, c));
-    tools.push_back(std::make_unique<TextTool>(gPtr, c));
-    tools.push_back(std::make_unique<DimensionTool>(gPtr, c));
-    tools.push_back(std::make_unique<TapeMeasureTool>(gPtr, c));
-    tools.push_back(std::make_unique<ProtractorTool>(gPtr, c));
-    tools.push_back(std::make_unique<AxesTool>(gPtr, c));
-    tools.push_back(std::make_unique<ExtrudeTool>(gPtr, c));
-    tools.push_back(std::make_unique<ChamferTool>(gPtr, c));
-    tools.push_back(std::make_unique<LoftTool>(gPtr, c));
-    tools.push_back(std::make_unique<SectionTool>(geometry, c, document));
-    tools.push_back(std::make_unique<OrbitTool>(gPtr, c));
-    tools.push_back(std::make_unique<PanTool>(gPtr, c));
-    tools.push_back(std::make_unique<ZoomTool>(gPtr, c));
+    const auto& registry = ToolRegistry::instance();
+    ToolRegistry::ToolCreationContext context{ geometry, camera, document };
+    tools.reserve(registry.allTools().size());
+    for (const auto& descriptor : registry.allTools()) {
+        if (!descriptor.factory)
+            continue;
+        auto tool = descriptor.factory(context);
+        if (!tool)
+            continue;
+        Q_ASSERT(std::strcmp(tool->getName(), descriptor.idLiteral) == 0);
+        tool->setDocument(document);
+        tool->setCommandStack(commandStack);
+        tools.push_back(std::move(tool));
+    }
     active = tools.empty() ? nullptr : tools.front().get();
     if (active && !active->isNavigationTool()) {
         lastModelingTool = active;
-    }
-    for (auto& tool : tools) {
-        tool->setDocument(document);
-        tool->setCommandStack(commandStack);
     }
     propagateViewport();
     geometryRevision = geometry ? geometry->revision() : 0;
@@ -417,6 +401,22 @@ void ToolManager::notifyExternalGeometryChange()
         document->synchronizeWithGeometry();
     if (geometryChangedCallback)
         geometryChangedCallback();
+}
+
+bool ToolManager::hasTool(const QString& name) const
+{
+    return hasTool(name.toUtf8().constData());
+}
+
+bool ToolManager::hasTool(const char* name) const
+{
+    if (!name)
+        return false;
+    for (const auto& tool : tools) {
+        if (std::strcmp(tool->getName(), name) == 0)
+            return true;
+    }
+    return false;
 }
 
 void ToolManager::propagateViewport()

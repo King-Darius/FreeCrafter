@@ -78,6 +78,7 @@ add_library(freecrafter_lib
     src/Tools/OrbitTool.cpp
     src/Tools/PanTool.cpp
     src/Tools/ZoomTool.cpp
+    src/Tools/ToolRegistry.cpp
     src/Tools/ToolManager.cpp
     src/Phase6/AdvancedModeling.cpp
     src/Interaction/InferenceEngine.cpp

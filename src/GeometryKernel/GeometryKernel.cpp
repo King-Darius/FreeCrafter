@@ -24,6 +24,7 @@ GeometryObject* GeometryKernel::addCurve(const std::vector<Vector3>& points) {
         return nullptr;
     }
     GeometryObject* raw = obj.get();
+    assignStableId(*raw);
     objects.push_back(std::move(obj));
     markModified();
     return raw;
@@ -44,6 +45,7 @@ GeometryObject* GeometryKernel::extrudeCurve(GeometryObject* curveObj, float hei
         return nullptr;
     }
     GeometryObject* raw = obj.get();
+    assignStableId(*raw);
     objects.push_back(std::move(obj));
     markModified();
     return raw;
@@ -83,6 +85,7 @@ GeometryObject* GeometryKernel::extrudeCurveAlongVector(GeometryObject* curveObj
         return nullptr;
     }
     GeometryObject* raw = obj.get();
+    assignStableId(*raw);
     objects.push_back(std::move(obj));
     markModified();
     return raw;
@@ -93,6 +96,7 @@ GeometryObject* GeometryKernel::addObject(std::unique_ptr<GeometryObject> object
     if (!object)
         return nullptr;
     GeometryObject* raw = object.get();
+    assignStableId(*raw);
     objects.push_back(std::move(object));
     markModified();
     return raw;
@@ -104,14 +108,19 @@ GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
     if (!clone)
         return nullptr;
     GeometryObject* raw = clone.get();
+    assignStableId(*raw);
     objects.push_back(std::move(clone));
-    auto it = materialAssignments.find(&source);
-    if (it != materialAssignments.end()) {
-        materialAssignments[raw] = it->second;
-    }
-    auto metaIt = metadataMap.find(&source);
-    if (metaIt != metadataMap.end()) {
-        metadataMap[raw] = metaIt->second;
+    GeometryObject::StableId sourceId = source.getStableId();
+    GeometryObject::StableId cloneId = raw->getStableId();
+    if (sourceId != 0 && cloneId != 0) {
+        auto it = materialAssignments.find(sourceId);
+        if (it != materialAssignments.end()) {
+            materialAssignments[cloneId] = it->second;
+        }
+        auto metaIt = metadataMap.find(sourceId);
+        if (metaIt != metadataMap.end()) {
+            metadataMap[cloneId] = metaIt->second;
+        }
     }
     markModified();
     return raw;
@@ -119,8 +128,11 @@ GeometryObject* GeometryKernel::cloneObject(const GeometryObject& source)
 
 void GeometryKernel::deleteObject(GeometryObject* obj) {
     if (!obj) return;
-    materialAssignments.erase(obj);
-    metadataMap.erase(obj);
+    GeometryObject::StableId id = obj->getStableId();
+    if (id != 0) {
+        materialAssignments.erase(id);
+        metadataMap.erase(id);
+    }
     for (auto it = objects.begin(); it != objects.end(); ++it) {
         if (it->get() == obj) { objects.erase(it); markModified(); return; }
     }
@@ -135,6 +147,7 @@ void GeometryKernel::clear()
     dimensions.clear();
     clearGuides();
     resetAxes();
+    nextStableId = 1;
     markModified();
 }
 
@@ -175,11 +188,23 @@ bool GeometryKernel::loadFromFile(const std::string& filename) {
     clear();
     bool changed = false;
     while (is) {
-        std::string type; if (!(is>>type)) break;
-        if (type=="Curve") {
-            auto c = GeometryIO::readCurve(is); if (c) { objects.push_back(std::move(c)); changed = true; }
-        } else if (type=="Solid") {
-            auto s = GeometryIO::readSolid(is); if (s) { objects.push_back(std::move(s)); changed = true; }
+        std::string type;
+        if (!(is >> type))
+            break;
+        if (type == "Curve") {
+            auto c = GeometryIO::readCurve(is);
+            if (c) {
+                assignStableId(*c);
+                objects.push_back(std::move(c));
+                changed = true;
+            }
+        } else if (type == "Solid") {
+            auto s = GeometryIO::readSolid(is);
+            if (s) {
+                assignStableId(*s);
+                objects.push_back(std::move(s));
+                changed = true;
+            }
         } else {
             break;
         }
@@ -201,12 +226,14 @@ void GeometryKernel::loadFromStream(std::istream& is, const std::string& termina
         if (type == "Curve") {
             auto curve = GeometryIO::readCurve(is);
             if (curve) {
+                assignStableId(*curve);
                 objects.push_back(std::move(curve));
                 changed = true;
             }
         } else if (type == "Solid") {
             auto solid = GeometryIO::readSolid(is);
             if (solid) {
+                assignStableId(*solid);
                 objects.push_back(std::move(solid));
                 changed = true;
             }
@@ -222,10 +249,13 @@ void GeometryKernel::assignMaterial(const GeometryObject* object, const std::str
 {
     if (!object)
         return;
+    GeometryObject::StableId id = object->getStableId();
+    if (id == 0)
+        return;
     if (materialName.empty()) {
-        materialAssignments.erase(object);
+        materialAssignments.erase(id);
     } else {
-        materialAssignments[object] = materialName;
+        materialAssignments[id] = materialName;
     }
     markModified();
 }
@@ -234,7 +264,10 @@ std::string GeometryKernel::getMaterial(const GeometryObject* object) const
 {
     if (!object)
         return {};
-    auto it = materialAssignments.find(object);
+    GeometryObject::StableId id = object->getStableId();
+    if (id == 0)
+        return {};
+    auto it = materialAssignments.find(id);
     if (it == materialAssignments.end())
         return {};
     return it->second;
@@ -244,10 +277,13 @@ void GeometryKernel::setShapeMetadata(const GeometryObject* object, const ShapeM
 {
     if (!object)
         return;
+    GeometryObject::StableId id = object->getStableId();
+    if (id == 0)
+        return;
     if (metadata.type == ShapeMetadata::Type::None) {
-        metadataMap.erase(object);
+        metadataMap.erase(id);
     } else {
-        metadataMap[object] = metadata;
+        metadataMap[id] = metadata;
     }
     markModified();
 }
@@ -256,7 +292,10 @@ std::optional<GeometryKernel::ShapeMetadata> GeometryKernel::shapeMetadata(const
 {
     if (!object)
         return std::nullopt;
-    auto it = metadataMap.find(object);
+    GeometryObject::StableId id = object->getStableId();
+    if (id == 0)
+        return std::nullopt;
+    auto it = metadataMap.find(id);
     if (it == metadataMap.end())
         return std::nullopt;
     return it->second;
@@ -265,6 +304,10 @@ std::optional<GeometryKernel::ShapeMetadata> GeometryKernel::shapeMetadata(const
 bool GeometryKernel::rebuildShapeFromMetadata(GeometryObject* object, const ShapeMetadata& metadata)
 {
     if (!object || object->getType() != ObjectType::Curve)
+        return false;
+
+    GeometryObject::StableId id = object->getStableId();
+    if (id == 0)
         return false;
 
     auto normalizeDirection = [](const Vector3& dir) {
@@ -327,7 +370,7 @@ bool GeometryKernel::rebuildShapeFromMetadata(GeometryObject* object, const Shap
     if (!curve->rebuildFromPoints(points))
         return false;
 
-    metadataMap[object] = resolved;
+    metadataMap[id] = resolved;
     markModified();
     return true;
 }
@@ -509,6 +552,18 @@ void GeometryKernel::resetAxes()
 {
     axes = AxesState{};
     markModified();
+}
+
+GeometryObject::StableId GeometryKernel::assignStableId(GeometryObject& object)
+{
+    GeometryObject::StableId id = object.getStableId();
+    if (id == 0) {
+        id = nextStableId++;
+        object.setStableId(id);
+    } else {
+        nextStableId = std::max(nextStableId, id + 1);
+    }
+    return id;
 }
 
 void GeometryKernel::markModified()

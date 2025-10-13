@@ -38,7 +38,7 @@ public:
 
     void assignMaterial(const GeometryObject* object, const std::string& materialName);
     std::string getMaterial(const GeometryObject* object) const;
-    const std::unordered_map<const GeometryObject*, std::string>& getMaterials() const { return materialAssignments; }
+    const std::unordered_map<GeometryObject::StableId, std::string>& getMaterials() const { return materialAssignments; }
 
     struct ShapeMetadata {
         enum class Type {
@@ -81,6 +81,7 @@ public:
     void setShapeMetadata(const GeometryObject* object, const ShapeMetadata& metadata);
     std::optional<ShapeMetadata> shapeMetadata(const GeometryObject* object) const;
     bool rebuildShapeFromMetadata(GeometryObject* object, const ShapeMetadata& metadata);
+    bool hasShapeMetadata(GeometryObject::StableId id) const { return metadataMap.find(id) != metadataMap.end(); }
 
     struct TextAnnotation {
         Vector3 position;
@@ -153,13 +154,15 @@ public:
 
 private:
     void markModified();
+    GeometryObject::StableId assignStableId(GeometryObject& object);
 
     std::vector<std::unique_ptr<GeometryObject>> objects;
-    std::unordered_map<const GeometryObject*, std::string> materialAssignments;
-    std::unordered_map<const GeometryObject*, ShapeMetadata> metadataMap;
+    std::unordered_map<GeometryObject::StableId, std::string> materialAssignments;
+    std::unordered_map<GeometryObject::StableId, ShapeMetadata> metadataMap;
     std::vector<TextAnnotation> textAnnotations;
     std::vector<LinearDimension> dimensions;
     GuideState guides;
     AxesState axes;
     std::uint64_t revisionCounter = 0;
+    GeometryObject::StableId nextStableId = 1;
 };

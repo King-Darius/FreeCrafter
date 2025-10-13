@@ -186,6 +186,7 @@ std::unique_ptr<GeometryObject> Curve::clone() const
     copy->setSelected(isSelected());
     copy->setVisible(isVisible());
     copy->setHidden(isHidden());
+    copy->setStableId(0);
     return copy;
 }
 

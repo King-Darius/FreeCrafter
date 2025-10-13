@@ -67,7 +67,10 @@ Document::ObjectId Document::objectIdForGeometry(const GeometryObject* object) c
 {
     if (!object)
         return 0;
-    auto it = geometryIndex.find(const_cast<GeometryObject*>(object));
+    GeometryObject::StableId geometryId = object->getStableId();
+    if (geometryId == 0)
+        return 0;
+    auto it = geometryIndex.find(geometryId);
     if (it == geometryIndex.end())
         return 0;
     return it->second;
@@ -93,10 +96,12 @@ Document::ObjectId Document::ensureObjectForGeometry(GeometryObject* object, con
 {
     if (!object)
         return 0;
-    auto it = geometryIndex.find(object);
-    if (it != geometryIndex.end())
-        return it->second;
-
+    GeometryObject::StableId geometryId = object->getStableId();
+    if (geometryId != 0) {
+        auto it = geometryIndex.find(geometryId);
+        if (it != geometryIndex.end())
+            return it->second;
+    }
     std::string nodeName = name.empty() ? std::string("Object ") + std::to_string(nextObjectId) : name;
     ObjectNode* node = addNode(NodeKind::Geometry, nodeName, rootNode.get());
     node->geometry = object;
@@ -107,15 +112,19 @@ Document::ObjectId Document::ensureObjectForGeometry(GeometryObject* object, con
 
 void Document::synchronizeWithGeometry()
 {
-    std::unordered_set<const GeometryObject*> existing;
+    std::unordered_set<GeometryObject::StableId> existing;
     existing.reserve(geometryKernel.getObjects().size());
     for (const auto& uptr : geometryKernel.getObjects()) {
-        existing.insert(uptr.get());
+        if (!uptr)
+            continue;
+        GeometryObject::StableId id = uptr->getStableId();
+        if (id != 0)
+            existing.insert(id);
     }
 
     std::vector<ObjectId> toRemove;
-    for (const auto& [geometryPtr, objectId] : geometryIndex) {
-        if (!existing.count(geometryPtr)) {
+    for (const auto& [geometryId, objectId] : geometryIndex) {
+        if (!existing.count(geometryId)) {
             toRemove.push_back(objectId);
         }
     }
@@ -956,14 +965,20 @@ void Document::registerGeometry(ObjectNode* node, GeometryObject* geometry)
 {
     if (!node || !geometry)
         return;
-    geometryIndex[geometry] = node->id;
+    GeometryObject::StableId geometryId = geometry->getStableId();
+    if (geometryId == 0)
+        return;
+    geometryIndex[geometryId] = node->id;
 }
 
 void Document::unregisterGeometry(GeometryObject* geometry)
 {
     if (!geometry)
         return;
-    auto it = geometryIndex.find(geometry);
+    GeometryObject::StableId geometryId = geometry->getStableId();
+    if (geometryId == 0)
+        return;
+    auto it = geometryIndex.find(geometryId);
     if (it != geometryIndex.end()) {
         clearImportMetadata(it->second);
         geometryIndex.erase(it);
@@ -1048,10 +1063,14 @@ Document::ObjectNode* Document::addNode(NodeKind kind, const std::string& name, 
 
 void Document::serializeObjectTree(std::ostream& os) const
 {
-    std::unordered_map<const GeometryObject*, std::size_t> geometryLookup;
+    std::unordered_map<GeometryObject::StableId, std::size_t> geometryLookup;
     const auto& objects = geometryKernel.getObjects();
     for (std::size_t i = 0; i < objects.size(); ++i) {
-        geometryLookup[objects[i].get()] = i;
+        if (!objects[i])
+            continue;
+        GeometryObject::StableId id = objects[i]->getStableId();
+        if (id != 0)
+            geometryLookup[id] = i;
     }
 
     os << kBeginObjectTree << '\n';
@@ -1060,12 +1079,13 @@ void Document::serializeObjectTree(std::ostream& os) const
 }
 
 void Document::serializeNode(std::ostream& os, const ObjectNode& node,
-                             const std::unordered_map<const GeometryObject*, std::size_t>& geometryLookup) const
+                             const std::unordered_map<GeometryObject::StableId, std::size_t>& geometryLookup) const
 {
     if (&node != rootNode.get()) {
         std::size_t geometryIndexValue = std::numeric_limits<std::size_t>::max();
         if (node.geometry) {
-            auto it = geometryLookup.find(node.geometry);
+            GeometryObject::StableId id = node.geometry->getStableId();
+            auto it = geometryLookup.find(id);
             if (it != geometryLookup.end()) {
                 geometryIndexValue = it->second;
             }
@@ -1204,17 +1224,22 @@ void Document::serializeComponentDefinitions(std::ostream& os) const
         definition.geometry.saveToStream(os);
         os << "END_DEF_GEOMETRY\n";
 
-        std::unordered_map<const GeometryObject*, std::size_t> lookup;
+        std::unordered_map<GeometryObject::StableId, std::size_t> lookup;
         const auto& objects = definition.geometry.getObjects();
         for (std::size_t i = 0; i < objects.size(); ++i) {
-            lookup[objects[i].get()] = i;
+            if (!objects[i])
+                continue;
+            GeometryObject::StableId geometryId = objects[i]->getStableId();
+            if (geometryId != 0)
+                lookup[geometryId] = i;
         }
 
         std::function<void(const PrototypeNode&)> serializeProto = [&](const PrototypeNode& proto) {
             os << "PROTO " << static_cast<int>(proto.kind) << ' ' << std::quoted(proto.name) << ' ';
             std::size_t geometryIndexValue = std::numeric_limits<std::size_t>::max();
             if (proto.geometry) {
-                auto it = lookup.find(proto.geometry);
+                GeometryObject::StableId geometryId = proto.geometry->getStableId();
+                auto it = lookup.find(geometryId);
                 if (it != lookup.end()) {
                     geometryIndexValue = it->second;
                 }

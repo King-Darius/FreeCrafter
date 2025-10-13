@@ -1,5 +1,7 @@
 #include <cassert>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 #include "CameraController.h"
@@ -209,6 +211,13 @@ void testSerializationRoundTrip()
     bool saved = doc.saveToFile(path.string());
     assert(saved);
 
+    std::ifstream sceneFile(path, std::ios::binary);
+    assert(sceneFile.good());
+    char magic[4] = {};
+    sceneFile.read(magic, sizeof(magic));
+    assert(sceneFile.gcount() == 4);
+    assert(std::memcmp(magic, "FCSN", 4) == 0);
+
     Document loaded;
     bool loadedOk = loaded.loadFromFile(path.string());
     std::filesystem::remove(path);
@@ -221,6 +230,31 @@ void testSerializationRoundTrip()
     assert(!loaded.objectTree().children.empty());
 }
 
+void testLegacySceneUpgrade()
+{
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "legacy_scene.fcm";
+    {
+        std::ofstream os(path);
+        os << "FCM 4\n";
+        os << "BEGIN_GEOMETRY\n";
+        os << "END_GEOMETRY\n";
+        os << "BEGIN_SECTION_PLANES 0\nEND_SECTION_PLANES\n";
+        os << "BEGIN_SETTINGS\nEND_SETTINGS\n";
+        os << "BEGIN_TAGS 0\nEND_TAGS\n";
+        os << "BEGIN_OBJECT_TREE\nEND_OBJECT_TREE\n";
+        os << "BEGIN_COMPONENT_DEFS 0\nEND_COMPONENT_DEFS\n";
+        os << "BEGIN_SCENES 0\nEND_SCENES\n";
+        os << "COLOR_BY_TAG 0\n";
+    }
+
+    Document legacy;
+    bool loaded = legacy.loadFromFile(path.string());
+    std::filesystem::remove(path);
+    assert(loaded);
+    assert(legacy.objectTree().children.empty());
+    assert(legacy.scenes().empty());
+}
+
 int main()
 {
     testOpenPolylineCreation();
@@ -231,6 +265,7 @@ int main()
     testIsolation();
     testScenes();
     testSerializationRoundTrip();
+    testLegacySceneUpgrade();
     return 0;
 }
 

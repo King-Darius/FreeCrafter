@@ -17,6 +17,8 @@
 
 namespace Scene {
 
+class SceneSerializer;
+
 class Document {
 public:
     enum class FileFormat {
@@ -177,7 +179,11 @@ public:
     void clearExternalReferenceMetadata(ObjectId id);
     const std::unordered_map<ObjectId, ExternalReferenceMetadata>& externalReferences() const { return externalReferenceMetadata; }
 
+    const std::string& lastSceneIoError() const { return lastSceneIoErrorMessage; }
+
 private:
+    friend class SceneSerializer;
+
     struct PrototypeNode {
         NodeKind kind = NodeKind::Geometry;
         std::string name;
@@ -230,6 +236,7 @@ private:
     bool deserializeScenes(std::istream& is, int version);
     bool parsePrototype(std::istream& is, const std::vector<GeometryObject*>& geometryObjects, PrototypeNode& proto);
     void resetInternal(bool clearGeometry);
+    bool loadLegacyFromFile(const std::string& filename);
 
     void clearImportMetadata(ObjectId id);
 
@@ -257,6 +264,7 @@ private:
     std::unordered_map<ObjectId, ImagePlaneMetadata> imagePlaneMetadata;
     std::unordered_map<ObjectId, ExternalReferenceMetadata> externalReferenceMetadata;
     std::string lastImportErrorMessage;
+    mutable std::string lastSceneIoErrorMessage;
 };
 
 } // namespace Scene

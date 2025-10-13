@@ -54,6 +54,7 @@ add_library(freecrafter_lib
     src/GeometryKernel/GeometryKernel.cpp
     src/GeometryKernel/Serialization.cpp
     src/Scene/Document.cpp
+    src/Scene/SceneSerializer.cpp
     src/Scene/PrimitiveBuilder.cpp
     src/Scene/SceneCommands.cpp
     src/Scene/SceneSettings.cpp

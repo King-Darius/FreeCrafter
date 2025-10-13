@@ -33,7 +33,9 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QByteArray>
 #include <QCheckBox>
+#include <QtCore/QtGlobal>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
@@ -614,21 +616,26 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 
 }
 
-    QString MainWindow::navigationHintForTool(const QString& toolName) const
+QString MainWindow::navigationHintForTool(const QString& toolName) const
 
 {
 
     QString base;
 
-    if (toolName == QLatin1String("PanTool")) {
+    const auto& registry = ToolRegistry::instance();
+    const QString& panId = registry.descriptor(ToolRegistry::ToolId::Pan).id;
+    const QString& orbitId = registry.descriptor(ToolRegistry::ToolId::Orbit).id;
+    const QString& zoomId = registry.descriptor(ToolRegistry::ToolId::Zoom).id;
+
+    if (toolName == panId) {
 
         base = tr("Pan: Drag to move the view target.");
 
-    } else if (toolName == QLatin1String("OrbitTool")) {
+    } else if (toolName == orbitId) {
 
         base = tr("Orbit: Drag to rotate around the target. Hold Shift while orbiting to pan.");
 
-    } else if (toolName == QLatin1String("ZoomTool")) {
+    } else if (toolName == zoomId) {
 
         base = tr("Zoom: Drag vertically to change distance. Hold Shift to invert drag direction. Ctrl-click zooms extents; Alt-click zooms the current selection.");
 
@@ -735,7 +742,7 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 
     }
 
-    if (toolName == QLatin1String("ZoomTool"))
+    if (toolName == zoomId)
 
         combos << tr("Scroll wheel");
 
@@ -743,7 +750,7 @@ QString measurementHintForKind(Tool::MeasurementKind kind)
 
         base += QStringLiteral(" ") + tr("Bindings: %1.").arg(combos.join(tr(", ")));
 
-    if (toolName == QLatin1String("ZoomTool")) {
+    if (toolName == zoomId) {
 
         base += QStringLiteral(" ");
 
@@ -763,17 +770,82 @@ void MainWindow::refreshNavigationActionHints()
 
 {
 
+    const auto& registry = ToolRegistry::instance();
+    const QString& panId = registry.descriptor(ToolRegistry::ToolId::Pan).id;
+    const QString& orbitId = registry.descriptor(ToolRegistry::ToolId::Orbit).id;
+    const QString& zoomId = registry.descriptor(ToolRegistry::ToolId::Zoom).id;
+
     if (panAction)
 
-        panAction->setStatusTip(navigationHintForTool(QStringLiteral("PanTool")));
+        panAction->setStatusTip(navigationHintForTool(panId));
 
     if (orbitAction)
 
-        orbitAction->setStatusTip(navigationHintForTool(QStringLiteral("OrbitTool")));
+        orbitAction->setStatusTip(navigationHintForTool(orbitId));
 
     if (zoomAction)
 
-        zoomAction->setStatusTip(navigationHintForTool(QStringLiteral("ZoomTool")));
+        zoomAction->setStatusTip(navigationHintForTool(zoomId));
+
+}
+
+void MainWindow::activateToolByKey(ToolRegistry::ToolId key, QAction* action)
+
+{
+
+    const auto& descriptor = ToolRegistry::instance().descriptor(key);
+
+    setActiveTool(action, descriptor.id, toolHintForDescriptor(descriptor));
+
+}
+
+QString MainWindow::toolHintForDescriptor(const ToolRegistry::ToolDescriptor& descriptor) const
+
+{
+
+    if (descriptor.hintKey && descriptor.hintKey[0])
+
+        return tr(descriptor.hintKey);
+
+    return navigationHintForTool(descriptor.id);
+
+}
+
+void MainWindow::validateToolActionBindings() const
+
+{
+
+#if !defined(NDEBUG)
+
+    if (!toolManager)
+
+        return;
+
+    for (const auto& binding : toolActionBindings_) {
+
+        if (!binding.descriptor || binding.descriptor->id.isEmpty())
+
+            continue;
+
+        if (!toolManager->hasTool(binding.descriptor->id)) {
+
+            const QString actionText = binding.action ? binding.action->text() : QStringLiteral("<unnamed>");
+
+            const QString message = QStringLiteral("Action '%1' references missing tool '%2'").arg(actionText, binding.descriptor->id);
+
+            const QByteArray messageBytes = message.toUtf8();
+
+            Q_ASSERT_X(false, "MainWindow::validateToolActionBindings", messageBytes.constData());
+
+        }
+
+    }
+
+#else
+
+    Q_UNUSED(toolManager);
+
+#endif
 
 }
 
@@ -894,17 +966,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
         if (hintLabel) {
 
+            const auto& registry = ToolRegistry::instance();
+            const QString& panId = registry.descriptor(ToolRegistry::ToolId::Pan).id;
+            const QString& orbitId = registry.descriptor(ToolRegistry::ToolId::Orbit).id;
+            const QString& zoomId = registry.descriptor(ToolRegistry::ToolId::Zoom).id;
+
             if (panAction && panAction->isChecked())
 
-                hintLabel->setText(navigationHintForTool(QStringLiteral("PanTool")));
+                hintLabel->setText(navigationHintForTool(panId));
 
             else if (orbitAction && orbitAction->isChecked())
 
-                hintLabel->setText(navigationHintForTool(QStringLiteral("OrbitTool")));
+                hintLabel->setText(navigationHintForTool(orbitId));
 
             else if (zoomAction && zoomAction->isChecked())
 
-                hintLabel->setText(navigationHintForTool(QStringLiteral("ZoomTool")));
+                hintLabel->setText(navigationHintForTool(zoomId));
 
         }
 
@@ -2131,129 +2208,50 @@ void MainWindow::createToolbars()
 
     toolActionGroup = new QActionGroup(this);
     toolActionGroup->setExclusive(true);
+    toolActionBindings_.clear();
 
-    auto createToolAction = [this](QAction*& target,
-                                   const QString& iconPath,
-                                   const QString& label,
-                                   void (MainWindow::*slot)(),
-                                   const QString& statusTip) {
-        target = new QAction(QIcon(iconPath), label, this);
+    const auto& registry = ToolRegistry::instance();
+    auto createToolAction = [this, &registry](ToolRegistry::ToolId key,
+                                              QAction*& target,
+                                              void (MainWindow::*slot)()) {
+        const auto& descriptor = registry.descriptor(key);
+        target = new QAction(descriptor.iconPath.isEmpty() ? QIcon() : QIcon(descriptor.iconPath),
+            descriptor.labelKey ? tr(descriptor.labelKey) : QString(), this);
         target->setCheckable(true);
-        target->setStatusTip(statusTip);
+        if (descriptor.statusTipKey)
+            target->setStatusTip(tr(descriptor.statusTipKey));
         connect(target, &QAction::triggered, this, slot);
         toolActionGroup->addAction(target);
+        toolActionBindings_.push_back({ &descriptor, target });
     };
 
-    createToolAction(selectAction,
-                     QStringLiteral(":/icons/select.png"),
-                     tr("Select"),
-                     &MainWindow::activateSelect,
-                     tr("Select and edit existing geometry."));
-    createToolAction(lineAction,
-                     QStringLiteral(":/icons/line.png"),
-                     tr("Line"),
-                     &MainWindow::activateLine,
-                     tr("Draw connected line segments."));
-    createToolAction(rectangleAction,
-                     QStringLiteral(":/icons/rectangle.png"),
-                     tr("Rectangle"),
-                     &MainWindow::activateRectangle,
-                     tr("Create rectangles aligned to the axes."));
-    createToolAction(rotatedRectangleAction,
-                     QStringLiteral(":/icons/rotated_rectangle.svg"),
-                     tr("Rotated Rectangle"),
-                     &MainWindow::activateRotatedRectangle,
-                     tr("Draw rectangles by edge, rotation, and height."));
-    createToolAction(circleAction,
-                     QStringLiteral(":/icons/circle.png"),
-                     tr("Circle"),
-                     &MainWindow::activateCircle,
-                     tr("Draw circles by center and radius."));
-    createToolAction(arcAction,
-                     QStringLiteral(":/icons/arc.png"),
-                     tr("3-Point Arc"),
-                     &MainWindow::activateArc,
-                     tr("Draw arcs using three points."));
-    createToolAction(centerArcAction,
-                     QStringLiteral(":/icons/center_arc.svg"),
-                     tr("Center Arc"),
-                     &MainWindow::activateCenterArc,
-                     tr("Draw arcs from a center, start, and end angle."));
-    createToolAction(tangentArcAction,
-                     QStringLiteral(":/icons/tangent_arc.svg"),
-                     tr("Tangent Arc"),
-                     &MainWindow::activateTangentArc,
-                     tr("Draw arcs tangent to a direction at the first point."));
-    createToolAction(polygonAction,
-                     QStringLiteral(":/icons/polygon.svg"),
-                     tr("Polygon"),
-                     &MainWindow::activatePolygon,
-                     tr("Draw regular polygons by center and radius. Enter a side count to adjust."));
-    createToolAction(bezierAction,
-                     QStringLiteral(":/icons/bezier.svg"),
-                     tr("Bezier"),
-                     &MainWindow::activateBezier,
-                     tr("Create cubic Bezier curves with adjustable handles."));
-    createToolAction(freehandAction,
-                     QStringLiteral(":/icons/freehand.svg"),
-                     tr("Freehand"),
-                     &MainWindow::activateFreehand,
-                     tr("Sketch loose strokes that become polylines."));
-    createToolAction(moveAction,
-                     QStringLiteral(":/icons/move.png"),
-                     tr("Move"),
-                     &MainWindow::activateMove,
-                     tr("Translate geometry to a new location."));
-    createToolAction(rotateAction,
-                     QStringLiteral(":/icons/rotate.png"),
-                     tr("Rotate"),
-                     &MainWindow::activateRotate,
-                     tr("Rotate entities around a pivot."));
-    createToolAction(scaleAction,
-                     QStringLiteral(":/icons/scale.png"),
-                     tr("Scale"),
-                     &MainWindow::activateScale,
-                     tr("Scale geometry about a point."));
-    createToolAction(extrudeAction,
-                     QStringLiteral(":/icons/pushpull.png"),
-                     tr("Extrude"),
-                     &MainWindow::activateExtrude,
-                     tr("Push or pull faces to add volume."));
-    createToolAction(chamferAction,
-                     QStringLiteral(":/icons/offset.png"),
-                     tr("Chamfer"),
-                     &MainWindow::activateChamfer,
-                     tr("Apply chamfers or fillets to a selected curve."));
-    createToolAction(loftAction,
-                     QStringLiteral(":/icons/followme.png"),
-                     tr("Loft"),
-                     &MainWindow::activateLoft,
-                     tr("Create a lofted solid between two selected profiles."));
-    createToolAction(sectionAction,
-                     QStringLiteral(":/icons/section.png"),
-                     tr("Section"),
-                     &MainWindow::activateSection,
-                     tr("Create section planes through the model."));
-    createToolAction(panAction,
-                     QStringLiteral(":/icons/pan.svg"),
-                     tr("Pan"),
-                     &MainWindow::activatePan,
-                     tr("Pan the camera view."));
-    createToolAction(orbitAction,
-                     QStringLiteral(":/icons/orbit.svg"),
-                     tr("Orbit"),
-                     &MainWindow::activateOrbit,
-                     tr("Orbit around the scene."));
-    createToolAction(zoomAction,
-                     QStringLiteral(":/icons/zoom.png"),
-                     tr("Zoom"),
-                     &MainWindow::activateZoom,
-                     tr("Zoom the camera view."));
-    createToolAction(measureAction,
-                     QStringLiteral(":/icons/measure.svg"),
-                     tr("Measure"),
-                     &MainWindow::activateMeasure,
-                     tr("Measure distances in the model."));
+    createToolAction(ToolRegistry::ToolId::SmartSelect, selectAction, &MainWindow::activateSelect);
+    createToolAction(ToolRegistry::ToolId::Line, lineAction, &MainWindow::activateLine);
+    createToolAction(ToolRegistry::ToolId::Rectangle, rectangleAction, &MainWindow::activateRectangle);
+    createToolAction(ToolRegistry::ToolId::RotatedRectangle, rotatedRectangleAction, &MainWindow::activateRotatedRectangle);
+    createToolAction(ToolRegistry::ToolId::Circle, circleAction, &MainWindow::activateCircle);
+    createToolAction(ToolRegistry::ToolId::Arc, arcAction, &MainWindow::activateArc);
+    createToolAction(ToolRegistry::ToolId::CenterArc, centerArcAction, &MainWindow::activateCenterArc);
+    createToolAction(ToolRegistry::ToolId::TangentArc, tangentArcAction, &MainWindow::activateTangentArc);
+    createToolAction(ToolRegistry::ToolId::Polygon, polygonAction, &MainWindow::activatePolygon);
+    createToolAction(ToolRegistry::ToolId::Bezier, bezierAction, &MainWindow::activateBezier);
+    createToolAction(ToolRegistry::ToolId::Freehand, freehandAction, &MainWindow::activateFreehand);
+    createToolAction(ToolRegistry::ToolId::Move, moveAction, &MainWindow::activateMove);
+    createToolAction(ToolRegistry::ToolId::Rotate, rotateAction, &MainWindow::activateRotate);
+    createToolAction(ToolRegistry::ToolId::Scale, scaleAction, &MainWindow::activateScale);
+    createToolAction(ToolRegistry::ToolId::Extrude, extrudeAction, &MainWindow::activateExtrude);
+    createToolAction(ToolRegistry::ToolId::Chamfer, chamferAction, &MainWindow::activateChamfer);
+    createToolAction(ToolRegistry::ToolId::Loft, loftAction, &MainWindow::activateLoft);
+    createToolAction(ToolRegistry::ToolId::Section, sectionAction, &MainWindow::activateSection);
+    createToolAction(ToolRegistry::ToolId::Pan, panAction, &MainWindow::activatePan);
+    createToolAction(ToolRegistry::ToolId::Orbit, orbitAction, &MainWindow::activateOrbit);
+    createToolAction(ToolRegistry::ToolId::Zoom, zoomAction, &MainWindow::activateZoom);
+
+    measureAction = new QAction(QIcon(QStringLiteral(":/icons/measure.svg")), tr("Measure"), this);
+    measureAction->setCheckable(true);
+    measureAction->setStatusTip(tr("Measure distances in the model."));
+    connect(measureAction, &QAction::triggered, this, &MainWindow::activateMeasure);
+    toolActionGroup->addAction(measureAction);
 
     toolOptionsToolbar = addToolBar(tr("Tool Options"));
     if (toolOptionsToolbar) {
@@ -2845,32 +2843,12 @@ void MainWindow::registerShortcuts()
 
         if (actionToggleTheme) actionToggleTheme->setToolTip(format(actionToggleTheme, tr("Toggle Dark Mode")));
 
-        if (selectAction) selectAction->setToolTip(format(selectAction, tr("Select")));
-
-        if (lineAction) lineAction->setToolTip(format(lineAction, tr("Line")));
-        if (rectangleAction) rectangleAction->setToolTip(format(rectangleAction, tr("Rectangle")));
-        if (rotatedRectangleAction) rotatedRectangleAction->setToolTip(format(rotatedRectangleAction, tr("Rotated Rectangle")));
-        if (arcAction) arcAction->setToolTip(format(arcAction, tr("3-Point Arc")));
-        if (centerArcAction) centerArcAction->setToolTip(format(centerArcAction, tr("Center Arc")));
-        if (tangentArcAction) tangentArcAction->setToolTip(format(tangentArcAction, tr("Tangent Arc")));
-        if (circleAction) circleAction->setToolTip(format(circleAction, tr("Circle")));
-        if (polygonAction) polygonAction->setToolTip(format(polygonAction, tr("Polygon")));
-        if (bezierAction) bezierAction->setToolTip(format(bezierAction, tr("Bezier")));
-        if (freehandAction) freehandAction->setToolTip(format(freehandAction, tr("Freehand")));
-
-        if (moveAction) moveAction->setToolTip(format(moveAction, tr("Move")));
-
-        if (rotateAction) rotateAction->setToolTip(format(rotateAction, tr("Rotate")));
-
-        if (scaleAction) scaleAction->setToolTip(format(scaleAction, tr("Scale")));
-
-        if (panAction) panAction->setToolTip(format(panAction, tr("Pan")));
-
-        if (orbitAction) orbitAction->setToolTip(format(orbitAction, tr("Orbit")));
-
-        if (zoomAction) zoomAction->setToolTip(format(zoomAction, tr("Zoom")));
-
-        if (extrudeAction) extrudeAction->setToolTip(format(extrudeAction, tr("Extrude")));
+        for (const auto& binding : toolActionBindings_) {
+            if (!binding.action || !binding.descriptor)
+                continue;
+            const QString label = binding.descriptor->labelKey ? tr(binding.descriptor->labelKey) : binding.action->text();
+            binding.action->setToolTip(format(binding.action, label));
+        }
 
         if (measureAction) measureAction->setToolTip(format(measureAction, tr("Measure")));
 
@@ -2879,6 +2857,7 @@ void MainWindow::registerShortcuts()
     };
 
     updateTooltips();
+    validateToolActionBindings();
 
     connect(&hotkeys, &HotkeyManager::shortcutsChanged, this, updateTooltips);
 
@@ -3020,11 +2999,15 @@ void MainWindow::updateToolOptionsPanel(const QString& toolId)
 
     QWidget* target = toolOptionsPlaceholder ? toolOptionsPlaceholder : nullptr;
 
-    if (toolId == QLatin1String("ChamferTool") && chamferOptionsWidget)
+    const auto& registry = ToolRegistry::instance();
+    const QString& chamferId = registry.descriptor(ToolRegistry::ToolId::Chamfer).id;
+    const QString& loftId = registry.descriptor(ToolRegistry::ToolId::Loft).id;
+
+    if (toolId == chamferId && chamferOptionsWidget)
 
         target = chamferOptionsWidget;
 
-    else if (toolId == QLatin1String("LoftTool") && loftOptionsWidget)
+    else if (toolId == loftId && loftOptionsWidget)
 
         target = loftOptionsWidget;
 
@@ -4134,74 +4117,65 @@ void MainWindow::activateSelect()
 
 {
 
-    setActiveTool(selectAction, QStringLiteral("SmartSelectTool"), tr("Select: Click to pick, drag left-to-right for window, right-to-left for crossing."));
+    activateToolByKey(ToolRegistry::ToolId::SmartSelect, selectAction);
 
 }
 
 void MainWindow::activateLine()
 {
-    setActiveTool(lineAction, QStringLiteral("LineTool"), tr("Line: Click to place vertices. Press Enter to finish, Esc to cancel."));
+    activateToolByKey(ToolRegistry::ToolId::Line, lineAction);
 }
 
 void MainWindow::activateRectangle()
 {
-    setActiveTool(rectangleAction, QStringLiteral("Rectangle"),
-        tr("Rectangle: Click the first corner, then click the opposite corner to finish."));
+    activateToolByKey(ToolRegistry::ToolId::Rectangle, rectangleAction);
 }
 
 void MainWindow::activateArc()
 {
-    setActiveTool(arcAction, QStringLiteral("Arc"),
-        tr("Arc: Click the first endpoint, click the second endpoint, then click to define the bulge."));
+    activateToolByKey(ToolRegistry::ToolId::Arc, arcAction);
 }
 
 void MainWindow::activateCenterArc()
 {
-    setActiveTool(centerArcAction, QStringLiteral("CenterArc"),
-        tr("Center Arc: Click the center, click the start angle, then click to set the end angle."));
+    activateToolByKey(ToolRegistry::ToolId::CenterArc, centerArcAction);
 }
 
 void MainWindow::activateTangentArc()
 {
-    setActiveTool(tangentArcAction, QStringLiteral("TangentArc"),
-        tr("Tangent Arc: Click the start point, click to set tangent direction, then click the end point."));
+    activateToolByKey(ToolRegistry::ToolId::TangentArc, tangentArcAction);
 }
 
 void MainWindow::activateCircle()
 {
-    setActiveTool(circleAction, QStringLiteral("Circle"),
-        tr("Circle: Click to set the center, then click again to define the radius."));
+    activateToolByKey(ToolRegistry::ToolId::Circle, circleAction);
 }
 
 void MainWindow::activatePolygon()
 {
-    setActiveTool(polygonAction, QStringLiteral("Polygon"),
-        tr("Polygon: Click to set the center, then click again to set the radius. Type a side count to change segments."));
+    activateToolByKey(ToolRegistry::ToolId::Polygon, polygonAction);
 }
 
 void MainWindow::activateRotatedRectangle()
 {
-    setActiveTool(rotatedRectangleAction, QStringLiteral("RotatedRectangle"),
-        tr("Rotated Rectangle: Click two corners for the base edge, then click to set height."));
+    activateToolByKey(ToolRegistry::ToolId::RotatedRectangle, rotatedRectangleAction);
 }
 
 void MainWindow::activateFreehand()
 {
-    setActiveTool(freehandAction, QStringLiteral("Freehand"),
-        tr("Freehand: Click and drag to sketch a polyline stroke."));
+    activateToolByKey(ToolRegistry::ToolId::Freehand, freehandAction);
 }
 
 void MainWindow::activateBezier()
 {
-    setActiveTool(bezierAction, QStringLiteral("Bezier"),
-        tr("Bezier: Click start and end anchors, then place the two handles."));
+    activateToolByKey(ToolRegistry::ToolId::Bezier, bezierAction);
 }
 
 void MainWindow::activateMove()
 
 {
 
-    setActiveTool(moveAction, QStringLiteral("MoveTool"), tr("Move: Drag to translate selection. Use arrow keys for axis locks."));
+    activateToolByKey(ToolRegistry::ToolId::Move, moveAction);
 
 }
 
@@ -4209,7 +4183,7 @@ void MainWindow::activateRotate()
 
 {
 
-    setActiveTool(rotateAction, QStringLiteral("RotateTool"), tr("Rotate: Drag to rotate around pivot. Use snaps or axis locks."));
+    activateToolByKey(ToolRegistry::ToolId::Rotate, rotateAction);
 
 }
 
@@ -4217,7 +4191,7 @@ void MainWindow::activateScale()
 
 {
 
-    setActiveTool(scaleAction, QStringLiteral("ScaleTool"), tr("Scale: Drag to scale selection. Axis locks limit scaling direction."));
+    activateToolByKey(ToolRegistry::ToolId::Scale, scaleAction);
 
 }
 
@@ -4225,7 +4199,7 @@ void MainWindow::activateExtrude()
 
 {
 
-    setActiveTool(extrudeAction, QStringLiteral("ExtrudeTool"), tr("Extrude: Click to extrude last curve by 1.0."));
+    activateToolByKey(ToolRegistry::ToolId::Extrude, extrudeAction);
 
 }
 
@@ -4233,9 +4207,7 @@ void MainWindow::activateChamfer()
 
 {
 
-    setActiveTool(chamferAction,
-                  QStringLiteral("ChamferTool"),
-                  tr("Chamfer: Select a closed curve, adjust radius, then click Apply."));
+    activateToolByKey(ToolRegistry::ToolId::Chamfer, chamferAction);
 
     applyChamferDefaults();
 
@@ -4245,9 +4217,7 @@ void MainWindow::activateLoft()
 
 {
 
-    setActiveTool(loftAction,
-                  QStringLiteral("LoftTool"),
-                  tr("Loft: Select two profiles, adjust sections, then click Apply."));
+    activateToolByKey(ToolRegistry::ToolId::Loft, loftAction);
 
     applyLoftDefaults();
 
@@ -4257,11 +4227,7 @@ void MainWindow::activateSection()
 
 {
 
-    setActiveTool(sectionAction,
-
-                  QStringLiteral("SectionTool"),
-
-                  tr("Section Plane: Click to place a cutting plane using current inference cues."));
+    activateToolByKey(ToolRegistry::ToolId::Section, sectionAction);
 
 }
 
@@ -4269,7 +4235,7 @@ void MainWindow::activatePan()
 
 {
 
-    setActiveTool(panAction, QStringLiteral("PanTool"), navigationHintForTool(QStringLiteral("PanTool")));
+    activateToolByKey(ToolRegistry::ToolId::Pan, panAction);
 
 }
 
@@ -4277,7 +4243,7 @@ void MainWindow::activateOrbit()
 
 {
 
-    setActiveTool(orbitAction, QStringLiteral("OrbitTool"), navigationHintForTool(QStringLiteral("OrbitTool")));
+    activateToolByKey(ToolRegistry::ToolId::Orbit, orbitAction);
 
 }
 
@@ -4285,7 +4251,7 @@ void MainWindow::activateZoom()
 
 {
 
-    setActiveTool(zoomAction, QStringLiteral("ZoomTool"), navigationHintForTool(QStringLiteral("ZoomTool")));
+    activateToolByKey(ToolRegistry::ToolId::Zoom, zoomAction);
 
 }
 

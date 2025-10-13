@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QString>
 #include <memory>
+#include <vector>
 
 class GLViewport;
 class QAction;
@@ -37,6 +38,7 @@ struct LoftOptions;
 #include "HotkeyManager.h"
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
+#include "Tools/ToolRegistry.h"
 #include "CameraController.h"
 #include "Core/CommandStack.h"
 #include "Navigation/ViewPresetManager.h"
@@ -131,6 +133,9 @@ private:
     void populateAdvancedToolsMenu();
     QString navigationHintForTool(const QString& toolName) const;
     void refreshNavigationActionHints();
+    void activateToolByKey(ToolRegistry::ToolId key, QAction* action);
+    QString toolHintForDescriptor(const ToolRegistry::ToolDescriptor& descriptor) const;
+    void validateToolActionBindings() const;
     void updateSelectionStatus();
     void updateThemeActionIcon();
     void setRenderStyle(Renderer::RenderStyle style);
@@ -255,6 +260,11 @@ private:
 
     QActionGroup* toolActionGroup = nullptr;
     QVector<QPointer<MainWindow>> secondaryWindows;
+    struct ToolActionBinding {
+        const ToolRegistry::ToolDescriptor* descriptor = nullptr;
+        QAction* action = nullptr;
+    };
+    std::vector<ToolActionBinding> toolActionBindings_;
 
     HotkeyManager hotkeys;
     QHash<QString, QAction*> paletteActions;

@@ -180,6 +180,7 @@ std::unique_ptr<GeometryObject> Solid::clone() const
     copy->setSelected(isSelected());
     copy->setVisible(isVisible());
     copy->setHidden(isHidden());
+    copy->setStableId(0);
     return copy;
 }
 

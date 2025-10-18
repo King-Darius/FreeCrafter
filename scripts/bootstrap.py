@@ -25,8 +25,10 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import List, Optional
+import shutil
 
 root = Path(__file__).resolve().parent.parent
 qt_root = root / "qt"
@@ -143,8 +145,8 @@ def verify_checksums(cache: Path) -> None:
             if not file_path.exists() or hash_file(file_path) != digest:
                 raise RuntimeError(f"Checksum mismatch for {file_path}")
 
-def run(cmd, *, retries: int = 3, **kwargs) -> int:
-    """Run *cmd* with retry logic, logging, and return its exit code."""
+def run(cmd, *, retries: int = 3, check: bool = True, **kwargs) -> int:
+    """Run *cmd* with retry logic and optional exception raising."""
     for attempt in range(1, retries + 1):
         logging.info("Running: %s", " ".join(map(str, cmd)))
         result = subprocess.run(cmd, **kwargs)
@@ -152,9 +154,17 @@ def run(cmd, *, retries: int = 3, **kwargs) -> int:
             return 0
         logging.error("Command failed with code %s", result.returncode)
         if attempt == retries:
+            if check:
+                raise subprocess.CalledProcessError(result.returncode, cmd)
             return result.returncode
         logging.info("Retrying (%s/%s)...", attempt + 1, retries)
         time.sleep(1)
+
+def require_executable(name: str, *, guidance: str) -> None:
+    """Ensure *name* is discoverable on PATH, otherwise raise."""
+    if shutil.which(name):
+        return
+    raise RuntimeError(f"Required executable '{name}' was not found. {guidance}")
 
 def ensure_aqt(
     offline: bool,
@@ -178,9 +188,7 @@ def ensure_aqt(
         elif use_user_site:
             cmd += ["--user"]
         cmd += ["-r", str(req_file)]
-        rc = run(cmd)
-        if rc != 0:
-            raise subprocess.CalledProcessError(rc, cmd)
+        run(cmd)
 
 def ensure_qt(offline: bool) -> Path:
     """Ensure a Qt installation exists and return its prefix."""
@@ -207,9 +215,7 @@ def ensure_qt(offline: bool) -> Path:
     if modules:
         logging.info("Requesting Qt modules: %s", ", ".join(modules))
         cmd += ["--modules", *modules]
-    rc = run(cmd)
-    if rc != 0:
-        raise subprocess.CalledProcessError(rc, cmd)
+    run(cmd)
     prefix = detect_qt()
     if not prefix:
         raise RuntimeError("Qt installation failed")
@@ -231,17 +237,13 @@ def run_cmake(
     configure_cmd = ["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg]
     if build_type:
         configure_cmd.append(f"-DCMAKE_BUILD_TYPE={build_type}")
-    rc = run(configure_cmd, env=env)
-    if rc != 0:
-        raise subprocess.CalledProcessError(rc, configure_cmd)
+    run(configure_cmd, env=env)
     if not build:
         return
     build_cmd = ["cmake", "--build", str(build_dir)]
     if build_type:
         build_cmd += ["--config", build_type]
-    rc = run(build_cmd, env=env)
-    if rc != 0:
-        raise subprocess.CalledProcessError(rc, build_cmd)
+    run(build_cmd, env=env)
     if install_prefix:
         if not install_prefix.is_absolute():
             install_prefix = root / install_prefix
@@ -254,9 +256,7 @@ def run_cmake(
         ]
         if build_type:
             install_cmd += ["--config", build_type]
-        rc = run(install_cmd, env=env)
-        if rc != 0:
-            raise subprocess.CalledProcessError(rc, install_cmd)
+        run(install_cmd, env=env)
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser()
@@ -292,8 +292,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         logging.warning("Ignoring unknown arguments: %s", " ".join(unknown))
 
     try:
+        require_executable(
+            "cmake",
+            guidance="Install CMake 3.24+ and ensure the 'cmake' command is on PATH.",
+        )
+        if args.wheel_cache and not args.wheel_cache.exists():
+            raise RuntimeError(f"Wheel cache directory does not exist: {args.wheel_cache}")
+
         ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)
         prefix = ensure_qt(args.offline)
+        if not args.ci:
+            with suppress(OSError):
+                args.install_prefix.parent.mkdir(parents=True, exist_ok=True)
         run_cmake(
             prefix,
             build=not args.ci,

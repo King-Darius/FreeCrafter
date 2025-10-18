@@ -34,9 +34,9 @@ A merged change must have passed the full GitHub Actions workflow defined in
      and asserts that an installer `.exe` exists (`Verify packaged artifacts`
      step). Failure of this job blocks merges.
 4. **Personal path scan (`personal-path-scan` job).**
-   - Executes `scripts/tools/check_no_personal_paths.py` to guard against
-     committing local user directories such as `C:\Users\…` or
-     `/home/…`.
+   - Executes `scripts/tools/repo_guard.py` to guard against
+     committing local user directories such as `C:\Users\<user>` or
+     `/home/<user>`.
 
 > **Result:** Every commit merged into `main` has compiled binaries, a passing
 > CTest suite, clang-tidy coverage, and a validated Windows packaging dry run.
@@ -44,6 +44,8 @@ A merged change must have passed the full GitHub Actions workflow defined in
 ## 2. Release Tags (`release.yml`)
 
 Tag pushes (`v*`) trigger a full matrix packaging workflow.
+
+Before the numbered steps run, the workflow executes `python scripts/tools/repo_guard.py` to ensure no user-specific paths are tracked.
 
 1. **Bootstrap + dependency install** for Linux, macOS, Windows runners.
 2. **Configure** via `python scripts/bootstrap.py --ci`. On Windows, injects the
@@ -63,6 +65,8 @@ Tag pushes (`v*`) trigger a full matrix packaging workflow.
 ## 3. Windows Release Track (`release-windows.yml`)
 
 Windows-only tags run an additional, more granular workflow.
+
+As an upfront guard, `python scripts/tools/repo_guard.py` runs before build steps start.
 
 1. **Dependencies:** Installs Python 3.11 and NSIS.
 2. **Configure:** `scripts/bootstrap.py --ci` (falls back to plain CMake) to
@@ -93,3 +97,4 @@ Before publishing release notes:
 Keep this document in sync with any CI changes so the automation contract stays
 transparent. When adding new tools or platforms, extend the relevant sections
 and reference the workflow step names.
+

@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Repository hygiene check
+        run: python scripts/tools/repo_guard.py
+
       - name: Install NSIS (for CPack)
         run: choco install nsis -y  # provides makensis.exe for NSIS generator
 

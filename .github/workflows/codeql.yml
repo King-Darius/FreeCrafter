@@ -32,6 +32,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Repository hygiene check
+        run: python scripts/tools/repo_guard.py
+
       - name: Install build dependencies
         run: |
           sudo apt-get update

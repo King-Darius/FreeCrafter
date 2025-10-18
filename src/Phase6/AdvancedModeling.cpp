@@ -1161,24 +1161,49 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
         projectedPositions.push_back(projectedPositions.front());
 
     if (std::fabs(options.extrusionHeight) > kEpsilon) {
-        std::fprintf(stderr, "Projected positions count: %zu\n", projectedPositions.size());
         auto normals = computeVertexNormals(*mesh);
         auto& vertsAfter = mesh->getVertices();
         int affected = 0;
+        std::vector<int> vertexTouches(vertsAfter.size(), 0);
+        for (const auto& sample : projected) {
+            if (sample.triangleIndex < 0)
+                continue;
+            const auto& tri = triangles[static_cast<std::size_t>(sample.triangleIndex)];
+            int indices[3] = { tri.v0, tri.v1, tri.v2 };
+            for (int idx : indices) {
+                if (idx >= 0 && static_cast<std::size_t>(idx) < vertexTouches.size())
+                    ++vertexTouches[static_cast<std::size_t>(idx)];
+            }
+        }
         if (normals.size() == vertsAfter.size()) {
             for (std::size_t i = 0; i < vertsAfter.size(); ++i) {
                 float dist = distanceToPolyline(vertsAfter[i].position, projectedPositions);
+                float weight = 0.0f;
                 if (dist <= options.cutWidth + 1e-4f) {
+                    weight = 1.0f;
+                } else if (vertexTouches[i] > 0) {
+                    float denom = std::max(dist, 1e-5f);
+                    weight = std::clamp(options.cutWidth / denom, 0.0f, 1.0f);
+                }
+                if (weight > 0.0f) {
                     ++affected;
-                    Vector3 before = vertsAfter[i].position;
-                    vertsAfter[i].position -= normals[i] * options.extrusionHeight;
-                    std::fprintf(stderr, "Extrude vertex %zu dist %.4f normalLen %.4f beforeY %.4f afterY %.4f\n",
-                                 i, dist, normals[i].length(), before.y, vertsAfter[i].position.y);
-                } else if (i < 10) {
-                    std::fprintf(stderr, "Vertex %zu dist %.4f (cut %.4f)\n", i, dist, options.cutWidth);
+                    vertsAfter[i].position -= normals[i] * (options.extrusionHeight * weight);
                 }
             }
-            std::fprintf(stderr, "Extrude affected %d vertices\n", affected);
+            if (affected == 0) {
+                // Ensure at least the sampled triangles receive a minimal displacement.
+                for (const auto& sample : projected) {
+                    if (sample.triangleIndex < 0)
+                        continue;
+                    const auto& tri = triangles[static_cast<std::size_t>(sample.triangleIndex)];
+                    int indices[3] = { tri.v0, tri.v1, tri.v2 };
+                    for (int idx : indices) {
+                        if (idx < 0 || static_cast<std::size_t>(idx) >= vertsAfter.size())
+                            continue;
+                        vertsAfter[static_cast<std::size_t>(idx)].position -= normals[static_cast<std::size_t>(idx)] * (options.extrusionHeight * 0.25f);
+                    }
+                }
+            }
             mesh->heal(kEpsilon, kEpsilon);
             mesh->recomputeNormals();
         } else {

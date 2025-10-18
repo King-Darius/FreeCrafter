@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Ensure no personal paths are committed
-        run: python scripts/tools/check_no_personal_paths.py
+      - name: Repository hygiene check
+        run: python scripts/tools/repo_guard.py
 
   build-and-test:
     name: Build & Test (${{ matrix.os }})
@@ -35,13 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            qt_host: linux
-            qt_arch: linux_gcc_64
-          - os: windows-latest
-            qt_host: windows
-            qt_arch: win64_msvc2019_64
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,35 +57,47 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: choco install ninja --yes
 
-      - name: Install Qt
-        id: install-qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.6.1'
-          host: ${{ matrix.qt_host }}
-          arch: ${{ matrix.qt_arch }}
-          modules: 'qtsvg'
-          cache: true
-
-      - name: Export Qt prefix
-        id: qt-prefix
+      - name: Bootstrap Qt (Linux)
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           set -euo pipefail
-          qt_dir="${Qt6_DIR}"
-          if [[ "${RUNNER_OS}" == "Windows" ]]; then
-            qt_dir="$(cygpath -u "${qt_dir}")"
-          fi
-          qt_prefix="$(dirname "$(dirname "$(dirname "${qt_dir}")")")"
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          qt_prefix="$(python - <<'PY'
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(prefix.as_posix())
+PY
+)"
           echo "QT_PREFIX_POSIX=${qt_prefix}" >> "${GITHUB_ENV}"
-          if [[ "${RUNNER_OS}" == "Windows" ]]; then
-            qt_prefix_win="$(cygpath -w "${qt_prefix}")"
-            echo "QT_PREFIX_WIN=${qt_prefix_win}" >> "${GITHUB_ENV}"
-          else
-            echo "QT_PREFIX_WIN=${qt_prefix}" >> "${GITHUB_ENV}"
-          fi
 
-      - name: Configure (Ubuntu)
+      - name: Bootstrap Qt (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          $qtInfo = python - <<'PY'
+import json
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(json.dumps({"native": str(prefix), "posix": prefix.as_posix()}))
+PY
+          $parsed = $qtInfo | ConvertFrom-Json
+          "QT_PREFIX_WIN=$($parsed.native)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "QT_PREFIX_POSIX=$($parsed.posix)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DFREECRAFTER_ENABLE_ASSIMP=OFF `
+            -DFREECRAFTER_ENABLE_ODA=OFF `
+            -DCMAKE_PREFIX_PATH="$($parsed.native)" `
+            -DCMAKE_BUILD_TYPE="$env:BUILD_TYPE"
+
+      - name: Configure (Linux)
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
@@ -101,14 +107,6 @@ jobs:
             -DFREECRAFTER_ENABLE_ASSIMP=OFF \
             -DFREECRAFTER_ENABLE_ODA=OFF \
             -DCMAKE_PREFIX_PATH="${QT_PREFIX_POSIX}"
-
-      - name: Configure (Windows)
-        if: matrix.os == 'windows-latest'
-        run: >
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-          -DFREECRAFTER_ENABLE_ASSIMP=OFF
-          -DFREECRAFTER_ENABLE_ODA=OFF
-          -DCMAKE_PREFIX_PATH="$env:QT_PREFIX_WIN"
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
@@ -165,22 +163,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-tidy ninja-build mesa-common-dev libglu1-mesa-dev
 
-      - name: Install Qt
-        id: install-qt-static
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.6.1'
-          host: linux
-          arch: linux_gcc_64
-          modules: 'qtsvg'
-          cache: true
-
-      - name: Export Qt prefix
+      - name: Bootstrap Qt
         shell: bash
         run: |
           set -euo pipefail
-          qt_dir="${Qt6_DIR}"
-          qt_prefix="$(dirname "$(dirname "$(dirname "${qt_dir}")")")"
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          qt_prefix="$(python - <<'PY'
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(prefix.as_posix())
+PY
+)"
           echo "QT_PREFIX_POSIX=${qt_prefix}" >> "${GITHUB_ENV}"
 
       - name: Configure

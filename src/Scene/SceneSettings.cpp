@@ -17,6 +17,16 @@ Scene::SceneSettings::PaletteState defaultPalette()
     return state;
 }
 
+Scene::SceneSettings::Color clampColor(const Scene::SceneSettings::Color& color)
+{
+    Scene::SceneSettings::Color clamped = color;
+    clamped.r = std::clamp(clamped.r, 0.0f, 1.0f);
+    clamped.g = std::clamp(clamped.g, 0.0f, 1.0f);
+    clamped.b = std::clamp(clamped.b, 0.0f, 1.0f);
+    clamped.a = std::clamp(clamped.a, 0.0f, 1.0f);
+    return clamped;
+}
+
 } // namespace
 
 namespace Scene {
@@ -34,6 +44,14 @@ void SceneSettings::reset()
     gridSettings = {};
     shadowSettings = {};
     paletteState = defaultPalette();
+}
+
+void SceneSettings::setPalette(const PaletteState& state)
+{
+    paletteState.id = state.id;
+    paletteState.fill = clampColor(state.fill);
+    paletteState.edge = clampColor(state.edge);
+    paletteState.highlight = clampColor(state.highlight);
 }
 
 void SceneSettings::serialize(std::ostream& os) const

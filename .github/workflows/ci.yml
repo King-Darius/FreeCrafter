@@ -11,9 +11,27 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
+  personal-path-scan:
+    name: Personal Path Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Ensure no personal paths are committed
+        run: python scripts/tools/check_no_personal_paths.py
+
   build-and-test:
     name: Build & Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: personal-path-scan
     strategy:
       fail-fast: false
       matrix:

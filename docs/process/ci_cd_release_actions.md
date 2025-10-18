@@ -33,6 +33,10 @@ A merged change must have passed the full GitHub Actions workflow defined in
    - Builds a Release configuration, installs into `dist/`, runs `cpack -G NSIS`,
      and asserts that an installer `.exe` exists (`Verify packaged artifacts`
      step). Failure of this job blocks merges.
+4. **Personal path scan (`personal-path-scan` job).**
+   - Executes `scripts/tools/check_no_personal_paths.py` to guard against
+     committing local user directories such as `C:\Users\…` or
+     `/home/…`.
 
 > **Result:** Every commit merged into `main` has compiled binaries, a passing
 > CTest suite, clang-tidy coverage, and a validated Windows packaging dry run.

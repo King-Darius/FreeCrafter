@@ -273,5 +273,3 @@ PY
             build\_CPack_Packages\**\*.exe
             dist\**\*.exe
           if-no-files-found: error
-
-

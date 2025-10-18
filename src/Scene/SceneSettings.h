@@ -60,7 +60,7 @@ public:
     };
 
     const PaletteState& palette() const { return paletteState; }
-    void setPalette(const PaletteState& state) { paletteState = state; }
+    void setPalette(const PaletteState& state);
 
     void reset();
     void serialize(std::ostream& os) const;

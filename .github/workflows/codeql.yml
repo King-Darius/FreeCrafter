@@ -1,0 +1,79 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+env:
+  BUILD_TYPE: Release
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+
+jobs:
+  analyze:
+    name: CodeQL Analyze
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Repository hygiene check
+        run: python scripts/tools/repo_guard.py
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build mesa-common-dev libglu1-mesa-dev
+
+      - name: Install Qt
+        id: install-qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.6.1'
+          host: linux
+          arch: linux_gcc_64
+          modules: 'qtsvg'
+          cache: true
+
+      - name: Export Qt prefix
+        id: qt-prefix
+        shell: bash
+        run: |
+          set -euo pipefail
+          qt_dir="${Qt6_DIR}"
+          qt_prefix="$(dirname "$(dirname "$(dirname "${qt_dir}")")")"
+          echo "QT_PREFIX=${qt_prefix}" >> "${GITHUB_ENV}"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DFREECRAFTER_ENABLE_ASSIMP=OFF
+          -DFREECRAFTER_ENABLE_ODA=OFF
+          -DCMAKE_PREFIX_PATH="${{ env.QT_PREFIX }}"
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

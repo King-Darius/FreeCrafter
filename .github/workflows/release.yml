@@ -25,6 +25,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Repository hygiene check
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python scripts/tools/repo_guard.py
+
       - name: Install Python requirements
         run: python -m pip install --upgrade pip -r scripts/requirements.txt
 
@@ -60,6 +66,30 @@ jobs:
 
       - name: Install to staging
         run: cmake --install build --config Release --prefix dist
+
+      - name: Run tests (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euxo pipefail
+          pushd build
+          ctest --output-on-failure
+          popd
+
+      - name: Run tests (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "windows"
+          $env:QT_OPENGL = "angle"
+          Push-Location build
+          try {
+            ctest --output-on-failure -C Release
+          } finally {
+            Pop-Location
+          }
 
       - name: Package with CPack
         shell: bash
@@ -107,6 +137,21 @@ jobs:
               [ -e "$file" ] || continue
               cp "$file" release_out/
             done
+            shopt -s nullglob
+            exe_candidates=(release_out/*.exe)
+            shopt -u nullglob
+            if [ ${#exe_candidates[@]} -eq 0 ]; then
+              echo "::error ::No Windows installer executable produced after fallback packaging."
+              exit 1
+            fi
+          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+            shopt -s nullglob
+            exe_candidates=(release_out/*.exe)
+            shopt -u nullglob
+            if [ ${#exe_candidates[@]} -eq 0 ]; then
+              echo "::error ::No Windows installer executable produced by CPack."
+              exit 1
+            fi
           fi
 
           ls -R release_out

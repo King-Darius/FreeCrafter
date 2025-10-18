@@ -57,6 +57,26 @@ int main()
     assert(std::fabs(loadedShadows.bias - shadows.bias) < 1e-6f);
     assert(!loaded.guidesVisible());
 
+    Scene::SceneSettings::PaletteState outOfRange = custom;
+    outOfRange.id = "wild";
+    outOfRange.fill = {1.5f, -0.25f, 0.5f, 2.0f};
+    outOfRange.edge = {-0.5f, 1.2f, 1.1f, -1.0f};
+    outOfRange.highlight = {0.4f, 0.6f, 5.0f, 0.0f};
+    settings.setPalette(outOfRange);
+    const auto& sanitized = settings.palette();
+    assert(sanitized.id == outOfRange.id);
+    assert(std::fabs(sanitized.fill.r - 1.0f) < 1e-6f);
+    assert(std::fabs(sanitized.fill.g - 0.0f) < 1e-6f);
+    assert(std::fabs(sanitized.fill.a - 1.0f) < 1e-6f);
+    assert(std::fabs(sanitized.edge.r - 0.0f) < 1e-6f);
+    assert(std::fabs(sanitized.edge.g - 1.0f) < 1e-6f);
+    assert(std::fabs(sanitized.edge.b - 1.0f) < 1e-6f);
+    assert(std::fabs(sanitized.edge.a - 0.0f) < 1e-6f);
+    assert(std::fabs(sanitized.highlight.r - 0.4f) < 1e-6f);
+    assert(std::fabs(sanitized.highlight.g - 0.6f) < 1e-6f);
+    assert(std::fabs(sanitized.highlight.b - 1.0f) < 1e-6f);
+    assert(std::fabs(sanitized.highlight.a - 0.0f) < 1e-6f);
+
     std::istringstream legacy("1 0\n");
     Scene::SceneSettings legacySettings;
     bool legacyOk = legacySettings.deserialize(legacy, 2);

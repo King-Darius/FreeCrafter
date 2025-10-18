@@ -23,7 +23,7 @@ A merged change must have passed the full GitHub Actions workflow defined in
    - **Tests (Windows):** Sets up Qt plugin paths, then runs
      `ctest --output-on-failure -C Release`.
 2. **Static analysis (`clang-tidy` job).**
-   - Reuses Qt installer.
+   - Reuses the bootstrapped Qt prefix (QT_PREFIX_POSIX).
    - Configures CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`.
    - Compiles to populate the compilation database.
    - Executes `run-clang-tidy -p build` over the tree.

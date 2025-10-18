@@ -40,23 +40,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build mesa-common-dev libglu1-mesa-dev
 
-      - name: Install Qt
-        id: install-qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: '6.6.1'
-          host: linux
-          arch: linux_gcc_64
-          modules: 'qtsvg'
-          cache: true
-
-      - name: Export Qt prefix
-        id: qt-prefix
+      - name: Bootstrap project
         shell: bash
         run: |
           set -euo pipefail
-          qt_dir="${Qt6_DIR}"
-          qt_prefix="$(dirname "$(dirname "$(dirname "${qt_dir}")")")"
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          qt_prefix="$(python - <<'PY'
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(prefix.as_posix())
+PY
+)"
           echo "QT_PREFIX=${qt_prefix}" >> "${GITHUB_ENV}"
 
       - name: Initialize CodeQL

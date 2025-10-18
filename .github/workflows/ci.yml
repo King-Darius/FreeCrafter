@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  BUILD_TYPE: Release
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+
+jobs:
+  personal-path-scan:
+    name: Personal Path Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Repository hygiene check
+        run: python scripts/tools/repo_guard.py
+
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: personal-path-scan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build mesa-common-dev libglu1-mesa-dev
+
+      - name: Install build dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install ninja --yes
+
+      - name: Bootstrap Qt (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          qt_prefix="$(python - <<'PY'
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(prefix.as_posix())
+PY
+)"
+          echo "QT_PREFIX_POSIX=${qt_prefix}" >> "${GITHUB_ENV}"
+
+      - name: Bootstrap Qt (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+      run: |
+        python -m pip install --upgrade pip
+        python scripts/bootstrap.py --ci
+        $qtInfo = python -c @"
+import json
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(json.dumps({"native": str(prefix), "posix": prefix.as_posix()}))
+"@
+        $parsed = $qtInfo | ConvertFrom-Json
+        "QT_PREFIX_WIN=$($parsed.native)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "QT_PREFIX_POSIX=$($parsed.posix)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DFREECRAFTER_ENABLE_ASSIMP=OFF `
+            -DFREECRAFTER_ENABLE_ODA=OFF `
+            -DCMAKE_PREFIX_PATH="$($parsed.native)" `
+            -DCMAKE_BUILD_TYPE="$env:BUILD_TYPE"
+
+      - name: Configure (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+            -DFREECRAFTER_ENABLE_ASSIMP=OFF \
+            -DFREECRAFTER_ENABLE_ODA=OFF \
+            -DCMAKE_PREFIX_PATH="${QT_PREFIX_POSIX}"
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Run tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          CTEST_CONFIGURATION_TYPE: ${{ env.BUILD_TYPE }}
+        run: |
+          set -euo pipefail
+          scripts/run_tests_with_qt_env.sh --build-dir build --qt-prefix "${QT_PREFIX_POSIX}" --ctest
+
+      - name: Run tests (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $qtBin = Join-Path $env:QT_PREFIX_WIN "bin"
+          $qtPlugins = Join-Path $env:QT_PREFIX_WIN "plugins"
+          $qtPlatformPlugins = Join-Path $qtPlugins "platforms"
+          if (-not (Test-Path $qtBin)) { throw "Qt bin directory not found at $qtBin" }
+          if (-not (Test-Path $qtPlatformPlugins)) { throw "Qt platform plugins not found at $qtPlatformPlugins" }
+          $env:PATH = "$qtBin;$env:PATH"
+          $env:QT_PLUGIN_PATH = $qtPlugins
+          $env:QT_QPA_PLATFORM_PLUGIN_PATH = $qtPlatformPlugins
+          $env:QT_QPA_PLATFORM = "windows"
+          $env:QT_OPENGL = "angle"
+          $env:FREECRAFTER_RENDER_SKIP_COVERAGE = "1"
+          Push-Location build
+          try {
+            ctest --output-on-failure -C $env:BUILD_TYPE
+          } finally {
+            Pop-Location
+          }
+
+  clang-tidy:
+    name: Clang-Tidy
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy ninja-build mesa-common-dev libglu1-mesa-dev
+
+      - name: Bootstrap Qt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python scripts/bootstrap.py --ci
+          qt_prefix="$(python - <<'PY'
+import scripts.bootstrap as bs
+prefix = bs.detect_qt()
+if prefix is None:
+    raise SystemExit("Qt installation not found after bootstrap.")
+print(prefix.as_posix())
+PY
+)"
+          echo "QT_PREFIX_POSIX=${qt_prefix}" >> "${GITHUB_ENV}"
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+            -DFREECRAFTER_ENABLE_ASSIMP=OFF \
+            -DFREECRAFTER_ENABLE_ODA=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_PREFIX_PATH="${QT_PREFIX_POSIX}"
+
+      - name: Build (compile commands)
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Run clang-tidy
+        run: run-clang-tidy -p build
+
+  windows-package-smoke:
+    name: Windows Packaging Smoke Test
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install NSIS
+        run: choco install nsis --yes
+
+      - name: Bootstrap (Qt + configure)
+        shell: pwsh
+        run: python scripts/bootstrap.py --ci
+
+      - name: Build (Release)
+        run: cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Install to staging
+        run: cmake --install build --config ${{ env.BUILD_TYPE }} --prefix dist
+
+      - name: Package with CPack (NSIS)
+        shell: pwsh
+        run: |
+          Push-Location build
+          try {
+            cpack -G NSIS
+          } finally {
+            Pop-Location
+          }
+
+      - name: Verify packaged artifacts
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $PWD 'build'
+          $distDir = Join-Path $PWD 'dist'
+          $cpackDir = Join-Path $buildDir '_CPack_Packages'
+          $exeFiles = @()
+          if (Test-Path $buildDir) {
+            $exeFiles += Get-ChildItem -Path $buildDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (Test-Path $distDir) {
+            $exeFiles += Get-ChildItem -Path $distDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (Test-Path $cpackDir) {
+            $exeFiles += Get-ChildItem -Path $cpackDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (-not $exeFiles) {
+            throw 'No .exe artifacts were produced by the packaging pipeline.'
+          }
+          Write-Host 'Discovered executable artifacts:'
+          foreach ($exe in $exeFiles | Sort-Object FullName -Unique) {
+            Write-Host " - $($exe.FullName)"
+          }
+
+      - name: Upload packaging artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package-smoke
+          path: |
+            build\*.exe
+            build\_CPack_Packages\**\*.exe
+            dist\**\*.exe
+          if-no-files-found: error

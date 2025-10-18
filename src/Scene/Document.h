@@ -82,6 +82,21 @@ public:
         std::unordered_map<TagId, bool> tagVisibility;
     };
 
+    struct PrototypeNode {
+        NodeKind kind = NodeKind::Geometry;
+        std::string name;
+        GeometryObject* geometry = nullptr;
+        std::vector<TagId> tags;
+        std::vector<std::unique_ptr<PrototypeNode>> children;
+    };
+
+    struct ComponentDefinition {
+        ComponentDefinitionId id = 0;
+        std::string name;
+        GeometryKernel geometry;
+        std::vector<std::unique_ptr<PrototypeNode>> roots;
+    };
+
     Document();
 
     GeometryKernel& geometry() { return geometryKernel; }
@@ -183,21 +198,6 @@ public:
 
 private:
     friend class SceneSerializer;
-
-    struct PrototypeNode {
-        NodeKind kind = NodeKind::Geometry;
-        std::string name;
-        GeometryObject* geometry = nullptr;
-        std::vector<TagId> tags;
-        std::vector<std::unique_ptr<PrototypeNode>> children;
-    };
-
-    struct ComponentDefinition {
-        ComponentDefinitionId id = 0;
-        std::string name;
-        GeometryKernel geometry;
-        std::vector<std::unique_ptr<PrototypeNode>> roots;
-    };
 
     ObjectNode* addNode(NodeKind kind, const std::string& name, ObjectNode* parent);
     void removeNode(ObjectNode* node);

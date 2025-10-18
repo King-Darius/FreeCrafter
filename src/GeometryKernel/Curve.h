@@ -29,6 +29,8 @@ public:
 
 private:
     Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness);
+    static std::unique_ptr<Curve> makePolyline(std::vector<Vector3>&& sanitized,
+        const std::vector<bool>& hardnessOverride);
 
     std::vector<Vector3> boundaryLoop;
     HalfEdgeMesh mesh;

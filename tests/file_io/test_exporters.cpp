@@ -11,6 +11,7 @@
 #include <limits>
 #include <unordered_map>
 #include <utility>
+#include <iostream>
 
 namespace {
 
@@ -110,6 +111,18 @@ void verifyRoundTrip(FileIO::SceneFormat format, const std::filesystem::path& ba
     SceneStats actual = summarizeScene(imported);
     assert(actual.hasGeometry);
     assert(actual.triangleCount == expected.triangleCount);
+    if (actual.materialTriangles != expected.materialTriangles) {
+        auto dump = [](const SceneStats& stats) {
+            std::cerr << "triangleCount=" << stats.triangleCount << '\n';
+            for (const auto& [name, count] : stats.materialTriangles) {
+                std::cerr << "  material '" << name << "' -> " << count << '\n';
+            }
+        };
+        std::cerr << "Expected materials:\n";
+        dump(expected);
+        std::cerr << "Actual materials:\n";
+        dump(actual);
+    }
     assert(actual.materialTriangles == expected.materialTriangles);
     const float tolerance = 1e-3f;
     auto within = [&](float a, float b) {

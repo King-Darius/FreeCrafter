@@ -1,74 +1,74 @@
 <RCC>
   <qresource prefix="/icons">
-    <file>resources/icons/select.png</file>
-    <file>resources/icons/line.png</file>
-    <file>resources/icons/arc.png</file>
-    <file>resources/icons/center_arc.svg</file>
-    <file>resources/icons/tangent_arc.svg</file>
-    <file>resources/icons/rectangle.png</file>
-    <file>resources/icons/rotated_rectangle.svg</file>
-    <file>resources/icons/move.png</file>
-    <file>resources/icons/rotate.png</file>
-    <file>resources/icons/scale.png</file>
-    <file>resources/icons/pushpull.png</file>
-    <file>resources/icons/eraser.png</file>
-    <file>resources/icons/paintbucket.png</file>
-    <file>resources/icons/tapemeasure.png</file>
-    <file>resources/icons/protractor.png</file>
-    <file>resources/icons/circle.png</file>
-    <file>resources/icons/polygon.svg</file>
-    <file>resources/icons/bezier.svg</file>
-    <file>resources/icons/freehand.svg</file>
-    <file>resources/icons/orbit.png</file>
-    <file>resources/icons/orbit.svg</file>
-    <file>resources/icons/pan.png</file>
-    <file>resources/icons/pan.svg</file>
-    <file>resources/icons/zoom.png</file>
-    <file>resources/icons/zoom_extents.png</file>
-    <file>resources/icons/section.png</file>
-    <file>resources/icons/text.png</file>
-    <file>resources/icons/offset.png</file>
-    <file>resources/icons/followme.png</file>
-    <file>resources/icons/axes.png</file>
-    <file>resources/icons/shadow.png</file>
-    <file>resources/icons/style_wireframe.png</file>
-    <file>resources/icons/style_shaded.png</file>
-    <file>resources/icons/style_shaded_edges.png</file>
-    <file>resources/icons/style_hiddenline.png</file>
-    <file>resources/icons/style_monochrome.png</file>
-    <file>resources/icons/newfile.svg</file>
-    <file>resources/icons/open.svg</file>
-    <file>resources/icons/save.svg</file>
-    <file>resources/icons/undo.svg</file>
-    <file>resources/icons/redo.svg</file>
-    <file>resources/icons/search.svg</file>
-    <file>resources/icons/run.svg</file>
-    <file>resources/icons/terminal.svg</file>
-    <file>resources/icons/git.svg</file>
-    <file>resources/icons/branch.svg</file>
-    <file>resources/icons/theme_dark.svg</file>
-    <file>resources/icons/theme_light.svg</file>
-    <file>resources/icons/settings.svg</file>
-    <file>resources/icons/palette.svg</file>
-    <file>resources/icons/help.svg</file>
-    <file>resources/icons/export.svg</file>
-    <file>resources/icons/import.svg</file>
-    <file>resources/icons/file.svg</file>
-    <file>resources/icons/folder.svg</file>
-    <file>resources/icons/grid.svg</file>
-    <file>resources/icons/measure.svg</file>
-    <file>resources/icons/zoom_in.svg</file>
-    <file>resources/icons/zoom_out.svg</file>
+    <file alias="select.png">resources/icons/select.png</file>
+    <file alias="line.png">resources/icons/line.png</file>
+    <file alias="arc.png">resources/icons/arc.png</file>
+    <file alias="center_arc.svg">resources/icons/center_arc.svg</file>
+    <file alias="tangent_arc.svg">resources/icons/tangent_arc.svg</file>
+    <file alias="rectangle.png">resources/icons/rectangle.png</file>
+    <file alias="rotated_rectangle.svg">resources/icons/rotated_rectangle.svg</file>
+    <file alias="move.png">resources/icons/move.png</file>
+    <file alias="rotate.png">resources/icons/rotate.png</file>
+    <file alias="scale.png">resources/icons/scale.png</file>
+    <file alias="pushpull.png">resources/icons/pushpull.png</file>
+    <file alias="eraser.png">resources/icons/eraser.png</file>
+    <file alias="paintbucket.png">resources/icons/paintbucket.png</file>
+    <file alias="tapemeasure.png">resources/icons/tapemeasure.png</file>
+    <file alias="protractor.png">resources/icons/protractor.png</file>
+    <file alias="circle.png">resources/icons/circle.png</file>
+    <file alias="polygon.svg">resources/icons/polygon.svg</file>
+    <file alias="bezier.svg">resources/icons/bezier.svg</file>
+    <file alias="freehand.svg">resources/icons/freehand.svg</file>
+    <file alias="orbit.png">resources/icons/orbit.png</file>
+    <file alias="orbit.svg">resources/icons/orbit.svg</file>
+    <file alias="pan.png">resources/icons/pan.png</file>
+    <file alias="pan.svg">resources/icons/pan.svg</file>
+    <file alias="zoom.png">resources/icons/zoom.png</file>
+    <file alias="zoom_extents.png">resources/icons/zoom_extents.png</file>
+    <file alias="section.png">resources/icons/section.png</file>
+    <file alias="text.png">resources/icons/text.png</file>
+    <file alias="offset.png">resources/icons/offset.png</file>
+    <file alias="followme.png">resources/icons/followme.png</file>
+    <file alias="axes.png">resources/icons/axes.png</file>
+    <file alias="shadow.png">resources/icons/shadow.png</file>
+    <file alias="style_wireframe.png">resources/icons/style_wireframe.png</file>
+    <file alias="style_shaded.png">resources/icons/style_shaded.png</file>
+    <file alias="style_shaded_edges.png">resources/icons/style_shaded_edges.png</file>
+    <file alias="style_hiddenline.png">resources/icons/style_hiddenline.png</file>
+    <file alias="style_monochrome.png">resources/icons/style_monochrome.png</file>
+    <file alias="newfile.svg">resources/icons/newfile.svg</file>
+    <file alias="open.svg">resources/icons/open.svg</file>
+    <file alias="save.svg">resources/icons/save.svg</file>
+    <file alias="undo.svg">resources/icons/undo.svg</file>
+    <file alias="redo.svg">resources/icons/redo.svg</file>
+    <file alias="search.svg">resources/icons/search.svg</file>
+    <file alias="run.svg">resources/icons/run.svg</file>
+    <file alias="terminal.svg">resources/icons/terminal.svg</file>
+    <file alias="git.svg">resources/icons/git.svg</file>
+    <file alias="branch.svg">resources/icons/branch.svg</file>
+    <file alias="theme_dark.svg">resources/icons/theme_dark.svg</file>
+    <file alias="theme_light.svg">resources/icons/theme_light.svg</file>
+    <file alias="settings.svg">resources/icons/settings.svg</file>
+    <file alias="palette.svg">resources/icons/palette.svg</file>
+    <file alias="help.svg">resources/icons/help.svg</file>
+    <file alias="export.svg">resources/icons/export.svg</file>
+    <file alias="import.svg">resources/icons/import.svg</file>
+    <file alias="file.svg">resources/icons/file.svg</file>
+    <file alias="folder.svg">resources/icons/folder.svg</file>
+    <file alias="grid.svg">resources/icons/grid.svg</file>
+    <file alias="measure.svg">resources/icons/measure.svg</file>
+    <file alias="zoom_in.svg">resources/icons/zoom_in.svg</file>
+    <file alias="zoom_out.svg">resources/icons/zoom_out.svg</file>
   </qresource>
   <qresource prefix="/styles">
-    <file>styles/dark.qss</file>
-    <file>styles/light.qss</file>
+    <file alias="dark.qss">styles/dark.qss</file>
+    <file alias="light.qss">styles/light.qss</file>
   </qresource>
   <qresource prefix="/fonts">
-    <file>resources/fonts/DejaVuSans.ttf</file>
+    <file alias="DejaVuSans.ttf">resources/fonts/DejaVuSans.ttf</file>
   </qresource>
   <qresource prefix="/config">
-    <file>resources/config/hotkeys_default.json</file>
-    <file>resources/config/navigation_default.json</file>
+    <file alias="hotkeys_default.json">resources/config/hotkeys_default.json</file>
+    <file alias="navigation_default.json">resources/config/navigation_default.json</file>
   </qresource>
 </RCC>

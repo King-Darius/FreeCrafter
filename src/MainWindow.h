@@ -30,11 +30,6 @@ class QUndoStack;
 class QSize;
 class AutosaveManager;
 
-namespace Phase6 {
-struct RoundCornerOptions;
-struct LoftOptions;
-}
-
 #include "HotkeyManager.h"
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
@@ -43,6 +38,7 @@ struct LoftOptions;
 #include "Core/CommandStack.h"
 #include "Navigation/ViewPresetManager.h"
 #include "SunSettings.h"
+#include "Phase6/AdvancedModeling.h"
 #include "ui/LeftToolPalette.h"
 #include "ui/RightTray.h"
 #include "ui/ViewportOverlay.h"
@@ -130,6 +126,8 @@ private:
     void updateLoftControls(const Phase6::LoftOptions& options);
     void applyChamferDefaults();
     void applyLoftDefaults();
+    void showChamferOptionsDialog();
+    void showLoftOptionsDialog();
     void populateAdvancedToolsMenu();
     QString navigationHintForTool(const QString& toolName) const;
     void refreshNavigationActionHints();

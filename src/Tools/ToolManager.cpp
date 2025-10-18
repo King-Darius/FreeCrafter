@@ -2,6 +2,8 @@
 
 #include "ToolRegistry.h"
 #include "ZoomTool.h"
+#include "../Scene/Document.h"
+#include "../Core/CommandStack.h"
 
 #ifdef _MSC_VER
 #pragma execution_character_set("utf-8")

@@ -2,6 +2,7 @@
 
 #include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
+#include "../Core/CommandStack.h"
 #include "../CameraNavigation.h"
 #include "../Scene/Document.h"
 #include "../GeometryKernel/Curve.h"

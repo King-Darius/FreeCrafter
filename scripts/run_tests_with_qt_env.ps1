@@ -1,7 +1,8 @@
 param(
     [string]$BuildDir = "build",
     [switch]$UseCTest,
-    [string[]]$CTestArgs = @("--output-on-failure")
+    [string[]]$CTestArgs = @("--output-on-failure"),
+    [string]$QtPrefix
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -17,7 +18,44 @@ if ($UseCTest -and -not $ctestTool) {
     Write-Error "CTest was not found on PATH. Run from a Visual Studio Developer Prompt or add CMake's bin directory to PATH." -ErrorAction Stop
 }
 
-$qtRoot = Join-Path $repoRoot "qt/6.5.3/msvc2019_64"
+function Resolve-QtPrefix {
+    param(
+        [string]$RootHint,
+        [string]$RepoRoot
+    )
+
+    $candidates = @()
+    if ($RootHint) {
+        $candidates += $RootHint
+    }
+
+    $candidates += @(
+        (Join-Path $RepoRoot "qt/6.5.3/msvc2019_64"),
+        (Join-Path $RepoRoot "qt/6.6.1/msvc2019_64"),
+        (Join-Path $RepoRoot "qt/6.9.3/msvc2019_64"),
+        (Join-Path $RepoRoot "qt/6.9.3/mingw_64"),
+        "C:\Qt\6.9.3\mingw_64",
+        "C:\Qt\6.9.3\msvc2019_64",
+        "C:\Qt\6.8.0\mingw_64",
+        "C:\Qt\6.8.0\msvc2019_64"
+    )
+
+    foreach ($candidate in $candidates | Where-Object { $_ -and $_.Trim() -ne "" }) {
+        $expanded = Resolve-Path -Path $candidate -ErrorAction SilentlyContinue
+        if ($expanded) {
+            return $expanded.ProviderPath
+        }
+    }
+
+    return $null
+}
+
+$qtRoot = Resolve-QtPrefix -RootHint $QtPrefix -RepoRoot $repoRoot
+if (-not $qtRoot) {
+    Write-Error "Qt runtime not found. Provide --QtPrefix or install Qt (e.g. C:\Qt\6.9.3\mingw_64)."
+    exit 1
+}
+
 $qtBin = Join-Path $qtRoot "bin"
 $qtPlugins = Join-Path $qtRoot "plugins"
 $qtPlatformPlugins = Join-Path $qtPlugins "platforms"

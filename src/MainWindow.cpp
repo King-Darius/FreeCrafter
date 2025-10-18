@@ -47,6 +47,7 @@
 #include <QDir>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -1194,7 +1195,7 @@ void MainWindow::maybeRestoreAutosave()
 
         return;
 
-    const QString timestamp = latest->timestamp.toLocalTime().toString(Qt::DefaultLocaleLongDate);
+    const QString timestamp = QLocale().toString(latest->timestamp.toLocalTime(), QLocale::LongFormat);
 
     QString prompt;
 

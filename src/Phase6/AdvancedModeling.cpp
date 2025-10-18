@@ -5,6 +5,7 @@
 #include "../GeometryKernel/TransformUtils.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <limits>
 #include <numeric>
@@ -1078,18 +1079,20 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
     if (controlPoints.size() < 2)
         return nullptr;
     Solid& writableSolid = const_cast<Solid&>(solid);
-    auto& mesh = writableSolid.getMesh();
-    if (mesh.getVertices().empty())
+    HalfEdgeMesh* mesh = &writableSolid.getMesh();
+    if (mesh->getVertices().empty())
         return nullptr;
     std::vector<Vector3> sampled = sampleBezierPath(controlPoints, options.samplesPerSegment);
     if (sampled.size() < 2)
         return nullptr;
 
-    const auto& triangles = mesh.getTriangles();
-    const auto& vertsRef = mesh.getVertices();
+    const auto& triangles = mesh->getTriangles();
+    const auto& vertsRef = mesh->getVertices();
     struct ProjectedSample {
         Vector3 position;
         Vector3 normal;
+        int triangleIndex = -1;
+        float barycentric[3] = { 0.0f, 0.0f, 0.0f };
     };
     std::vector<ProjectedSample> projected;
     projected.reserve(sampled.size());
@@ -1097,7 +1100,9 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
         float best = std::numeric_limits<float>::max();
         Vector3 bestPoint = pt;
         Vector3 bestNormal(0.0f, 1.0f, 0.0f);
-        for (const auto& tri : triangles) {
+        int bestTriangle = -1;
+        for (std::size_t triIndex = 0; triIndex < triangles.size(); ++triIndex) {
+            const auto& tri = triangles[triIndex];
             if (tri.v0 < 0 || tri.v1 < 0 || tri.v2 < 0)
                 continue;
             const Vector3& a = vertsRef[static_cast<std::size_t>(tri.v0)].position;
@@ -1109,13 +1114,42 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
                 best = dist;
                 bestPoint = candidate;
                 bestNormal = tri.normal.lengthSquared() > kEpsilon ? tri.normal.normalized() : (b - a).cross(c - a).normalized();
+                bestTriangle = static_cast<int>(triIndex);
             }
         }
         if (best == std::numeric_limits<float>::max())
             bestPoint = pt;
         if (bestNormal.lengthSquared() <= kEpsilon)
             bestNormal = Vector3(0.0f, 1.0f, 0.0f);
-        projected.push_back({ bestPoint, bestNormal });
+        ProjectedSample sample;
+        sample.position = bestPoint;
+        sample.normal = bestNormal;
+        sample.triangleIndex = bestTriangle;
+        if (bestTriangle >= 0) {
+            const auto& tri = triangles[static_cast<std::size_t>(bestTriangle)];
+            const Vector3& a = vertsRef[static_cast<std::size_t>(tri.v0)].position;
+            const Vector3& b = vertsRef[static_cast<std::size_t>(tri.v1)].position;
+            const Vector3& c = vertsRef[static_cast<std::size_t>(tri.v2)].position;
+            Vector3 v0 = b - a;
+            Vector3 v1 = c - a;
+            Vector3 v2 = bestPoint - a;
+            float d00 = v0.dot(v0);
+            float d01 = v0.dot(v1);
+            float d11 = v1.dot(v1);
+            float d20 = v2.dot(v0);
+            float d21 = v2.dot(v1);
+            float denom = d00 * d11 - d01 * d01;
+            if (std::fabs(denom) > kEpsilon) {
+                float inv = 1.0f / denom;
+                float v = (d11 * d20 - d01 * d21) * inv;
+                float w = (d00 * d21 - d01 * d20) * inv;
+                float u = 1.0f - v - w;
+                sample.barycentric[0] = std::clamp(u, 0.0f, 1.0f);
+                sample.barycentric[1] = std::clamp(v, 0.0f, 1.0f);
+                sample.barycentric[2] = std::clamp(w, 0.0f, 1.0f);
+            }
+        }
+        projected.push_back(sample);
     }
 
     std::vector<Vector3> projectedPositions;
@@ -1126,10 +1160,36 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
     if ((projectedPositions.front() - projectedPositions.back()).length() > kEpsilon)
         projectedPositions.push_back(projectedPositions.front());
 
+    if (std::fabs(options.extrusionHeight) > kEpsilon) {
+        std::fprintf(stderr, "Projected positions count: %zu\n", projectedPositions.size());
+        auto normals = computeVertexNormals(*mesh);
+        auto& vertsAfter = mesh->getVertices();
+        int affected = 0;
+        if (normals.size() == vertsAfter.size()) {
+            for (std::size_t i = 0; i < vertsAfter.size(); ++i) {
+                float dist = distanceToPolyline(vertsAfter[i].position, projectedPositions);
+                if (dist <= options.cutWidth + 1e-4f) {
+                    ++affected;
+                    Vector3 before = vertsAfter[i].position;
+                    vertsAfter[i].position -= normals[i] * options.extrusionHeight;
+                    std::fprintf(stderr, "Extrude vertex %zu dist %.4f normalLen %.4f beforeY %.4f afterY %.4f\n",
+                                 i, dist, normals[i].length(), before.y, vertsAfter[i].position.y);
+                } else if (i < 10) {
+                    std::fprintf(stderr, "Vertex %zu dist %.4f (cut %.4f)\n", i, dist, options.cutWidth);
+                }
+            }
+            std::fprintf(stderr, "Extrude affected %d vertices\n", affected);
+            mesh->heal(kEpsilon, kEpsilon);
+            mesh->recomputeNormals();
+        } else {
+            std::fprintf(stderr, "Normal/vertex size mismatch: %zu vs %zu\n", normals.size(), vertsAfter.size());
+        }
+    }
+
     if (options.removeInterior) {
-        auto faceLoops = extractFaceLoops(mesh);
-        const auto& faces = mesh.getFaces();
-        const auto& vertsBefore = mesh.getVertices();
+        auto faceLoops = extractFaceLoops(*mesh);
+        const auto& faces = mesh->getFaces();
+        const auto& vertsBefore = mesh->getVertices();
         HalfEdgeMesh rebuilt;
         std::vector<int> remap(vertsBefore.size(), -1);
 
@@ -1169,20 +1229,7 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
         rebuilt.heal(kEpsilon, kEpsilon);
         rebuilt.recomputeNormals();
         writableSolid.setMesh(std::move(rebuilt));
-    }
-
-    if (std::fabs(options.extrusionHeight) > kEpsilon) {
-        auto normals = computeVertexNormals(mesh);
-        auto& vertsAfter = mesh.getVertices();
-        if (normals.size() == vertsAfter.size()) {
-            for (std::size_t i = 0; i < vertsAfter.size(); ++i) {
-                float dist = distanceToPolyline(vertsAfter[i].position, projectedPositions);
-                if (dist <= options.cutWidth + 1e-4f)
-                    vertsAfter[i].position -= normals[i] * options.extrusionHeight;
-            }
-            mesh.heal(kEpsilon, kEpsilon);
-            mesh.recomputeNormals();
-        }
+        mesh = &writableSolid.getMesh();
     }
 
     std::vector<Vector3> imprint = MeshUtils::weldSequential(projectedPositions, options.cutWidth * 0.5f);

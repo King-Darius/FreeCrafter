@@ -18,3 +18,7 @@ FreeCrafter is distributed under the MIT License, but it dynamically links again
 - Keep `qt/manifest.json` up to date when the Qt version or module list changes so downstream users know precisely which runtime components were shipped.
 
 These steps ensure FreeCrafter's MIT-licensed code and the LGPL-licensed Qt runtime remain compliant when shipped together.
+
+## Repository policy on Qt binaries
+
+To keep the repository lean and avoid accidentally versioning personal build artifacts, we do **not** check Qt DLLs or other redistributable binaries into `main`.  Instead, automated packaging (see `docs/process/ci_cd_release_actions.md`) runs `windeployqt` during `cmake --install` so release artifacts include every required runtime along with the Qt license texts copied from the official distribution.  Developers who need a runnable tree locally should invoke `python scripts/bootstrap.py`, which stages the same DLL set under `dist/` without committing it to source control.

@@ -82,9 +82,89 @@ check_vs.bat
 secrets/
 .secret/
 
+# Additional secret stores
+*.kdb
+*.kdbx
+*.gpg
+*.pgp
+*.asc
+*.ovpn
+*.vpn
+*.mobileprovision
+*.provisionprofile
+*.token
+*.tokens
+*.session
+*.cookie
+*.cookies
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.mdb
+
+# Local auth and cloud CLI caches
+.aws/
+.azure/
+.gcloud/
+.config/gcloud/
+.config/gh/
+.gnupg/
+.kube/
+.ssh/
+.docker/
+.secrets.d/
+
 # Temporary/editor backup files
 *.swp
 *.swo
 *~
 *.tmp
 *.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+
+# Python virtual environments and bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+env.*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Node/npm caches
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs and diagnostics (often contain system information)
+*.log
+logs/
+*.trace
+*.dmp
+*.mdmp
+*.stackdump
+*.crash
+*.core
+core.*
+*.pid
+*.dump
+*.diagnostics
+*.system.log
+
+# OS-specific metadata
+Thumbs.db
+ehthumbs.db
+desktop.ini

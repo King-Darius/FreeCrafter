@@ -1,5 +1,8 @@
 #include <cassert>
+#include <cstdio>
 #include <vector>
+#include <algorithm>
+#include <limits>
 
 #include "Scene/Document.h"
 #include "GeometryKernel/Vector3.h"
@@ -38,6 +41,31 @@ using Phase6::SweepOptions;
 using Phase6::ShellOptions;
 using Phase6::PatternOptions;
 using Phase6::SplitOptions;
+
+float distanceToSegment(const Vector3& point, const Vector3& a, const Vector3& b)
+{
+    Vector3 ab = b - a;
+    float denom = ab.lengthSquared();
+    if (denom <= 1e-6f)
+        return (point - a).length();
+    float t = (point - a).dot(ab) / denom;
+    t = std::clamp(t, 0.0f, 1.0f);
+    Vector3 closest = a + ab * t;
+    return (point - closest).length();
+}
+
+float distanceToPolylineDebug(const Vector3& point, const std::vector<Vector3>& polyline)
+{
+    if (polyline.size() < 2)
+        return (point - polyline.front()).length();
+    float best = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i + 1 < polyline.size(); ++i) {
+        float dist = distanceToSegment(point, polyline[i], polyline[i + 1]);
+        if (dist < best)
+            best = dist;
+    }
+    return best;
+}
 
 std::vector<Vector3> makeRectangle(float width, float depth)
 {
@@ -159,13 +187,29 @@ void testSurfaceAndKnife()
     assert(cut);
     assert(cut->getBoundaryLoop().size() > path.size());
     assert(solid->getMesh().getFaces().size() <= beforeFaces);
-    bool lowered = false;
     const auto& afterVerts = solid->getMesh().getVertices();
+    std::vector<Vector3> imprintLoop = cut->getBoundaryLoop();
+    float minDistToPath = std::numeric_limits<float>::max();
+    for (const auto& v : afterVerts) {
+        float dist = imprintLoop.empty() ? distanceToPolylineDebug(v.position, path)
+                                         : distanceToPolylineDebug(v.position, imprintLoop);
+        if (dist < minDistToPath)
+            minDistToPath = dist;
+    }
+    bool lowered = false;
+    float maxDrop = 0.0f;
     for (std::size_t i = 0; i < afterVerts.size() && i < beforeHeights.size(); ++i) {
-        if (afterVerts[i].position.y < beforeHeights[i] - 1e-4f) {
+        float drop = beforeHeights[i] - afterVerts[i].position.y;
+        if (drop > 1e-4f) {
             lowered = true;
+            if (drop > maxDrop)
+                maxDrop = drop;
             break;
         }
+    }
+    if (!lowered) {
+        std::fprintf(stderr, "Min dist %.6f, Max drop %.6f\n", minDistToPath, maxDrop);
+        std::fflush(stderr);
     }
     assert(lowered);
 }

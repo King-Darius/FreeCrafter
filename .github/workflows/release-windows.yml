@@ -38,10 +38,46 @@ jobs:
           cmake --build build --config Release
           cmake --install build --config Release --prefix dist
 
+      - name: Run test suite
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "windows"
+          $env:QT_OPENGL = "angle"
+          Push-Location build
+          try {
+            ctest --output-on-failure -C Release
+          } finally {
+            Pop-Location
+          }
+
       - name: Package with CPack (NSIS)
         run: |
           cd build
           cpack -G NSIS
+
+      - name: Verify packaged artifacts
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $PWD 'build'
+          $distDir = Join-Path $PWD 'dist'
+          $cpackDir = Join-Path $buildDir '_CPack_Packages'
+          $exeFiles = @()
+          if (Test-Path $buildDir) {
+            $exeFiles += Get-ChildItem -Path $buildDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (Test-Path $distDir) {
+            $exeFiles += Get-ChildItem -Path $distDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (Test-Path $cpackDir) {
+            $exeFiles += Get-ChildItem -Path $cpackDir -Filter *.exe -Recurse -ErrorAction SilentlyContinue
+          }
+          if (-not $exeFiles) {
+            throw "No Windows installer executable was produced."
+          }
+          Write-Host "Installer candidates:"
+          foreach ($exe in $exeFiles | Sort-Object FullName -Unique) {
+            Write-Host " - $($exe.FullName)"
+          }
 
       - name: Upload .exe to the release
         uses: svenstaro/upload-release-action@v2

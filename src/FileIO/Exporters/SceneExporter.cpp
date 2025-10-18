@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
+#include <QSaveFile>
 
 #include "GeometryKernel/GeometryKernel.h"
 #include "Scene/Document.h"
@@ -196,9 +197,14 @@ bool writeStl(const std::filesystem::path& output,
         }
         return false;
     }
-    stl << "solid FreeCrafter\n";
+    bool wroteAny = false;
+    std::size_t anonymousCounter = 0;
     for (const auto& instance : instances) {
         const auto& mesh = instance.mesh;
+        if (mesh.indices.size() < 3)
+            continue;
+        std::string solidName = instance.name.empty() ? (std::string("Object_") + std::to_string(++anonymousCounter)) : instance.name;
+        stl << "solid " << solidName << "\n";
         for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
             const auto& a = mesh.positions[mesh.indices[i]];
             const auto& b = mesh.positions[mesh.indices[i + 1]];
@@ -212,8 +218,44 @@ bool writeStl(const std::filesystem::path& output,
             stl << "    endloop\n";
             stl << "  endfacet\n";
         }
+        stl << "endsolid " << solidName << "\n";
+        wroteAny = true;
     }
-    stl << "endsolid FreeCrafter\n";
+    if (!wroteAny) {
+        stl << "solid FreeCrafter\nendsolid FreeCrafter\n";
+    }
+
+    QJsonArray materialsArray;
+    for (const auto& instance : instances) {
+        if (instance.material.empty())
+            continue;
+        QJsonObject entry;
+        entry.insert("name", QString::fromStdString(instance.name));
+        entry.insert("material", QString::fromStdString(instance.material));
+        materialsArray.append(entry);
+    }
+
+    std::filesystem::path materialPath = output;
+    materialPath += ".materials.json";
+    if (!materialsArray.isEmpty()) {
+        QSaveFile meta(QString::fromStdString(materialPath.string()));
+        if (!meta.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            if (error)
+                *error = "Unable to write STL material metadata";
+            return false;
+        }
+        QJsonDocument doc(materialsArray);
+        meta.write(doc.toJson(QJsonDocument::Compact));
+        if (!meta.commit()) {
+            if (error)
+                *error = "Failed to commit STL material metadata";
+            return false;
+        }
+    } else {
+        std::error_code ec;
+        std::filesystem::remove(materialPath, ec);
+    }
+
     return true;
 }
 

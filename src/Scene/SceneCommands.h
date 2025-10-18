@@ -14,7 +14,7 @@ class AddPrimitiveCommand : public QUndoCommand {
 public:
     AddPrimitiveCommand(Document& document, PrimitiveOptions options, const QString& text = QString());
 
-    ObjectId objectId() const { return currentObjectId; }
+    Document::ObjectId objectId() const { return currentObjectId; }
     const std::string& error() const { return lastError; }
 
     void redo() override;
@@ -23,7 +23,7 @@ public:
 private:
     Document& document;
     PrimitiveOptions options;
-    ObjectId currentObjectId = 0;
+    Document::ObjectId currentObjectId = 0;
     std::string lastError;
 };
 
@@ -58,7 +58,7 @@ class AddImagePlaneCommand : public QUndoCommand {
 public:
     AddImagePlaneCommand(Document& document, ImagePlaneOptions options, const QString& text = QString());
 
-    ObjectId objectId() const { return currentObjectId; }
+    Document::ObjectId objectId() const { return currentObjectId; }
     const std::string& error() const { return lastError; }
 
     void redo() override;
@@ -67,7 +67,7 @@ public:
 private:
     Document& document;
     ImagePlaneOptions options;
-    ObjectId currentObjectId = 0;
+    Document::ObjectId currentObjectId = 0;
     std::string lastError;
 };
 
@@ -84,7 +84,7 @@ class LinkExternalReferenceCommand : public QUndoCommand {
 public:
     LinkExternalReferenceCommand(Document& document, ExternalReferenceOptions options, const QString& text = QString());
 
-    ObjectId objectId() const { return currentObjectId; }
+    Document::ObjectId objectId() const { return currentObjectId; }
     const std::string& error() const { return lastError; }
 
     void redo() override;
@@ -93,7 +93,7 @@ public:
 private:
     Document& document;
     ExternalReferenceOptions options;
-    ObjectId currentObjectId = 0;
+    Document::ObjectId currentObjectId = 0;
     std::string lastError;
 };
 

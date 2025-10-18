@@ -6,6 +6,7 @@
 #include "CameraNavigation.h"
 #include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
+#include "../Core/CommandStack.h"
 #include <QString>
 
 MoveTool::MoveTool(GeometryKernel* g, CameraController* c)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/Command.h"
+#include "Command.h"
 
 #include <memory>
 

@@ -50,16 +50,6 @@ bool populatePolylineData(std::vector<Vector3>&& sanitized,
     return true;
 }
 
-std::unique_ptr<Curve> makePolyline(std::vector<Vector3>&& sanitized,
-                                    const std::vector<bool>& hardnessOverride)
-{
-    std::vector<Vector3> boundary;
-    HalfEdgeMesh mesh;
-    std::vector<bool> hardness;
-    if (!populatePolylineData(std::move(sanitized), hardnessOverride, boundary, mesh, hardness))
-        return nullptr;
-    return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
-}
 }
 
 Curve::Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness)
@@ -73,6 +63,17 @@ Curve::Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> har
     if (hardnessFlags.size() != boundaryLoop.size()) {
         hardnessFlags.resize(boundaryLoop.size(), false);
     }
+}
+
+std::unique_ptr<Curve> Curve::makePolyline(std::vector<Vector3>&& sanitized,
+    const std::vector<bool>& hardnessOverride)
+{
+    std::vector<Vector3> boundary;
+    HalfEdgeMesh mesh;
+    std::vector<bool> hardness;
+    if (!populatePolylineData(std::move(sanitized), hardnessOverride, boundary, mesh, hardness))
+        return nullptr;
+    return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
 }
 
 namespace {

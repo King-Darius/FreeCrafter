@@ -190,7 +190,7 @@ std::array<float, 16> transformFromJson(const QJsonArray& arr)
 {
     std::array<float, 16> matrix{};
     matrix.fill(0.0f);
-    const int count = std::min(arr.size(), 16);
+    const int count = std::min<int>(static_cast<int>(arr.size()), 16);
     for (int i = 0; i < count; ++i)
         matrix[static_cast<std::size_t>(i)] = static_cast<float>(arr.at(i).toDouble(matrix[i]));
     return matrix;
@@ -420,7 +420,6 @@ QJsonObject objectNodeToJson(const Document::ObjectNode& node,
     obj.insert(QStringLiteral("tags"), tags);
 
     QJsonArray children;
-    children.reserve(static_cast<int>(node.children.size()));
     for (const auto& child : node.children)
         children.append(objectNodeToJson(*child, geometryLookup));
     obj.insert(QStringLiteral("children"), children);
@@ -474,10 +473,10 @@ QJsonObject importMetadataToJson(Document::ObjectId id, const Document::ImportMe
     obj.insert(QStringLiteral("objectId"), static_cast<double>(id));
     obj.insert(QStringLiteral("path"), QString::fromStdString(meta.sourcePath));
     obj.insert(QStringLiteral("format"), fileFormatToString(meta.format));
-    QJsonArray slots;
+    QJsonArray slotArray;
     for (const auto& slot : meta.materialSlots)
-        slots.append(QString::fromStdString(slot));
-    obj.insert(QStringLiteral("materialSlots"), slots);
+        slotArray.append(QString::fromStdString(slot));
+    obj.insert(QStringLiteral("materialSlots"), slotArray);
     if (meta.importedAt.time_since_epoch().count() != 0) {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             meta.importedAt.time_since_epoch()).count();
@@ -491,9 +490,9 @@ Document::ImportMetadata importMetadataFromJson(const QJsonObject& obj)
     Document::ImportMetadata meta;
     meta.sourcePath = obj.value(QStringLiteral("path")).toString().toStdString();
     meta.format = fileFormatFromString(obj.value(QStringLiteral("format")).toString());
-    const QJsonArray slots = obj.value(QStringLiteral("materialSlots")).toArray();
-    meta.materialSlots.reserve(slots.size());
-    for (const auto& entry : slots)
+    const QJsonArray slotArray = obj.value(QStringLiteral("materialSlots")).toArray();
+    meta.materialSlots.reserve(slotArray.size());
+    for (const auto& entry : slotArray)
         meta.materialSlots.push_back(entry.toString().toStdString());
     const double ts = obj.value(QStringLiteral("timestamp")).toDouble(std::numeric_limits<double>::quiet_NaN());
     if (std::isfinite(ts)) {

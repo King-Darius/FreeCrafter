@@ -1,4 +1,4 @@
-﻿#include <QDir>
+#include <QDir>
 #include "SceneImporter.h"
 
 #include <algorithm>
@@ -140,6 +140,32 @@ std::array<float, 16> readNodeTransform(const QJsonObject& node)
     return composeTrs(node);
 }
 
+std::unordered_map<std::string, std::string> loadStlMaterialMetadata(const std::filesystem::path& path)
+{
+    std::unordered_map<std::string, std::string> mapping;
+    std::filesystem::path metaPath = path;
+    metaPath += ".materials.json";
+    QFile meta(QString::fromStdString(metaPath.string()));
+    if (!meta.exists())
+        return mapping;
+    if (!meta.open(QIODevice::ReadOnly))
+        return mapping;
+    const QJsonDocument doc = QJsonDocument::fromJson(meta.readAll());
+    if (!doc.isArray())
+        return mapping;
+    for (const auto& value : doc.array()) {
+        if (!value.isObject())
+            continue;
+        const QJsonObject obj = value.toObject();
+        const QString name = obj.value(QStringLiteral("name")).toString();
+        const QString material = obj.value(QStringLiteral("material")).toString();
+        if (name.isEmpty() || material.isEmpty())
+            continue;
+        mapping.emplace(name.toStdString(), material.toStdString());
+    }
+    return mapping;
+}
+
 bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
 {
     std::ifstream file(path);
@@ -150,27 +176,80 @@ bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>&
         return false;
     }
 
-    ImportedMesh mesh;
-    mesh.name = path.stem().string();
-    mesh.transform = GeometryKernel::identityTransform();
+    auto makeDefaultName = [&](std::size_t counter) {
+        return path.stem().string() + "_" + std::to_string(counter);
+    };
 
-    std::string token;
-    while (file >> token) {
-        if (token == "vertex") {
-            float x = 0.0f, y = 0.0f, z = 0.0f;
-            file >> x >> y >> z;
-            mesh.positions.emplace_back(x, y, z);
-            mesh.indices.push_back(static_cast<std::uint32_t>(mesh.positions.size() - 1));
+    ImportedMesh current;
+    current.transform = GeometryKernel::identityTransform();
+    bool haveMesh = false;
+    std::size_t meshCounter = 0;
+
+    auto finalizeMesh = [&]() {
+        if (haveMesh && !current.indices.empty()) {
+            meshes.push_back(current);
+        }
+        current = ImportedMesh{};
+        current.transform = GeometryKernel::identityTransform();
+        haveMesh = false;
+    };
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty())
+            continue;
+        std::istringstream stream(line);
+        std::string tag;
+        stream >> tag;
+        if (tag == "solid") {
+            std::string name;
+            std::getline(stream, name);
+            finalizeMesh();
+            current.name = trim(name);
+            if (current.name.empty())
+                current.name = makeDefaultName(++meshCounter);
+            haveMesh = true;
+        } else if (tag == "facet") {
+            if (!haveMesh) {
+                current.name = makeDefaultName(++meshCounter);
+                haveMesh = true;
+            }
+            // facet normal nx ny nz
+            std::string normalToken;
+            stream >> normalToken; // "normal"
+            float nx = 0.0f, ny = 0.0f, nz = 0.0f;
+            stream >> nx >> ny >> nz;
+            // Expect "outer loop" on next line
+            std::getline(file, line); // outer loop
+            for (int i = 0; i < 3; ++i) {
+                if (!std::getline(file, line))
+                    break;
+                std::istringstream vertexStream(line);
+                std::string vertexTag;
+                vertexStream >> vertexTag;
+                if (vertexTag != "vertex")
+                    continue;
+                float x = 0.0f, y = 0.0f, z = 0.0f;
+                vertexStream >> x >> y >> z;
+                current.positions.emplace_back(x, y, z);
+                current.indices.push_back(static_cast<std::uint32_t>(current.positions.size() - 1));
+            }
+            // consume "endloop" and "endfacet"
+            std::getline(file, line);
+            std::getline(file, line);
+        } else if (tag == "endsolid") {
+            finalizeMesh();
         }
     }
 
-    if (mesh.indices.empty()) {
+    finalizeMesh();
+
+    if (meshes.empty()) {
         if (error) {
             *error = "STL file did not contain any facets";
         }
         return false;
     }
-    meshes.push_back(std::move(mesh));
     return true;
 }
 
@@ -284,6 +363,17 @@ bool parseObj(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
             float x = 0.0f, y = 0.0f, z = 0.0f;
             stream >> x >> y >> z;
             globalPositions.emplace_back(x, y, z);
+        } else if (tag == "solid") {
+            std::string name;
+            std::getline(stream, name);
+            startObject(trim(name));
+        } else if (tag == "endsolid") {
+            if (haveCurrent && !current.indices.empty()) {
+                meshes.push_back(current);
+            }
+            current = ImportedMesh{};
+            remap.clear();
+            haveCurrent = false;
         } else if (tag == "o" || tag == "g") {
             std::string name;
             std::getline(stream, name);
@@ -367,17 +457,36 @@ bool parseStl(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
     stream.read(header.data(), header.size());
     std::uint32_t triangleCount = 0;
     stream.read(reinterpret_cast<char*>(&triangleCount), sizeof(triangleCount));
-    bool binaryCandidate = stream.good() && !ec && fileSize >= 84;
+    bool asciiHeader = std::strncmp(header.data(), "solid", 5) == 0;
+    bool binaryCandidate = stream.good() && !ec && fileSize >= 84 && !asciiHeader;
+
+    auto materialMap = loadStlMaterialMetadata(path);
+    std::size_t startIndex = meshes.size();
+
+    bool parsed = false;
     if (binaryCandidate) {
         const std::uintmax_t expectedSize = 84 + static_cast<std::uintmax_t>(triangleCount) * 50;
         if (fileSize == expectedSize) {
             stream.close();
-            return parseBinaryStl(path, meshes, error);
+            parsed = parseBinaryStl(path, meshes, error);
         }
     }
 
-    stream.close();
-    return parseAsciiStl(path, meshes, error);
+    if (!parsed) {
+        stream.close();
+        parsed = parseAsciiStl(path, meshes, error);
+    }
+
+    if (parsed && !materialMap.empty()) {
+        for (std::size_t i = startIndex; i < meshes.size(); ++i) {
+            auto it = materialMap.find(meshes[i].name);
+            if (it != materialMap.end()) {
+                meshes[i].material = it->second;
+            }
+        }
+    }
+
+    return parsed;
 }
 
 int componentWidth(int componentType)

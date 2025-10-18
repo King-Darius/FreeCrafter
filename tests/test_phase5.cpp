@@ -217,6 +217,7 @@ void testSerializationRoundTrip()
     sceneFile.read(magic, sizeof(magic));
     assert(sceneFile.gcount() == 4);
     assert(std::memcmp(magic, "FCSN", 4) == 0);
+    sceneFile.close();
 
     Document loaded;
     bool loadedOk = loaded.loadFromFile(path.string());

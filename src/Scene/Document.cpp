@@ -1,5 +1,6 @@
 #include "Document.h"
 
+#include "SceneSerializer.h"
 #include "SectionPlane.h"
 #include "SceneSettings.h"
 #include "../CameraController.h"
@@ -565,6 +566,7 @@ void Document::resetInternal(bool clearGeometry)
     imagePlaneMetadata.clear();
     externalReferenceMetadata.clear();
     lastImportErrorMessage.clear();
+    lastSceneIoErrorMessage.clear();
     nextObjectId = 1;
     nextTagId = 1;
     nextDefinitionId = 1;
@@ -574,53 +576,69 @@ void Document::resetInternal(bool clearGeometry)
 
 bool Document::saveToFile(const std::string& filename) const
 {
-    std::ofstream os(filename, std::ios::out | std::ios::trunc);
-    if (!os)
-        return false;
-
-    os << "FCM 4\n";
-    os << kBeginGeometry << '\n';
-    geometryKernel.saveToStream(os);
-    os << kEndGeometry << '\n';
-
-    os << kBeginSectionPlanes << ' ' << planes.size() << '\n';
-    for (const auto& plane : planes) {
-        plane.serialize(os);
+    SceneSerializer::Result result = SceneSerializer::save(*this, filename);
+    if (result.status == SceneSerializer::Result::Status::Success) {
+        lastSceneIoErrorMessage.clear();
+        return true;
     }
-    os << kEndSectionPlanes << '\n';
-
-    os << kBeginSettings << '\n';
-    sceneSettings.serialize(os);
-    os << kEndSettings << '\n';
-
-    serializeTags(os);
-    serializeObjectTree(os);
-    serializeComponentDefinitions(os);
-    serializeScenes(os);
-    os << kColorByTagToken << ' ' << (colorByTagEnabled ? 1 : 0) << '\n';
-    return true;
+    if (result.status == SceneSerializer::Result::Status::Error) {
+        lastSceneIoErrorMessage = result.message;
+    } else {
+        lastSceneIoErrorMessage = "Scene serializer reported an unknown failure";
+    }
+    return false;
 }
 
 bool Document::loadFromFile(const std::string& filename)
 {
-    std::ifstream is(filename);
-    if (!is)
+    SceneSerializer::Result result = SceneSerializer::load(*this, filename);
+    if (result.status == SceneSerializer::Result::Status::Success) {
+        lastSceneIoErrorMessage.clear();
+        return true;
+    }
+    if (result.status == SceneSerializer::Result::Status::FormatMismatch) {
+        if (loadLegacyFromFile(filename)) {
+            lastSceneIoErrorMessage.clear();
+            return true;
+        }
+        if (lastSceneIoErrorMessage.empty()) {
+            lastSceneIoErrorMessage = "Legacy scene file could not be parsed";
+        }
         return false;
+    }
+    lastSceneIoErrorMessage = result.message;
+    return false;
+}
+
+bool Document::loadLegacyFromFile(const std::string& filename)
+{
+    std::ifstream is(filename);
+    if (!is) {
+        lastSceneIoErrorMessage = "Unable to open legacy scene file";
+        return false;
+    }
 
     std::string tag;
     int version = 0;
-    if (!(is >> tag >> version))
+    if (!(is >> tag >> version)) {
+        lastSceneIoErrorMessage = "Legacy scene header is invalid";
         return false;
-    if (tag != "FCM")
+    }
+    if (tag != "FCM") {
+        lastSceneIoErrorMessage = "Legacy scene signature mismatch";
         return false;
+    }
 
     if (version <= 1) {
-        bool loaded = geometryKernel.loadFromFile(filename);
-        // Legacy files only serialize the kernel, so rebuild scene state while
-        // preserving the freshly imported geometry objects.
+        if (!geometryKernel.loadFromFile(filename)) {
+            lastSceneIoErrorMessage = "Legacy kernel payload could not be read";
+            return false;
+        }
         resetInternal(false);
         synchronizeWithGeometry();
-        return loaded;
+        updateVisibility();
+        lastSceneIoErrorMessage.clear();
+        return true;
     }
 
     reset();
@@ -636,29 +654,42 @@ bool Document::loadFromFile(const std::string& filename)
             planes.reserve(count);
             for (size_t i = 0; i < count; ++i) {
                 SectionPlane plane;
-                if (!plane.deserialize(is))
-                    break;
+                if (!plane.deserialize(is)) {
+                    lastSceneIoErrorMessage = "Legacy section plane payload truncated";
+                    return false;
+                }
                 planes.push_back(plane);
             }
         } else if (token == kBeginSettings) {
-            sceneSettings.deserialize(is, version);
-        } else if (token == kBeginTags) {
-            if (!deserializeTags(is))
+            if (!sceneSettings.deserialize(is, version)) {
+                lastSceneIoErrorMessage = "Legacy scene settings failed to deserialize";
                 return false;
+            }
+        } else if (token == kBeginTags) {
+            if (!deserializeTags(is)) {
+                lastSceneIoErrorMessage = "Legacy tags section failed to deserialize";
+                return false;
+            }
         } else if (token == kBeginObjectTree) {
             std::vector<GeometryObject*> geometryObjects;
             geometryObjects.reserve(geometryKernel.getObjects().size());
             for (const auto& uptr : geometryKernel.getObjects()) {
                 geometryObjects.push_back(uptr.get());
             }
-            if (!deserializeObjectTree(is, version, geometryObjects))
+            if (!deserializeObjectTree(is, version, geometryObjects)) {
+                lastSceneIoErrorMessage = "Legacy object tree failed to deserialize";
                 return false;
+            }
         } else if (token == kBeginComponentDefs) {
-            if (!deserializeComponentDefinitions(is, version))
+            if (!deserializeComponentDefinitions(is, version)) {
+                lastSceneIoErrorMessage = "Legacy component definitions failed to deserialize";
                 return false;
+            }
         } else if (token == kBeginScenes) {
-            if (!deserializeScenes(is, version))
+            if (!deserializeScenes(is, version)) {
+                lastSceneIoErrorMessage = "Legacy scenes failed to deserialize";
                 return false;
+            }
         } else if (token == kColorByTagToken) {
             int enabled = 0;
             is >> enabled;
@@ -668,6 +699,7 @@ bool Document::loadFromFile(const std::string& filename)
 
     synchronizeWithGeometry();
     updateVisibility();
+    lastSceneIoErrorMessage.clear();
     return true;
 }
 

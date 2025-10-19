@@ -34,3 +34,57 @@ Makefile
 aqinstall.log
 aqtinstall.log
 check_vs.bat
+
+# Shell history and REPL artefacts (may contain personal data)
+.bash_history
+.zsh_history
+.fish_history
+.history
+.sqlite_history
+.mysql_history
+.psql_history
+.python_history
+.node_repl_history
+.lesshst
+
+# IDE and editor local settings
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.code-workspace
+.fleet/
+.history/
+*.sublime-project
+*.sublime-workspace
+
+# Credential and environment files
+.env
+.env.*
+*.env
+.envrc
+.secrets
+*.secrets
+*.secret
+*.key
+*.pem
+*.pfx
+*.p12
+*.p8
+*.p10
+*.cer
+*.crt
+*.der
+*.jks
+*.keystore
+*.credentials
+secrets/
+.secret/
+
+# Temporary/editor backup files
+*.swp
+*.swo
+*~
+*.tmp
+*.temp

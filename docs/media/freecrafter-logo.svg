@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">FreeCrafter emblem</title>
+  <desc id="desc">Rounded square with gradient background containing interlocking F and C glyphs.</desc>
+  <defs>
+    <linearGradient id="bg" x1="12" y1="6" x2="84" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5C8EE8" />
+      <stop offset="1" stop-color="#1F2B38" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0A1A2B" flood-opacity="0.25" />
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="80" height="80" rx="20" fill="url(#bg)" filter="url(#shadow)" />
+  <path d="M60 24c-14.359 0-26 11.641-26 26s11.641 26 26 26c3.216 0 6.317-.589 9.18-1.715" fill="none" stroke="#E8F2FF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M36 28v40m0-40h24m-24 20h16" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

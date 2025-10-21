@@ -1,3 +1,4 @@
 aqtinstall==3.3.0
 PySimpleGUI>=5.0.8
 pyinstaller>=6.0
+streamlit>=1.49.1

@@ -76,6 +76,17 @@ ctest --test-dir build --output-on-failure
 
 > **Note:** IDE language servers may warn about `aqtinstall` imports until the dependencies in [`scripts/requirements.txt`](scripts/requirements.txt) are installed for the selected Python interpreter.
 
+## Run locally
+
+```bash
+# POSIX
+./scripts/run_local.sh
+# PowerShell
+./scripts/run_local.ps1
+```
+
+No account or email is required. Telemetry is disabled via config/env.
+
 ## Documentation & roadmap
 - [ROADMAP.md](ROADMAP.md) — long-range plan broken into phases and milestone tracks.
 - [docs/status/roadmap-progress.md](docs/status/roadmap-progress.md) — running implementation snapshot mapped to the roadmap.

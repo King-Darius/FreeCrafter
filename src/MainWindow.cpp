@@ -770,22 +770,13 @@ void MainWindow::refreshNavigationActionHints()
 
 {
 
-    const auto& registry = ToolRegistry::instance();
-    const QString& panId = registry.descriptor(ToolRegistry::ToolId::Pan).id;
-    const QString& orbitId = registry.descriptor(ToolRegistry::ToolId::Orbit).id;
-    const QString& zoomId = registry.descriptor(ToolRegistry::ToolId::Zoom).id;
-
-    if (panAction)
-
-        panAction->setStatusTip(navigationHintForTool(panId));
-
-    if (orbitAction)
-
-        orbitAction->setStatusTip(navigationHintForTool(orbitId));
-
-    if (zoomAction)
-
-        zoomAction->setStatusTip(navigationHintForTool(zoomId));
+    for (const auto& binding : toolActionBindings_) {
+        if (!binding.descriptor || !binding.descriptor->navigation)
+            continue;
+        if (!binding.action)
+            continue;
+        binding.action->setStatusTip(navigationHintForTool(binding.descriptor->id));
+    }
 
 }
 
@@ -2218,6 +2209,7 @@ void MainWindow::createToolbars()
         target = new QAction(descriptor.iconPath.isEmpty() ? QIcon() : QIcon(descriptor.iconPath),
             descriptor.labelKey ? tr(descriptor.labelKey) : QString(), this);
         target->setCheckable(true);
+        target->setObjectName(descriptor.id);
         if (descriptor.statusTipKey)
             target->setStatusTip(tr(descriptor.statusTipKey));
         connect(target, &QAction::triggered, this, slot);
@@ -2239,10 +2231,19 @@ void MainWindow::createToolbars()
     createToolAction(ToolRegistry::ToolId::Move, moveAction, &MainWindow::activateMove);
     createToolAction(ToolRegistry::ToolId::Rotate, rotateAction, &MainWindow::activateRotate);
     createToolAction(ToolRegistry::ToolId::Scale, scaleAction, &MainWindow::activateScale);
+    createToolAction(ToolRegistry::ToolId::Offset, offsetAction, &MainWindow::activateOffset);
+    createToolAction(ToolRegistry::ToolId::PushPull, pushPullAction, &MainWindow::activatePushPull);
+    createToolAction(ToolRegistry::ToolId::FollowMe, followMeAction, &MainWindow::activateFollowMe);
+    createToolAction(ToolRegistry::ToolId::PaintBucket, paintBucketAction, &MainWindow::activatePaintBucket);
     createToolAction(ToolRegistry::ToolId::Extrude, extrudeAction, &MainWindow::activateExtrude);
     createToolAction(ToolRegistry::ToolId::Chamfer, chamferAction, &MainWindow::activateChamfer);
     createToolAction(ToolRegistry::ToolId::Loft, loftAction, &MainWindow::activateLoft);
     createToolAction(ToolRegistry::ToolId::Section, sectionAction, &MainWindow::activateSection);
+    createToolAction(ToolRegistry::ToolId::Text, textAction, &MainWindow::activateText);
+    createToolAction(ToolRegistry::ToolId::Dimension, dimensionAction, &MainWindow::activateDimension);
+    createToolAction(ToolRegistry::ToolId::TapeMeasure, tapeMeasureAction, &MainWindow::activateTapeMeasure);
+    createToolAction(ToolRegistry::ToolId::Protractor, protractorAction, &MainWindow::activateProtractor);
+    createToolAction(ToolRegistry::ToolId::Axes, axesAction, &MainWindow::activateAxes);
     createToolAction(ToolRegistry::ToolId::Pan, panAction, &MainWindow::activatePan);
     createToolAction(ToolRegistry::ToolId::Orbit, orbitAction, &MainWindow::activateOrbit);
     createToolAction(ToolRegistry::ToolId::Zoom, zoomAction, &MainWindow::activateZoom);
@@ -2534,6 +2535,10 @@ void MainWindow::createLeftDock()
     modifyGroup.actions = collect({ moveAction,
                                     rotateAction,
                                     scaleAction,
+                                    offsetAction,
+                                    pushPullAction,
+                                    followMeAction,
+                                    paintBucketAction,
                                     extrudeAction,
                                     chamferAction,
                                     loftAction,
@@ -2541,15 +2546,20 @@ void MainWindow::createLeftDock()
     if (!modifyGroup.actions.isEmpty())
         groups.append(modifyGroup);
 
-    ToolGroup navGroup;
-    navGroup.label = tr("NAV");
-    navGroup.actions = collect({ panAction,
-                                 orbitAction,
-                                 zoomAction,
-                                 measureAction,
-                                 gridAction });
-    if (!navGroup.actions.isEmpty())
-        groups.append(navGroup);
+    ToolGroup annotateNavGroup;
+    annotateNavGroup.label = tr("ANNOTATE / NAV");
+    annotateNavGroup.actions = collect({ dimensionAction,
+                                         textAction,
+                                         tapeMeasureAction,
+                                         protractorAction,
+                                         axesAction,
+                                         panAction,
+                                         orbitAction,
+                                         zoomAction,
+                                         measureAction,
+                                         gridAction });
+    if (!annotateNavGroup.actions.isEmpty())
+        groups.append(annotateNavGroup);
 
     leftDock_ = new QDockWidget(tr("Tools"), this);
     leftDock_->setObjectName(QStringLiteral("ToolsDock"));
@@ -4195,6 +4205,30 @@ void MainWindow::activateScale()
 
 }
 
+void MainWindow::activateOffset()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::Offset, offsetAction);
+
+}
+
+void MainWindow::activatePushPull()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::PushPull, pushPullAction);
+
+}
+
+void MainWindow::activateFollowMe()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::FollowMe, followMeAction);
+
+}
+
 void MainWindow::activateExtrude()
 
 {
@@ -4228,6 +4262,54 @@ void MainWindow::activateSection()
 {
 
     activateToolByKey(ToolRegistry::ToolId::Section, sectionAction);
+
+}
+
+void MainWindow::activatePaintBucket()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::PaintBucket, paintBucketAction);
+
+}
+
+void MainWindow::activateText()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::Text, textAction);
+
+}
+
+void MainWindow::activateDimension()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::Dimension, dimensionAction);
+
+}
+
+void MainWindow::activateTapeMeasure()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::TapeMeasure, tapeMeasureAction);
+
+}
+
+void MainWindow::activateProtractor()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::Protractor, protractorAction);
+
+}
+
+void MainWindow::activateAxes()
+
+{
+
+    activateToolByKey(ToolRegistry::ToolId::Axes, axesAction);
 
 }
 

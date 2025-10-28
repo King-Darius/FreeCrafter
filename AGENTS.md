@@ -22,7 +22,7 @@ Adhere to the concept’s **top‑down** frame so the app looks and behaves as d
 5. **Right Dock Stack** — Inspector/Properties, Layers/Outliner, Materials  
 6. **Status Bar** — dynamic hints, coordinates, selection badges
 
-**Naming & wiring:** UI actions must activate tools via the **exact** tool ID string (see §5). Buttons are checkable and grouped exclusively.
+**Naming & wiring:** UI actions must activate tools via the **exact** tool ID string (see §5). Buttons are checkable and grouped exclusively. **Always load toolbar button icons from the bundled assets under `resources/icons` so the left and top toolbars match the shipped GUI graphics.**
 
 **Theme toggle (Light/Dark) — overview:** The GUI exposes **View ▸ Toggle Dark Mode**. Theme choice applies immediately to all widgets (docks/tabs/inputs/trees/status bar) and **persists**. Details and code in **§3.7 Styling (QSS themes)**.
 

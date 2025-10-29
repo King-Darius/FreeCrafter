@@ -1177,14 +1177,18 @@ std::pair<float, float> GLViewport::depthRangeForAspect(float aspect) const
     if (aspect <= 0.0f)
         aspect = 1.0f;
 
-    constexpr float kMinNearAbsolute = 0.01f;
+    constexpr float kMinNearAbsolute = 1e-4f;
     constexpr float kNearFraction = 0.001f;
+    constexpr float kMaxDepthRatio = 2e5f;
 
-    const float focusDistance = std::max(camera.getDistance(), 0.001f);
-    const float minNearFromFraction = std::max(focusDistance * kNearFraction, kMinNearAbsolute);
-    float nearPlane = minNearFromFraction;
-    float farPlane = std::max(focusDistance * 4.0f, nearPlane * 8.0f);
-    float frontDistanceLimit = std::numeric_limits<float>::infinity();
+    const float focusDistance = std::max(camera.getDistance(), 1e-3f);
+    const float minNear = std::max(kMinNearAbsolute, focusDistance * kNearFraction);
+
+    float nearPlane = minNear;
+    float farPlane = std::max(focusDistance * 4.0f, nearPlane * 64.0f);
+
+    float frontDistance = std::numeric_limits<float>::infinity();
+    float frontClearance = minNear;
 
     Vector3 minBounds;
     Vector3 maxBounds;
@@ -1224,37 +1228,44 @@ std::pair<float, float> GLViewport::depthRangeForAspect(float aspect) const
         }
 
         if (maxProj > 0.0f) {
-            const float frontDistance = std::max(minProj, 0.0f);
-            const float depthSpan = std::max(maxProj - frontDistance, focusDistance * 0.5f);
-            float margin = std::max(frontDistance * 0.1f, nearPlane * 2.0f);
-            margin = std::min(margin, depthSpan * 0.25f);
-            margin = std::max(margin, nearPlane);
+            frontDistance = std::max(minProj, 0.0f);
+            const float depthSpan = std::max(maxProj - frontDistance, focusDistance * 0.25f);
 
-            frontDistanceLimit = frontDistance;
+            frontClearance = std::max({ minNear,
+                                        focusDistance * 0.02f,
+                                        frontDistance * 0.1f });
 
-            const float nearCandidate = std::max(frontDistance - margin, 0.0f);
-            if (nearCandidate > nearPlane)
-                nearPlane = nearCandidate;
+            const float desiredNear = std::max(0.0f, frontDistance - frontClearance);
+            nearPlane = std::max(nearPlane, desiredNear);
 
-            const float farCandidate = maxProj + margin;
-            if (farCandidate > farPlane)
-                farPlane = farCandidate;
+            const float farMargin = std::max(frontClearance, depthSpan * 0.1f);
+            const float desiredFar = maxProj + farMargin;
+            farPlane = std::max(farPlane, desiredFar);
+
+            const float maxNear = std::max(frontDistance - std::max(frontClearance, 1e-3f), minNear);
+            nearPlane = std::clamp(nearPlane, minNear, maxNear);
+
+            if (farPlane <= nearPlane)
+                farPlane = nearPlane + std::max(frontClearance, minNear);
+        } else {
+            farPlane = std::max(farPlane, focusDistance * 8.0f);
         }
     } else {
-        farPlane = std::max(farPlane, 1000.0f);
+        farPlane = std::max(farPlane, focusDistance * 8.0f);
     }
 
     if (farPlane <= nearPlane)
-        farPlane = nearPlane + std::max(nearPlane * 0.25f, 1.0f);
+        farPlane = nearPlane + std::max(frontClearance, minNear);
 
-    if (std::isfinite(frontDistanceLimit)) {
-        const float cappedFront = std::max(frontDistanceLimit - 1e-3f, kMinNearAbsolute);
-        if (cappedFront >= minNearFromFraction)
-            nearPlane = std::clamp(nearPlane, minNearFromFraction, cappedFront);
-        else
-            nearPlane = std::max(nearPlane, cappedFront);
-    } else {
-        nearPlane = std::max(nearPlane, minNearFromFraction);
+    const float ratio = farPlane / std::max(nearPlane, kMinNearAbsolute);
+    if (ratio > kMaxDepthRatio) {
+        nearPlane = std::max(nearPlane, farPlane / kMaxDepthRatio);
+        if (std::isfinite(frontDistance)) {
+            const float maxNear = std::max(frontDistance - std::max(frontClearance, 1e-3f), minNear);
+            nearPlane = std::clamp(nearPlane, minNear, maxNear);
+            if (farPlane <= nearPlane)
+                farPlane = nearPlane + std::max(frontClearance, minNear);
+        }
     }
 
     return { nearPlane, farPlane };

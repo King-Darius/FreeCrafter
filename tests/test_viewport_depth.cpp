@@ -157,7 +157,7 @@ int main(int argc, char** argv)
     if (!(znear > 0.0f && zfar > znear))
         return 5;
 
-    const float minFractionNear = std::max(camera->getDistance() * 0.001f, 0.01f);
+    const float minFractionNear = std::max(camera->getDistance() * 0.001f, 1e-4f);
 
     BoundingBox bounds = computeDocumentBounds(*geometry);
     if (!bounds.valid)
@@ -223,6 +223,10 @@ int main(int argc, char** argv)
 
     if (originDistance + exit > zfar + 50.0f)
         return 13;
+
+    const float ratio = zfar / std::max(znear, 1e-4f);
+    if (ratio > 2.1e5f)
+        return 16;
 
     viewport.update();
     QElapsedTimer timer;

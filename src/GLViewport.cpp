@@ -1172,25 +1172,113 @@ void GLViewport::drawSceneOverlays()
     }
 }
 
+std::pair<float, float> GLViewport::depthRangeForAspect(float aspect) const
+{
+    if (aspect <= 0.0f)
+        aspect = 1.0f;
+
+    constexpr float kMinNearAbsolute = 0.01f;
+    constexpr float kNearFraction = 0.001f;
+
+    const float focusDistance = std::max(camera.getDistance(), 0.001f);
+    const float minNearFromFraction = std::max(focusDistance * kNearFraction, kMinNearAbsolute);
+    float nearPlane = minNearFromFraction;
+    float farPlane = std::max(focusDistance * 4.0f, nearPlane * 8.0f);
+    float frontDistanceLimit = std::numeric_limits<float>::infinity();
+
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (computeBounds(false, minBounds, maxBounds)) {
+        float cx, cy, cz;
+        camera.getCameraPosition(cx, cy, cz);
+        float tx, ty, tz;
+        camera.getTarget(tx, ty, tz);
+
+        const QVector3D cameraPos(cx, cy, cz);
+        QVector3D viewDir(tx - cx, ty - cy, tz - cz);
+        const float viewLength = viewDir.length();
+        if (viewLength > 1e-4f)
+            viewDir /= viewLength;
+        else
+            viewDir = QVector3D(0.0f, 0.0f, -1.0f);
+
+        const QVector3D minCorner(minBounds.x, minBounds.y, minBounds.z);
+        const QVector3D maxCorner(maxBounds.x, maxBounds.y, maxBounds.z);
+        const std::array<QVector3D, 8> corners = {
+            QVector3D(minCorner.x(), minCorner.y(), minCorner.z()),
+            QVector3D(maxCorner.x(), minCorner.y(), minCorner.z()),
+            QVector3D(minCorner.x(), maxCorner.y(), minCorner.z()),
+            QVector3D(maxCorner.x(), maxCorner.y(), minCorner.z()),
+            QVector3D(minCorner.x(), minCorner.y(), maxCorner.z()),
+            QVector3D(maxCorner.x(), minCorner.y(), maxCorner.z()),
+            QVector3D(minCorner.x(), maxCorner.y(), maxCorner.z()),
+            QVector3D(maxCorner.x(), maxCorner.y(), maxCorner.z())
+        };
+
+        float minProj = std::numeric_limits<float>::max();
+        float maxProj = -std::numeric_limits<float>::max();
+        for (const QVector3D& corner : corners) {
+            const float proj = QVector3D::dotProduct(corner - cameraPos, viewDir);
+            minProj = std::min(minProj, proj);
+            maxProj = std::max(maxProj, proj);
+        }
+
+        if (maxProj > 0.0f) {
+            const float frontDistance = std::max(minProj, 0.0f);
+            const float depthSpan = std::max(maxProj - frontDistance, focusDistance * 0.5f);
+            float margin = std::max(frontDistance * 0.1f, nearPlane * 2.0f);
+            margin = std::min(margin, depthSpan * 0.25f);
+            margin = std::max(margin, nearPlane);
+
+            frontDistanceLimit = frontDistance;
+
+            const float nearCandidate = std::max(frontDistance - margin, 0.0f);
+            if (nearCandidate > nearPlane)
+                nearPlane = nearCandidate;
+
+            const float farCandidate = maxProj + margin;
+            if (farCandidate > farPlane)
+                farPlane = farCandidate;
+        }
+    } else {
+        farPlane = std::max(farPlane, 1000.0f);
+    }
+
+    if (farPlane <= nearPlane)
+        farPlane = nearPlane + std::max(nearPlane * 0.25f, 1.0f);
+
+    if (std::isfinite(frontDistanceLimit)) {
+        const float cappedFront = std::max(frontDistanceLimit - 1e-3f, kMinNearAbsolute);
+        if (cappedFront >= minNearFromFraction)
+            nearPlane = std::clamp(nearPlane, minNearFromFraction, cappedFront);
+        else
+            nearPlane = std::max(nearPlane, cappedFront);
+    } else {
+        nearPlane = std::max(nearPlane, minNearFromFraction);
+    }
+
+    return { nearPlane, farPlane };
+}
+
 QMatrix4x4 GLViewport::buildProjectionMatrix(float aspect) const
 {
     QMatrix4x4 projection;
-    const float znear = 0.1f;
-    const float zfar = 5000.0f;
-    if (aspect <= 0.0f)
-        aspect = 1.0f;
+    const auto [znear, zfar] = depthRangeForAspect(aspect);
+    float safeAspect = aspect;
+    if (safeAspect <= 0.0f)
+        safeAspect = 1.0f;
     if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
         float orthoHeight = camera.getOrthoHeight();
         if (orthoHeight <= 0.0f)
             orthoHeight = 1.0f;
-        float halfHeight = orthoHeight * 0.5f;
-        float halfWidth = halfHeight * aspect;
+        const float halfHeight = orthoHeight * 0.5f;
+        const float halfWidth = halfHeight * safeAspect;
         projection.ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, znear, zfar);
     } else {
         float fov = camera.getFieldOfView();
         if (fov < 1.0f)
             fov = 1.0f;
-        projection.perspective(fov, aspect, znear, zfar);
+        projection.perspective(fov, safeAspect, znear, zfar);
     }
     return projection;
 }

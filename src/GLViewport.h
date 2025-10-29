@@ -14,6 +14,8 @@
 #include <QColor>
 #include <QSize>
 
+#include <utility>
+
 #include "Scene/Document.h"
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
@@ -70,6 +72,7 @@ public:
     void zoomOutStep();
     bool zoomExtents();
     bool zoomSelection();
+    std::pair<float, float> depthRangeForAspect(float aspect) const;
 
 signals:
     void cursorPositionChanged(double x, double y, double z);

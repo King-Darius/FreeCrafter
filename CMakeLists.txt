@@ -167,6 +167,10 @@ target_link_libraries(test_render
     PRIVATE freecrafter_lib
             Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 
+add_executable(test_viewport_depth tests/test_viewport_depth.cpp)
+target_include_directories(test_viewport_depth PRIVATE src)
+target_link_libraries(test_viewport_depth PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+
 add_executable(test_scene_settings tests/test_scene_settings.cpp)
 target_include_directories(test_scene_settings PRIVATE src)
 target_link_libraries(test_scene_settings PRIVATE freecrafter_lib)
@@ -176,6 +180,12 @@ add_test(NAME render_regression COMMAND $<TARGET_FILE:test_render>)
 if(EXISTS "${_qt_bin_dir}")
   string(REPLACE ";" "\;" _system_path "$ENV{PATH}")
   set_property(TEST render_regression PROPERTY ENVIRONMENT "PATH=${_qt_bin_dir}\;${_system_path}")
+endif()
+
+add_test(NAME viewport_depth_range COMMAND $<TARGET_FILE:test_viewport_depth>)
+if(EXISTS "${_qt_bin_dir}")
+  string(REPLACE ";" "\;" _system_path "$ENV{PATH}")
+  set_property(TEST viewport_depth_range PROPERTY ENVIRONMENT "PATH=${_qt_bin_dir}\;${_system_path}")
 endif()
 
 add_test(NAME scene_settings COMMAND $<TARGET_FILE:test_scene_settings>)

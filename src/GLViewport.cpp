@@ -1172,25 +1172,124 @@ void GLViewport::drawSceneOverlays()
     }
 }
 
+std::pair<float, float> GLViewport::depthRangeForAspect(float aspect) const
+{
+    if (aspect <= 0.0f)
+        aspect = 1.0f;
+
+    constexpr float kMinNearAbsolute = 1e-4f;
+    constexpr float kNearFraction = 0.001f;
+    constexpr float kMaxDepthRatio = 2e5f;
+
+    const float focusDistance = std::max(camera.getDistance(), 1e-3f);
+    const float minNear = std::max(kMinNearAbsolute, focusDistance * kNearFraction);
+
+    float nearPlane = minNear;
+    float farPlane = std::max(focusDistance * 4.0f, nearPlane * 64.0f);
+
+    float frontDistance = std::numeric_limits<float>::infinity();
+    float frontClearance = minNear;
+
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (computeBounds(false, minBounds, maxBounds)) {
+        float cx, cy, cz;
+        camera.getCameraPosition(cx, cy, cz);
+        float tx, ty, tz;
+        camera.getTarget(tx, ty, tz);
+
+        const QVector3D cameraPos(cx, cy, cz);
+        QVector3D viewDir(tx - cx, ty - cy, tz - cz);
+        const float viewLength = viewDir.length();
+        if (viewLength > 1e-4f)
+            viewDir /= viewLength;
+        else
+            viewDir = QVector3D(0.0f, 0.0f, -1.0f);
+
+        const QVector3D minCorner(minBounds.x, minBounds.y, minBounds.z);
+        const QVector3D maxCorner(maxBounds.x, maxBounds.y, maxBounds.z);
+        const std::array<QVector3D, 8> corners = {
+            QVector3D(minCorner.x(), minCorner.y(), minCorner.z()),
+            QVector3D(maxCorner.x(), minCorner.y(), minCorner.z()),
+            QVector3D(minCorner.x(), maxCorner.y(), minCorner.z()),
+            QVector3D(maxCorner.x(), maxCorner.y(), minCorner.z()),
+            QVector3D(minCorner.x(), minCorner.y(), maxCorner.z()),
+            QVector3D(maxCorner.x(), minCorner.y(), maxCorner.z()),
+            QVector3D(minCorner.x(), maxCorner.y(), maxCorner.z()),
+            QVector3D(maxCorner.x(), maxCorner.y(), maxCorner.z())
+        };
+
+        float minProj = std::numeric_limits<float>::max();
+        float maxProj = -std::numeric_limits<float>::max();
+        for (const QVector3D& corner : corners) {
+            const float proj = QVector3D::dotProduct(corner - cameraPos, viewDir);
+            minProj = std::min(minProj, proj);
+            maxProj = std::max(maxProj, proj);
+        }
+
+        if (maxProj > 0.0f) {
+            frontDistance = std::max(minProj, 0.0f);
+            const float depthSpan = std::max(maxProj - frontDistance, focusDistance * 0.25f);
+
+            frontClearance = std::max({ minNear,
+                                        focusDistance * 0.02f,
+                                        frontDistance * 0.1f });
+
+            const float desiredNear = std::max(0.0f, frontDistance - frontClearance);
+            nearPlane = std::max(nearPlane, desiredNear);
+
+            const float farMargin = std::max(frontClearance, depthSpan * 0.1f);
+            const float desiredFar = maxProj + farMargin;
+            farPlane = std::max(farPlane, desiredFar);
+
+            const float maxNear = std::max(frontDistance - std::max(frontClearance, 1e-3f), minNear);
+            nearPlane = std::clamp(nearPlane, minNear, maxNear);
+
+            if (farPlane <= nearPlane)
+                farPlane = nearPlane + std::max(frontClearance, minNear);
+        } else {
+            farPlane = std::max(farPlane, focusDistance * 8.0f);
+        }
+    } else {
+        farPlane = std::max(farPlane, focusDistance * 8.0f);
+    }
+
+    if (farPlane <= nearPlane)
+        farPlane = nearPlane + std::max(frontClearance, minNear);
+
+    const float ratio = farPlane / std::max(nearPlane, kMinNearAbsolute);
+    if (ratio > kMaxDepthRatio) {
+        nearPlane = std::max(nearPlane, farPlane / kMaxDepthRatio);
+        if (std::isfinite(frontDistance)) {
+            const float maxNear = std::max(frontDistance - std::max(frontClearance, 1e-3f), minNear);
+            nearPlane = std::clamp(nearPlane, minNear, maxNear);
+            if (farPlane <= nearPlane)
+                farPlane = nearPlane + std::max(frontClearance, minNear);
+        }
+    }
+
+    return { nearPlane, farPlane };
+}
+
 QMatrix4x4 GLViewport::buildProjectionMatrix(float aspect) const
 {
     QMatrix4x4 projection;
-    const float znear = 0.1f;
-    const float zfar = 5000.0f;
-    if (aspect <= 0.0f)
-        aspect = 1.0f;
+    const auto [znear, zfar] = depthRangeForAspect(aspect);
+    float safeAspect = aspect;
+    if (safeAspect <= 0.0f)
+        safeAspect = 1.0f;
     if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
         float orthoHeight = camera.getOrthoHeight();
         if (orthoHeight <= 0.0f)
             orthoHeight = 1.0f;
-        float halfHeight = orthoHeight * 0.5f;
-        float halfWidth = halfHeight * aspect;
+        const float halfHeight = orthoHeight * 0.5f;
+        const float halfWidth = halfHeight * safeAspect;
         projection.ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, znear, zfar);
     } else {
         float fov = camera.getFieldOfView();
         if (fov < 1.0f)
             fov = 1.0f;
-        projection.perspective(fov, aspect, znear, zfar);
+        projection.perspective(fov, safeAspect, znear, zfar);
     }
     return projection;
 }

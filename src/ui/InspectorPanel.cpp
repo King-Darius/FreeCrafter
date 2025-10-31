@@ -191,7 +191,7 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     connect(arcStart, &QDoubleSpinBox::editingFinished, this, &InspectorPanel::commitArc);
     connect(arcSweep, &QDoubleSpinBox::editingFinished, this, &InspectorPanel::commitArc);
     connect(arcSegments, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &InspectorPanel::commitArc);
-    connect(arcDirection, &QCheckBox::checkStateChanged, this, &InspectorPanel::commitArc);
+    connect(arcDirection, &QCheckBox::stateChanged, this, &InspectorPanel::commitArc);
 
     connect(bezierSegments, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &InspectorPanel::commitBezier);
 

@@ -10,6 +10,9 @@
 
 #include <QOpenGLContext>
 #include <QCursor>
+#include <QIcon>
+#include <QPixmap>
+#include <QMap>
 
 #include <QByteArray>
 #include <QFont>
@@ -62,67 +65,120 @@ void main() {
 }
 )";
 
-Qt::CursorShape cursorShapeForTool(const Tool* tool)
+QString axisLabelForDirection(const Vector3& dir)
 {
-    if (!tool)
-        return Qt::ArrowCursor;
-
-    const QString name = QString::fromLatin1(tool->getName());
-
-    if (name == QLatin1String("PanTool")) {
-        return tool->getState() == Tool::State::Active ? Qt::ClosedHandCursor : Qt::OpenHandCursor;
-    }
-    if (name == QLatin1String("OrbitTool")) {
-        return Qt::SizeAllCursor;
-    }
-    if (name == QLatin1String("ZoomTool")) {
-        return Qt::PointingHandCursor;
-    }
-    if (name == QLatin1String("MoveTool")) {
-        return Qt::SizeAllCursor;
-    }
-    if (name == QLatin1String("RotateTool")) {
-        return Qt::SizeBDiagCursor;
-    }
-    if (name == QLatin1String("ScaleTool")) {
-        return Qt::SizeFDiagCursor;
-    }
-    if (name == QLatin1String("PaintBucket")) {
-        return Qt::PointingHandCursor;
-    }
-    if (name == QLatin1String("Text")) {
-        return Qt::IBeamCursor;
-    }
-    if (name == QLatin1String("SmartSelectTool")) {
-        return Qt::ArrowCursor;
-    }
-
-    static const auto isCrosshairTool = [](const QString& toolName) {
-        return toolName == QLatin1String("LineTool")
-            || toolName == QLatin1String("Arc")
-            || toolName == QLatin1String("Circle")
-            || toolName == QLatin1String("Polygon")
-            || toolName == QLatin1String("RotatedRectangle")
-            || toolName == QLatin1String("Freehand")
-            || toolName == QLatin1String("Offset")
-            || toolName == QLatin1String("PushPull")
-            || toolName == QLatin1String("FollowMe")
-            || toolName == QLatin1String("ExtrudeTool")
-            || toolName == QLatin1String("Dimension")
-            || toolName == QLatin1String("TapeMeasure")
-            || toolName == QLatin1String("Protractor")
-            || toolName == QLatin1String("Axes")
-            || toolName == QLatin1String("SectionTool");
-    };
-
-    if (isCrosshairTool(name)) {
-        return Qt::CrossCursor;
-    }
-
-    return Qt::ArrowCursor;
+    Vector3 normalized = dir;
+    const float length = normalized.length();
+    if (length <= 1e-5f)
+        return {};
+    normalized /= length;
+    const float ax = std::fabs(normalized.x);
+    const float ay = std::fabs(normalized.y);
+    const float az = std::fabs(normalized.z);
+    if (ax >= ay && ax >= az)
+        return normalized.x >= 0.0f ? QStringLiteral("X") : QStringLiteral("-X");
+    if (ay >= ax && ay >= az)
+        return normalized.y >= 0.0f ? QStringLiteral("Y") : QStringLiteral("-Y");
+    return normalized.z >= 0.0f ? QStringLiteral("Z") : QStringLiteral("-Z");
 }
 
+const QIcon& iconFromResource(const QString& resource)
+{
+    static QIcon emptyIcon;
+    if (resource.isEmpty())
+        return emptyIcon;
+
+    static QMap<QString, QIcon> cache;
+    auto it = cache.find(resource);
+    if (it != cache.end())
+        return it.value();
+
+    auto inserted = cache.insert(resource, QIcon(resource));
+    return inserted.value();
 }
+
+QString iconResourceForTool(const QString& toolName, Tool::CursorDescriptor::Mode mode)
+{
+    if (toolName == QLatin1String("SmartSelectTool"))
+        return QStringLiteral(":/icons/select.png");
+    if (toolName == QLatin1String("LineTool"))
+        return QStringLiteral(":/icons/line.png");
+    if (toolName == QLatin1String("Rectangle"))
+        return QStringLiteral(":/icons/rectangle.png");
+    if (toolName == QLatin1String("RotatedRectangle"))
+        return QStringLiteral(":/icons/rotated_rectangle.svg");
+    if (toolName == QLatin1String("Arc"))
+        return QStringLiteral(":/icons/arc.png");
+    if (toolName == QLatin1String("CenterArc"))
+        return QStringLiteral(":/icons/center_arc.svg");
+    if (toolName == QLatin1String("TangentArc"))
+        return QStringLiteral(":/icons/tangent_arc.svg");
+    if (toolName == QLatin1String("Circle"))
+        return QStringLiteral(":/icons/circle.png");
+    if (toolName == QLatin1String("Polygon"))
+        return QStringLiteral(":/icons/polygon.svg");
+    if (toolName == QLatin1String("Freehand"))
+        return QStringLiteral(":/icons/freehand.svg");
+    if (toolName == QLatin1String("Bezier"))
+        return QStringLiteral(":/icons/bezier.svg");
+    if (toolName == QLatin1String("Offset"))
+        return QStringLiteral(":/icons/offset.png");
+    if (toolName == QLatin1String("PushPull"))
+        return QStringLiteral(":/icons/pushpull.png");
+    if (toolName == QLatin1String("MoveTool"))
+        return QStringLiteral(":/icons/move.png");
+    if (toolName == QLatin1String("RotateTool"))
+        return QStringLiteral(":/icons/rotate.png");
+    if (toolName == QLatin1String("ScaleTool"))
+        return QStringLiteral(":/icons/scale.png");
+    if (toolName == QLatin1String("PaintBucket"))
+        return QStringLiteral(":/icons/paintbucket.png");
+    if (toolName == QLatin1String("Dimension") || toolName == QLatin1String("TapeMeasure"))
+        return QStringLiteral(":/icons/tapemeasure.png");
+    if (toolName == QLatin1String("Protractor"))
+        return QStringLiteral(":/icons/protractor.png");
+    if (toolName == QLatin1String("Axes"))
+        return QStringLiteral(":/icons/axes.png");
+    if (toolName == QLatin1String("Text"))
+        return QStringLiteral(":/icons/text.png");
+    if (toolName == QLatin1String("OrbitTool"))
+        return QStringLiteral(":/icons/orbit.png");
+    if (toolName == QLatin1String("PanTool"))
+        return QStringLiteral(":/icons/pan.png");
+    if (toolName == QLatin1String("ZoomTool"))
+        return QStringLiteral(":/icons/zoom.png");
+
+    switch (mode) {
+    case Tool::CursorDescriptor::Mode::Pointer:
+        return QStringLiteral(":/icons/select.png");
+    case Tool::CursorDescriptor::Mode::Draw:
+        return QStringLiteral(":/icons/line.png");
+    case Tool::CursorDescriptor::Mode::Move:
+        return QStringLiteral(":/icons/move.png");
+    case Tool::CursorDescriptor::Mode::Rotate:
+        return QStringLiteral(":/icons/rotate.png");
+    case Tool::CursorDescriptor::Mode::Annotate:
+        return QStringLiteral(":/icons/paintbucket.png");
+    case Tool::CursorDescriptor::Mode::Navigate:
+        return QStringLiteral(":/icons/orbit.png");
+    }
+
+    return {};
+}
+
+const QIcon& iconForTool(const QString& toolName, Tool::CursorDescriptor::Mode mode)
+{
+    return iconFromResource(iconResourceForTool(toolName, mode));
+}
+
+bool descriptorUsesOverlay(const Tool::CursorDescriptor& descriptor)
+{
+    if (descriptor.preferSystemCursor)
+        return false;
+    return descriptor.showCrosshair || descriptor.showPickCircle;
+}
+
+} // namespace
 
 GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
@@ -408,6 +464,7 @@ void GLViewport::paintGL()
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     drawInferenceOverlay(painter, projectionMatrix, viewMatrix);
+    drawCursorOverlay(painter);
 
     if (frameStatsHudVisible) {
         const QString statsText = tr("FPS: %1\nFrame: %2 ms\nDraw Calls: %3")
@@ -1436,6 +1493,188 @@ void GLViewport::drawInferenceOverlay(QPainter& painter, const QMatrix4x4& proje
     }
 }
 
+GLViewport::CursorOverlaySnapshot GLViewport::buildCursorOverlaySnapshot() const
+{
+    CursorOverlaySnapshot snapshot;
+    if (!toolManager)
+        return snapshot;
+
+    ToolCursorOverlayState state = toolManager->cursorOverlayState();
+    snapshot.hasTool = state.hasTool;
+    snapshot.toolName = state.toolName;
+    snapshot.descriptor = state.descriptor;
+    snapshot.modifierHint = state.descriptor.modifierHint;
+    snapshot.axisLocked = state.axisLocked;
+    snapshot.stickyLock = state.stickyLock;
+    snapshot.inferenceLocked = state.inference.locked;
+    if (state.inference.isValid())
+        snapshot.inferenceLabel = QString::fromLatin1(Interaction::toString(state.inference.type));
+
+    if (snapshot.axisLocked) {
+        snapshot.badgeLabel = axisLabelForDirection(state.axisDirection);
+    } else if (snapshot.stickyLock && !snapshot.inferenceLabel.isEmpty()) {
+        snapshot.badgeLabel = snapshot.inferenceLabel;
+    }
+
+    const bool hasVisual = snapshot.descriptor.showCrosshair || snapshot.descriptor.showPickCircle;
+    snapshot.showOverlay = !snapshot.descriptor.preferSystemCursor
+        && (hasVisual || !snapshot.inferenceLabel.isEmpty() || !snapshot.badgeLabel.isEmpty()
+            || !snapshot.modifierHint.isEmpty());
+
+    return snapshot;
+}
+
+GLViewport::CursorOverlaySnapshot GLViewport::queryCursorOverlaySnapshot()
+{
+    cursorOverlaySnapshot = buildCursorOverlaySnapshot();
+    return cursorOverlaySnapshot;
+}
+
+void GLViewport::drawCursorOverlay(QPainter& painter)
+{
+    cursorOverlaySnapshot = buildCursorOverlaySnapshot();
+    if (!cursorOverlaySnapshot.showOverlay)
+        return;
+    if (!hasDeviceMouse)
+        return;
+    if (!rect().contains(lastMouse))
+        return;
+
+    const QPointF center = lastMouse;
+    const auto& descriptor = cursorOverlaySnapshot.descriptor;
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    const QColor shadowColor(0, 0, 0, 110);
+    const QColor primaryColor(255, 255, 255, 235);
+
+    if (descriptor.showPickCircle) {
+        QPen shadowPen(shadowColor, 3.0f, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(shadowPen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(center, descriptor.pickRadius + 1.2f, descriptor.pickRadius + 1.2f);
+
+        QPen circlePen(primaryColor, 1.8f, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(circlePen);
+        painter.drawEllipse(center, descriptor.pickRadius, descriptor.pickRadius);
+    }
+
+    if (descriptor.showCrosshair) {
+        const float radius = descriptor.crosshairRadius;
+        const float gap = descriptor.crosshairGap;
+        const QPointF leftStart = center + QPointF(-radius, 0.0f);
+        const QPointF leftEnd = center + QPointF(-gap, 0.0f);
+        const QPointF rightStart = center + QPointF(radius, 0.0f);
+        const QPointF rightEnd = center + QPointF(gap, 0.0f);
+        const QPointF topStart = center + QPointF(0.0f, -radius);
+        const QPointF topEnd = center + QPointF(0.0f, -gap);
+        const QPointF bottomStart = center + QPointF(0.0f, radius);
+        const QPointF bottomEnd = center + QPointF(0.0f, gap);
+
+        QPen shadowPen(shadowColor, 4.0f, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(shadowPen);
+        painter.drawLine(leftStart, leftEnd);
+        painter.drawLine(rightStart, rightEnd);
+        painter.drawLine(topStart, topEnd);
+        painter.drawLine(bottomStart, bottomEnd);
+
+        QPen crosshairPen(primaryColor, 2.0f, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(crosshairPen);
+        painter.drawLine(leftStart, leftEnd);
+        painter.drawLine(rightStart, rightEnd);
+        painter.drawLine(topStart, topEnd);
+        painter.drawLine(bottomStart, bottomEnd);
+    }
+
+    const QIcon& toolIcon = iconForTool(cursorOverlaySnapshot.toolName, descriptor.mode);
+    if (!toolIcon.isNull()) {
+        const qreal deviceRatio = devicePixelRatioF();
+        const qreal iconEdge = 28.0;
+        const qreal anchorRadius = descriptor.showCrosshair
+            ? descriptor.crosshairRadius
+            : (descriptor.showPickCircle ? descriptor.pickRadius : 0.0f);
+        const qreal margin = 18.0;
+        const QPointF iconCenter = center + QPointF(-(anchorRadius + margin + iconEdge * 0.5), 0.0);
+        const QRectF iconRect(iconCenter.x() - iconEdge * 0.5,
+                              iconCenter.y() - iconEdge * 0.5,
+                              iconEdge,
+                              iconEdge);
+
+        QRectF backgroundRect = iconRect.adjusted(-6.0, -6.0, 6.0, 6.0);
+        painter.setBrush(QColor(14, 20, 32, 220));
+        painter.setPen(QPen(QColor(0, 0, 0, 150), 1.2));
+        painter.drawRoundedRect(backgroundRect, 7.0, 7.0);
+
+        QSize pixmapSize(qRound(iconEdge), qRound(iconEdge));
+        QPixmap pixmap = toolIcon.pixmap(pixmapSize * deviceRatio);
+        pixmap.setDevicePixelRatio(deviceRatio);
+        painter.drawPixmap(iconRect.topLeft(), pixmap);
+    }
+
+    QFont baseFont = painter.font();
+
+    if (!cursorOverlaySnapshot.badgeLabel.isEmpty()) {
+        QFont badgeFont = baseFont;
+        badgeFont.setBold(true);
+        badgeFont.setPointSizeF(std::max(9.5f, badgeFont.pointSizeF() - 1.0f));
+        painter.setFont(badgeFont);
+        const QFontMetricsF metrics(badgeFont);
+        const QSizeF size(metrics.horizontalAdvance(cursorOverlaySnapshot.badgeLabel) + 12.0,
+                          metrics.height() + 6.0);
+        QRectF badgeRect(center.x() + descriptor.pickRadius + 12.0,
+                         center.y() - size.height() - 6.0,
+                         size.width(),
+                         size.height());
+        painter.setBrush(QColor(28, 40, 66, 230));
+        painter.setPen(QPen(QColor(0, 0, 0, 140), 1.0));
+        painter.drawRoundedRect(badgeRect, 6.0, 6.0);
+        painter.setPen(QColor(212, 230, 255));
+        painter.drawText(badgeRect, Qt::AlignCenter, cursorOverlaySnapshot.badgeLabel);
+    }
+
+    if (!cursorOverlaySnapshot.inferenceLabel.isEmpty()) {
+        QFont inferenceFont = baseFont;
+        inferenceFont.setBold(true);
+        inferenceFont.setPointSizeF(std::max(11.0f, baseFont.pointSizeF() + 1.0f));
+        painter.setFont(inferenceFont);
+        QString text = cursorOverlaySnapshot.inferenceLabel;
+        if (cursorOverlaySnapshot.inferenceLocked)
+            text.append(QStringLiteral("  · Locked"));
+        const QFontMetricsF metrics(inferenceFont);
+        const QSizeF size(metrics.horizontalAdvance(text) + 16.0, metrics.height() + 8.0);
+        QRectF bubble(center.x() + descriptor.crosshairRadius + 16.0,
+                      center.y() - size.height() - 18.0,
+                      size.width(),
+                      size.height());
+        painter.setBrush(QColor(40, 93, 181, 235));
+        painter.setPen(QPen(QColor(0, 0, 0, 160), 1.0));
+        painter.drawRoundedRect(bubble, 7.0, 7.0);
+        painter.setPen(QColor(240, 248, 255));
+        painter.drawText(bubble, Qt::AlignCenter, text);
+    }
+
+    if (!cursorOverlaySnapshot.modifierHint.isEmpty()) {
+        QFont hintFont = baseFont;
+        hintFont.setPointSizeF(std::max(9.0f, baseFont.pointSizeF() - 0.5f));
+        painter.setFont(hintFont);
+        const QFontMetricsF metrics(hintFont);
+        const QSizeF size(metrics.horizontalAdvance(cursorOverlaySnapshot.modifierHint) + 16.0,
+                          metrics.height() + 6.0);
+        QRectF hintRect(center.x() + descriptor.crosshairRadius + 16.0,
+                        center.y() + 14.0,
+                        size.width(),
+                        size.height());
+        painter.setBrush(QColor(18, 22, 30, 220));
+        painter.setPen(Qt::NoPen);
+        painter.drawRoundedRect(hintRect, 6.0, 6.0);
+        painter.setPen(QColor(206, 214, 224));
+        painter.drawText(hintRect.adjusted(6.0, 3.0, -6.0, -3.0), Qt::AlignLeft | Qt::AlignVCenter, cursorOverlaySnapshot.modifierHint);
+    }
+
+    painter.restore();
+}
+
 bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const
 {
     bool hasBounds = false;
@@ -1479,21 +1718,61 @@ bool GLViewport::applyZoomToBounds(const Vector3& minBounds, const Vector3& maxB
 void GLViewport::refreshCursorShape()
 {
     if (!underMouse()) {
+        if (cursorHidden || currentCursorShape != Qt::ArrowCursor) {
+            unsetCursor();
+            cursorHidden = false;
+            currentCursorShape = Qt::ArrowCursor;
+        }
         return;
     }
 
+    bool hideCursor = false;
     Qt::CursorShape desired = Qt::ArrowCursor;
+
     if (activeNavigationBinding) {
         desired = Qt::ClosedHandCursor;
     } else if (toolManager) {
         if (Tool* tool = toolManager->getActiveTool()) {
-            desired = cursorShapeForTool(tool);
+            ToolCursorOverlayState overlayState = toolManager->cursorOverlayState();
+            if (descriptorUsesOverlay(overlayState.descriptor)) {
+                hideCursor = true;
+            } else {
+                const QString& name = overlayState.toolName;
+                if (name == QLatin1String("PanTool")) {
+                    desired = tool->getState() == Tool::State::Active ? Qt::ClosedHandCursor : Qt::OpenHandCursor;
+                } else if (name == QLatin1String("OrbitTool")) {
+                    desired = Qt::SizeAllCursor;
+                } else if (name == QLatin1String("ZoomTool")) {
+                    desired = Qt::PointingHandCursor;
+                } else if (name == QLatin1String("Text")) {
+                    desired = Qt::IBeamCursor;
+                } else if (name == QLatin1String("MoveTool")) {
+                    desired = Qt::SizeAllCursor;
+                } else if (name == QLatin1String("RotateTool")) {
+                    desired = Qt::SizeBDiagCursor;
+                } else if (name == QLatin1String("ScaleTool")) {
+                    desired = Qt::SizeFDiagCursor;
+                } else if (name == QLatin1String("PaintBucket")) {
+                    desired = Qt::PointingHandCursor;
+                } else {
+                    desired = Qt::ArrowCursor;
+                }
+            }
         }
     }
 
-    if (desired != currentCursorShape) {
-        setCursor(desired);
-        currentCursorShape = desired;
+    if (hideCursor) {
+        if (!cursorHidden || currentCursorShape != Qt::BlankCursor) {
+            setCursor(Qt::BlankCursor);
+            cursorHidden = true;
+            currentCursorShape = Qt::BlankCursor;
+        }
+    } else {
+        if (cursorHidden || currentCursorShape != desired) {
+            setCursor(desired);
+            cursorHidden = false;
+            currentCursorShape = desired;
+        }
     }
 }
 
@@ -1738,6 +2017,7 @@ void GLViewport::leaveEvent(QEvent* event)
     }
     unsetCursor();
     currentCursorShape = Qt::ArrowCursor;
+    cursorHidden = false;
     emit cursorPositionChanged(std::numeric_limits<double>::quiet_NaN(),
                                std::numeric_limits<double>::quiet_NaN(),
                                std::numeric_limits<double>::quiet_NaN());

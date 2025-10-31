@@ -182,6 +182,26 @@ unit     := mm|cm|m|in|ft|"|'
 
 - BVH/Octree acceleration; screen-space pixel tolerance; last-hit hover stabilization.
 
+### 5.4 Cursor Overlay (tool-driven)
+
+- OS cursor collapses to a blank sprite while the viewport renders the active tool cursor.
+- Default pick radius = **6 px** (selection 5.5 px, paint 7 px). Crosshair outer radius = **18 px** with a **4 px** gap at the center.
+- Sticky/axis locks surface as compact badges next to the crosshair ("X", "-Z", etc.). Locked inferences reuse the inference label plus a lock suffix.
+- Modifier hints (for example, `Shift: Stick inference • X/Y/Z: Axis lock`) live in a dark pill adjacent to the crosshair so they stay readable in light/dark themes.
+
+The overlay deliberately relies on FreeCrafter’s bundled tool artwork instead of whatever cursor a platform ships. Windows, macOS, and Linux all expose different cursor packs, sizes, and DPI scaling rules; leaning on them would shatter the Figma framing and leave nowhere to stage inference locks or modifier hints. By hiding the OS cursor we can render the pick radius, crosshair, badges, and glyphs at spec-accurate dimensions, tint them for either theme, and animate sticky locks in real time.
+
+Each cursor mode resolves to an icon under `:/icons` (for example, Line → `:/icons/line.png`, Move → `:/icons/move.png`, Rotate → `:/icons/rotate.png`, Paint Bucket → `:/icons/paintbucket.png`). The viewport paints that glyph just left of the crosshair with a soft shadow so the active tool remains obvious even when multiple modes share the same pick circle. For regression captures run `tests/test_cursor_overlay.cpp`; set `FREECRAFTER_CAPTURE_CURSOR=/tmp/cursor.png` (or `.base64`) before launching the test to dump the overlay without checking in binary artefacts.
+
+<!-- Cursor overlay modes illustrated with existing tool icons -->
+<p align="center">
+  <img src="../resources/icons/line.png" alt="Line tool icon" width="96" />
+  <img src="../resources/icons/move.png" alt="Move tool icon" width="96" />
+  <img src="../resources/icons/rotate.png" alt="Rotate tool icon" width="96" />
+  <img src="../resources/icons/paintbucket.png" alt="Paint bucket tool icon" width="96" />
+</p>
+<sub>Existing tool icons reinforce the cursor overlay modes: drawing, moving, rotating, and annotating. Observe the live overlay in the viewport to see pick radii, crosshair spacing, and modifier hints in context.</sub>
+
 ---
 
 ## 6. Tools - Exhaustive Behaviour & UX

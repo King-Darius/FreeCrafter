@@ -355,6 +355,22 @@ void ToolManager::updatePointerModifiers(const Tool::ModifierState& modifiers)
     }
 }
 
+ToolCursorOverlayState ToolManager::cursorOverlayState() const
+{
+    ToolCursorOverlayState state;
+    state.modifiers = { shiftPressed, ctrlPressed, altPressed };
+    state.stickyLock = stickyActive;
+    state.axisLocked = axisLocked;
+    state.axisDirection = axisDirection;
+    state.inference = stickyActive ? stickyInference : currentInference;
+    if (active) {
+        state.hasTool = true;
+        state.toolName = QString::fromLatin1(active->getName());
+        state.descriptor = active->cursorDescriptor();
+    }
+    return state;
+}
+
 Tool::MeasurementKind ToolManager::getMeasurementKind() const
 {
     if (!active) {

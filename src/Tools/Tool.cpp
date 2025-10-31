@@ -1,6 +1,7 @@
 #include "Tool.h"
 
 #include <algorithm>
+#include <QString>
 
 void Tool::handleMouseDown(const PointerInput& input)
 {
@@ -83,6 +84,99 @@ void Tool::updateModifiers(const ModifierState& nextModifiers)
         modifiers = nextModifiers;
         onModifiersChanged(modifiers);
     }
+}
+
+Tool::CursorDescriptor Tool::cursorDescriptor() const
+{
+    CursorDescriptor descriptor;
+    const QString name = QString::fromLatin1(getName());
+
+    if (name == QLatin1String("PanTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Navigate;
+        descriptor.preferSystemCursor = true;
+        return descriptor;
+    }
+    if (name == QLatin1String("OrbitTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Navigate;
+        descriptor.preferSystemCursor = true;
+        return descriptor;
+    }
+    if (name == QLatin1String("ZoomTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Navigate;
+        descriptor.preferSystemCursor = true;
+        return descriptor;
+    }
+    if (name == QLatin1String("Text")) {
+        descriptor.mode = CursorDescriptor::Mode::Annotate;
+        descriptor.preferSystemCursor = true;
+        return descriptor;
+    }
+
+    const auto configureDrawingCursor = [&descriptor]() {
+        descriptor.mode = CursorDescriptor::Mode::Draw;
+        descriptor.showCrosshair = true;
+        descriptor.showPickCircle = true;
+        descriptor.modifierHint = QStringLiteral("Shift: Stick inference  •  X/Y/Z: Axis lock");
+    };
+
+    if (name == QLatin1String("SmartSelectTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Pointer;
+        descriptor.showPickCircle = true;
+        descriptor.pickRadius = 5.5f;
+        descriptor.modifierHint = QStringLiteral("Shift: Add  •  Ctrl: Toggle");
+        return descriptor;
+    }
+    if (name == QLatin1String("LineTool") || name == QLatin1String("Rectangle")
+        || name == QLatin1String("Arc") || name == QLatin1String("CenterArc")
+        || name == QLatin1String("TangentArc") || name == QLatin1String("Circle")
+        || name == QLatin1String("Polygon") || name == QLatin1String("RotatedRectangle")
+        || name == QLatin1String("Freehand") || name == QLatin1String("Bezier")
+        || name == QLatin1String("Offset") || name == QLatin1String("PushPull")
+        || name == QLatin1String("FollowMe") || name == QLatin1String("ExtrudeTool")
+        || name == QLatin1String("ChamferTool") || name == QLatin1String("LoftTool")
+        || name == QLatin1String("SectionTool")) {
+        configureDrawingCursor();
+        return descriptor;
+    }
+    if (name == QLatin1String("Dimension") || name == QLatin1String("TapeMeasure")
+        || name == QLatin1String("Protractor") || name == QLatin1String("Axes")) {
+        configureDrawingCursor();
+        descriptor.mode = CursorDescriptor::Mode::Annotate;
+        return descriptor;
+    }
+    if (name == QLatin1String("PaintBucket")) {
+        descriptor.mode = CursorDescriptor::Mode::Annotate;
+        descriptor.showPickCircle = true;
+        descriptor.pickRadius = 7.0f;
+        descriptor.modifierHint = QStringLiteral("Alt: Sample material");
+        return descriptor;
+    }
+    if (name == QLatin1String("MoveTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Move;
+        descriptor.showCrosshair = true;
+        descriptor.showPickCircle = true;
+        descriptor.pickRadius = 6.5f;
+        descriptor.modifierHint = QStringLiteral("Ctrl: Copy  •  Shift: Lock axis");
+        return descriptor;
+    }
+    if (name == QLatin1String("RotateTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Rotate;
+        descriptor.showCrosshair = true;
+        descriptor.showPickCircle = true;
+        descriptor.pickRadius = 7.5f;
+        descriptor.modifierHint = QStringLiteral("Shift: 15° snap  •  Ctrl: Copy");
+        return descriptor;
+    }
+    if (name == QLatin1String("ScaleTool")) {
+        descriptor.mode = CursorDescriptor::Mode::Move;
+        descriptor.showCrosshair = true;
+        descriptor.showPickCircle = true;
+        descriptor.pickRadius = 6.0f;
+        descriptor.modifierHint = QStringLiteral("Shift: Uniform  •  Ctrl: About center");
+        return descriptor;
+    }
+
+    return descriptor;
 }
 
 void PointerDragTool::onPointerDown(const PointerInput& input)

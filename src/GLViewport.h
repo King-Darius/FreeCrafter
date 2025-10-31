@@ -20,6 +20,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "CameraController.h"
 #include "Renderer.h"
+#include "Tools/Tool.h"
 #include "PalettePreferences.h"
 #include "SunSettings.h"
 #include "Navigation/ViewPresetManager.h"
@@ -74,6 +75,22 @@ public:
     bool zoomSelection();
     std::pair<float, float> depthRangeForAspect(float aspect) const;
 
+    struct CursorOverlaySnapshot {
+        bool hasTool = false;
+        QString toolName;
+        Tool::CursorDescriptor descriptor;
+        QString inferenceLabel;
+        QString badgeLabel;
+        QString modifierHint;
+        bool inferenceLocked = false;
+        bool axisLocked = false;
+        bool stickyLock = false;
+        bool showOverlay = false;
+    };
+
+    CursorOverlaySnapshot queryCursorOverlaySnapshot();
+    CursorOverlaySnapshot lastCursorOverlay() const { return cursorOverlaySnapshot; }
+
 signals:
     void cursorPositionChanged(double x, double y, double z);
     void frameStatsUpdated(double fps, double frameMs, int drawCalls);
@@ -106,6 +123,8 @@ private:
     bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
     bool projectWorldToScreen(const QVector3D& world, const QMatrix4x4& projection, const QMatrix4x4& view, QPointF& out) const;
     void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
+    void drawCursorOverlay(QPainter& painter);
+    CursorOverlaySnapshot buildCursorOverlaySnapshot() const;
     bool computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const;
     bool applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds);
     void refreshCursorShape();
@@ -139,6 +158,8 @@ private:
     ViewPresetManager viewPresets;
     QString activePresetId = QStringLiteral("iso");
     Qt::CursorShape currentCursorShape = Qt::ArrowCursor;
+    bool cursorHidden = false;
+    CursorOverlaySnapshot cursorOverlaySnapshot;
 
     QOpenGLShaderProgram horizonProgram;
     QOpenGLBuffer horizonVbo { QOpenGLBuffer::VertexBuffer };

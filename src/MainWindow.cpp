@@ -25,6 +25,7 @@
 #include "ui/EnvironmentPanel.h"
 #include "ui/InsertShapeDialog.h"
 #include "ui/InspectorPanel.h"
+#include "ui/CommandPaletteDialog.h"
 #include "ui/MeasurementWidget.h"
 #include "ui/PluginManagerDialog.h"
 #include "ui/TerminalDock.h"
@@ -1263,6 +1264,19 @@ void MainWindow::updateAutosaveSource(const QString& path, bool purgePreviousPre
 
     persistAutosaveSettings();
 
+}
+
+void MainWindow::recordPaletteCommand(const QString& commandId)
+{
+    if (commandId.isEmpty())
+        return;
+
+    recentPaletteCommands.removeAll(commandId);
+    recentPaletteCommands.prepend(commandId);
+
+    constexpr int kMaxRecentCommands = 12;
+    while (recentPaletteCommands.size() > kMaxRecentCommands)
+        recentPaletteCommands.removeLast();
 }
 
 void MainWindow::createMenus()
@@ -4045,9 +4059,37 @@ void MainWindow::showPreferences()
 void MainWindow::showCommandPalette()
 
 {
+    if (!commandPaletteDialog) {
+        commandPaletteDialog = new CommandPaletteDialog(this);
+        connect(commandPaletteDialog,
+            &CommandPaletteDialog::commandExecuted,
+            this,
+            [this](const QString& id, const QString& title, const QString& detail) {
+                recordPaletteCommand(id);
+                QString message = detail;
+                if (message.isEmpty())
+                    message = tr("%1 activated").arg(title);
+                if (!message.isEmpty() && statusBar())
+                    statusBar()->showMessage(message, 2500);
+                if (viewport)
+                    viewport->setFocus(Qt::ShortcutFocusReason);
+            });
+    }
 
-    statusBar()->showMessage(tr("Command palette coming soon"), 2000);
+    auto hintResolver = [this](const QString& descriptorId) -> QString {
+        if (descriptorId.isEmpty())
+            return QString();
+        const auto* descriptor = ToolRegistry::instance().findById(descriptorId);
+        if (!descriptor)
+            return QString();
+        return toolHintForDescriptor(*descriptor);
+    };
 
+    commandPaletteDialog->populate(hotkeys, toolManager.get(), recentPaletteCommands, hintResolver);
+    commandPaletteDialog->show();
+    commandPaletteDialog->raise();
+    commandPaletteDialog->activateWindow();
+    commandPaletteDialog->focusInput();
 }
 
 void MainWindow::toggleRightDock()

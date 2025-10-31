@@ -29,6 +29,7 @@ class TerminalDock;
 class QUndoStack;
 class QSize;
 class AutosaveManager;
+class CommandPaletteDialog;
 
 namespace Phase6 {
 struct RoundCornerOptions;
@@ -49,6 +50,7 @@ struct LoftOptions;
 
 #include <QHash>
 #include <QVector>
+#include <QStringList>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -161,6 +163,7 @@ private:
     void initializeAutosave();
     void maybeRestoreAutosave();
     void updateAutosaveSource(const QString& path, bool purgePreviousPrefix);
+    void recordPaletteCommand(const QString& commandId);
 
     GLViewport* viewport = nullptr;
     std::unique_ptr<ToolManager> toolManager;
@@ -319,4 +322,6 @@ private:
     QMenu* advancedToolsMenu = nullptr;
     Phase6::RoundCornerOptions chamferDefaults_;
     Phase6::LoftOptions loftDefaults_;
+    CommandPaletteDialog* commandPaletteDialog = nullptr;
+    QStringList recentPaletteCommands;
 };

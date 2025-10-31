@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QHash>
 #include <QKeySequence>
+#include <QList>
 #include <memory>
 
 class QAction;
@@ -20,6 +21,14 @@ public:
     void exportToFile(const QString& path) const;
 
     QHash<QString, QKeySequence> currentMap() const { return shortcuts; }
+
+    struct CommandInfo {
+        QString id;
+        QAction* action = nullptr;
+        QString label;
+    };
+
+    QList<CommandInfo> commands() const;
 
 signals:
     void shortcutsChanged();

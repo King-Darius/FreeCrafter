@@ -13,8 +13,11 @@
 #include <QMatrix4x4>
 #include <QColor>
 #include <QSize>
+#include <QVariantAnimation>
+#include <QEasingCurve>
 
 #include <utility>
+#include <cstdint>
 
 #include "Scene/Document.h"
 #include "GeometryKernel/GeometryKernel.h"
@@ -73,6 +76,11 @@ public:
     void zoomOutStep();
     bool zoomExtents();
     bool zoomSelection();
+    void setAutoFrameOnGeometryChange(bool enabled);
+    bool autoFrameOnGeometryChangeEnabled() const { return autoFrameOnGeometryChange; }
+    void requestAutoFrameOnGeometryChange();
+    bool frameSceneToGeometry();
+    void resetCameraToHome(bool triggerRedraw = true);
     std::pair<float, float> depthRangeForAspect(float aspect) const;
 
     struct CursorOverlaySnapshot {
@@ -90,6 +98,11 @@ public:
 
     CursorOverlaySnapshot queryCursorOverlaySnapshot();
     CursorOverlaySnapshot lastCursorOverlay() const { return cursorOverlaySnapshot; }
+
+    void setAutoFocusSelection(bool enable);
+    bool autoFocusSelectionEnabled() const { return autoFocusSelection; }
+    bool focusSelection(bool animate = true);
+    void notifySelectionChanged();
 
 signals:
     void cursorPositionChanged(double x, double y, double z);
@@ -125,8 +138,28 @@ private:
     void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
     void drawCursorOverlay(QPainter& painter);
     CursorOverlaySnapshot buildCursorOverlaySnapshot() const;
-    bool computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const;
-    bool applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds);
+    bool computeBounds(bool selectedOnly, bool includeHidden, Vector3& outMin, Vector3& outMax) const;
+    bool frameSceneToGeometryInternal(bool includeHidden, bool triggerRedraw, bool animate = true);
+    struct CameraKeyframe {
+        QVector3D target;
+        float yaw = 0.0f;
+        float pitch = 0.0f;
+        float distance = 1.0f;
+        CameraController::ProjectionMode projection = CameraController::ProjectionMode::Perspective;
+        float fieldOfView = 60.0f;
+        float orthoHeight = 1.0f;
+    };
+    CameraKeyframe captureCameraState() const;
+    static CameraKeyframe cameraStateFromController(const CameraController& camera);
+    void applyCameraState(const CameraKeyframe& state);
+    static CameraKeyframe interpolateCameraState(const CameraKeyframe& from, const CameraKeyframe& to, float t);
+    bool cameraStatesApproximatelyEqual(const CameraKeyframe& a, const CameraKeyframe& b) const;
+    std::optional<CameraKeyframe> cameraStateForBounds(const Vector3& minBounds, const Vector3& maxBounds) const;
+    bool applyCameraStateForBounds(const Vector3& minBounds, const Vector3& maxBounds, bool triggerRedraw, bool animate);
+    void startCameraAnimation(const CameraKeyframe& targetState, int durationMs = 240);
+    void stopCameraAnimation(bool applyEndState);
+    void applyAnimatedCameraProgress(float t);
+    void cancelAnimationsForImmediateInput();
     void refreshCursorShape();
 
     Scene::Document document;
@@ -169,5 +202,13 @@ private:
     QColor skyColor = QColor(179, 210, 240);
     QColor groundColor = QColor(188, 206, 188);
     QColor horizonLineColor = QColor(140, 158, 140);
+
+    bool autoFrameOnGeometryChange = true;
+    bool autoFramePending = true;
+    std::uint64_t lastGeometryRevision = 0;
+    bool autoFocusSelection = true;
+    QVariantAnimation cameraAnimator;
+    CameraKeyframe animationStartState;
+    CameraKeyframe animationEndState;
 };
 

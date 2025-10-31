@@ -18,6 +18,8 @@
 #include <QFont>
 #include <QStringList>
 #include <QtMath>
+#include <QAbstractAnimation>
+#include <QVariant>
 #include <limits>
 
 #include <algorithm>
@@ -192,6 +194,21 @@ GLViewport::GLViewport(QWidget* parent)
     frameTimer.start();
     paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
     setCursor(currentCursorShape);
+    lastGeometryRevision = document.geometry().revision();
+    autoFramePending = autoFrameOnGeometryChange;
+
+    cameraAnimator.setStartValue(0.0);
+    cameraAnimator.setEndValue(1.0);
+    cameraAnimator.setDuration(240);
+    cameraAnimator.setEasingCurve(QEasingCurve::InOutCubic);
+    connect(&cameraAnimator, &QVariantAnimation::valueChanged, this, [this](const QVariant& value) {
+        applyAnimatedCameraProgress(static_cast<float>(value.toDouble()));
+        update();
+    });
+    connect(&cameraAnimator, &QVariantAnimation::finished, this, [this]() {
+        applyCameraState(animationEndState);
+        update();
+    });
 }
 
 void GLViewport::initializeGL()
@@ -341,47 +358,79 @@ void GLViewport::setProjectionMode(CameraController::ProjectionMode mode)
 {
     if (camera.getProjectionMode() == mode)
         return;
+    stopCameraAnimation(false);
     camera.setProjectionMode(mode);
     update();
 }
 
 void GLViewport::toggleProjectionMode()
 {
+    stopCameraAnimation(false);
     camera.toggleProjectionMode();
     update();
 }
 
 void GLViewport::setFieldOfView(float degrees)
 {
+    stopCameraAnimation(false);
     camera.setFieldOfView(degrees);
     update();
 }
 
 void GLViewport::setOrthoHeight(float height)
 {
+    stopCameraAnimation(false);
     camera.setOrthoHeight(height);
     update();
 }
 
 bool GLViewport::applyViewPreset(ViewPresetManager::StandardView view)
 {
-    if (!viewPresets.applyPreset(view, camera))
-        return false;
-    activePresetId = viewPresets.idFor(view);
-    update();
-    return true;
+    if (const auto* preset = viewPresets.preset(view)) {
+        CameraKeyframe currentState = captureCameraState();
+        CameraKeyframe targetState = currentState;
+        targetState.yaw = preset->yaw;
+        targetState.pitch = preset->pitch;
+
+        Vector3 dummyMin;
+        Vector3 dummyMax;
+        if (!computeBounds(false, showHiddenGeometry, dummyMin, dummyMax)) {
+            targetState.target = preset->target;
+            targetState.distance = preset->distance;
+        }
+
+        activePresetId = viewPresets.idFor(view);
+        startCameraAnimation(targetState);
+        update();
+        return true;
+    }
+    return false;
 }
 
 bool GLViewport::applyViewPreset(const QString& id)
 {
-    if (!viewPresets.applyPreset(id, camera))
-        return false;
-    if (auto mapped = viewPresets.viewForId(id))
-        activePresetId = viewPresets.idFor(*mapped);
-    else
-        activePresetId = id;
-    update();
-    return true;
+    if (const auto* preset = viewPresets.presetById(id)) {
+        CameraKeyframe currentState = captureCameraState();
+        CameraKeyframe targetState = currentState;
+        targetState.yaw = preset->yaw;
+        targetState.pitch = preset->pitch;
+
+        Vector3 dummyMin;
+        Vector3 dummyMax;
+        if (!computeBounds(false, showHiddenGeometry, dummyMin, dummyMax)) {
+            targetState.target = preset->target;
+            targetState.distance = preset->distance;
+        }
+
+        if (auto mapped = viewPresets.viewForId(id))
+            activePresetId = viewPresets.idFor(*mapped);
+        else
+            activePresetId = id;
+        startCameraAnimation(targetState);
+        update();
+        return true;
+    }
+    return false;
 }
 
 QString GLViewport::currentViewPresetLabel() const
@@ -393,6 +442,17 @@ void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    GeometryKernel& geometry = document.geometry();
+    const std::uint64_t revision = geometry.revision();
+    if (revision != lastGeometryRevision) {
+        lastGeometryRevision = revision;
+        if (autoFrameOnGeometryChange && autoFramePending) {
+            if (frameSceneToGeometryInternal(showHiddenGeometry, false)) {
+                autoFramePending = false;
+            }
+        }
+    }
     drawHorizonBand();
 
     float aspect = width() > 0 ? float(width()) / float(height() > 0 ? height() : 1) : 1.0f;
@@ -954,18 +1014,21 @@ void drawGhostSolid(Renderer& renderer,
 void GLViewport::drawSceneGeometry()
 {
     std::vector<QVector4D> clipPlanes;
-    const auto& planes = document.sectionPlanes();
-    clipPlanes.reserve(planes.size());
-    for (const auto& plane : planes) {
-        if (!plane.isActive()) {
-            continue;
+    const Scene::SceneSettings& sceneSettings = document.settings();
+    if (sceneSettings.sectionPlanesVisible()) {
+        const auto& planes = document.sectionPlanes();
+        clipPlanes.reserve(planes.size());
+        for (const auto& plane : planes) {
+            if (!plane.isActive()) {
+                continue;
+            }
+            const Vector3& normal = plane.getNormal();
+            QVector3D qNormal(normal.x, normal.y, normal.z);
+            if (qNormal.lengthSquared() <= 1e-6f) {
+                continue;
+            }
+            clipPlanes.emplace_back(normal.x, normal.y, normal.z, plane.getOffset());
         }
-        const Vector3& normal = plane.getNormal();
-        QVector3D qNormal(normal.x, normal.y, normal.z);
-        if (qNormal.lengthSquared() <= 1e-6f) {
-            continue;
-        }
-        clipPlanes.emplace_back(normal.x, normal.y, normal.z, plane.getOffset());
     }
     renderer.setClipPlanes(clipPlanes);
 
@@ -1249,7 +1312,7 @@ std::pair<float, float> GLViewport::depthRangeForAspect(float aspect) const
 
     Vector3 minBounds;
     Vector3 maxBounds;
-    if (computeBounds(false, minBounds, maxBounds)) {
+    if (computeBounds(false, showHiddenGeometry, minBounds, maxBounds)) {
         float cx, cy, cz;
         camera.getCameraPosition(cx, cy, cz);
         float tx, ty, tz;
@@ -1675,7 +1738,7 @@ void GLViewport::drawCursorOverlay(QPainter& painter)
     painter.restore();
 }
 
-bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outMax) const
+bool GLViewport::computeBounds(bool selectedOnly, bool includeHidden, Vector3& outMin, Vector3& outMax) const
 {
     bool hasBounds = false;
     const auto& objects = document.geometry().getObjects();
@@ -1684,6 +1747,12 @@ bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outM
             continue;
         }
         if (selectedOnly && !object->isSelected()) {
+            continue;
+        }
+        if (!object->isVisible()) {
+            continue;
+        }
+        if (!includeHidden && object->isHidden()) {
             continue;
         }
         const HalfEdgeMesh& mesh = object->getMesh();
@@ -1707,11 +1776,188 @@ bool GLViewport::computeBounds(bool selectedOnly, Vector3& outMin, Vector3& outM
     return hasBounds;
 }
 
-bool GLViewport::applyZoomToBounds(const Vector3& minBounds, const Vector3& maxBounds)
+GLViewport::CameraKeyframe GLViewport::captureCameraState() const
 {
-    if (!CameraNavigation::frameBounds(camera, minBounds, maxBounds, width(), height()))
+    return cameraStateFromController(camera);
+}
+
+GLViewport::CameraKeyframe GLViewport::cameraStateFromController(const CameraController& controller)
+{
+    CameraKeyframe state;
+    float tx = 0.0f;
+    float ty = 0.0f;
+    float tz = 0.0f;
+    controller.getTarget(tx, ty, tz);
+    state.target = QVector3D(tx, ty, tz);
+    state.yaw = controller.getYaw();
+    state.pitch = controller.getPitch();
+    state.distance = controller.getDistance();
+    state.projection = controller.getProjectionMode();
+    state.fieldOfView = controller.getFieldOfView();
+    state.orthoHeight = controller.getOrthoHeight();
+    return state;
+}
+
+void GLViewport::applyCameraState(const CameraKeyframe& state)
+{
+    camera.setProjectionMode(state.projection);
+    camera.setTarget(state.target.x(), state.target.y(), state.target.z());
+    camera.setYawPitch(state.yaw, state.pitch);
+    if (state.projection == CameraController::ProjectionMode::Parallel) {
+        camera.setOrthoHeight(state.orthoHeight);
+        camera.setDistance(state.distance);
+    } else {
+        camera.setFieldOfView(state.fieldOfView);
+        camera.setDistance(state.distance);
+    }
+}
+
+GLViewport::CameraKeyframe GLViewport::interpolateCameraState(const CameraKeyframe& from,
+                                                              const CameraKeyframe& to,
+                                                              float t)
+{
+    auto wrapAngle = [](float angle) {
+        while (angle < 0.0f)
+            angle += 360.0f;
+        while (angle >= 360.0f)
+            angle -= 360.0f;
+        return angle;
+    };
+
+    auto shortestDelta = [](float a, float b) {
+        float delta = b - a;
+        while (delta > 180.0f)
+            delta -= 360.0f;
+        while (delta < -180.0f)
+            delta += 360.0f;
+        return delta;
+    };
+
+    CameraKeyframe result = from;
+    result.target = from.target + (to.target - from.target) * t;
+    result.distance = from.distance + (to.distance - from.distance) * t;
+    result.fieldOfView = from.fieldOfView + (to.fieldOfView - from.fieldOfView) * t;
+    result.orthoHeight = from.orthoHeight + (to.orthoHeight - from.orthoHeight) * t;
+    result.projection = to.projection;
+
+    float baseYaw = wrapAngle(from.yaw);
+    float basePitch = from.pitch;
+    float deltaYaw = shortestDelta(baseYaw, to.yaw);
+    float deltaPitch = to.pitch - basePitch;
+    result.yaw = wrapAngle(baseYaw + deltaYaw * t);
+    result.pitch = basePitch + deltaPitch * t;
+    return result;
+}
+
+bool GLViewport::cameraStatesApproximatelyEqual(const CameraKeyframe& a, const CameraKeyframe& b) const
+{
+    const float posDelta = (a.target - b.target).length();
+    auto angularDelta = [](float from, float to) {
+        float delta = to - from;
+        while (delta > 180.0f)
+            delta -= 360.0f;
+        while (delta < -180.0f)
+            delta += 360.0f;
+        return std::fabs(delta);
+    };
+    const float yawDelta = angularDelta(a.yaw, b.yaw);
+    const float pitchDelta = angularDelta(a.pitch, b.pitch);
+    const float distanceDelta = std::fabs(a.distance - b.distance);
+    const float projectionDelta = (a.projection == b.projection) ? 0.0f : 1.0f;
+    const float fovDelta = std::fabs(a.fieldOfView - b.fieldOfView);
+    const float orthoDelta = std::fabs(a.orthoHeight - b.orthoHeight);
+
+    return posDelta < 1e-3f
+        && yawDelta < 1e-3f
+        && pitchDelta < 1e-3f
+        && distanceDelta < 1e-3f
+        && projectionDelta < 0.5f
+        && fovDelta < 1e-3f
+        && orthoDelta < 1e-3f;
+}
+
+std::optional<GLViewport::CameraKeyframe> GLViewport::cameraStateForBounds(const Vector3& minBounds,
+                                                                           const Vector3& maxBounds) const
+{
+    CameraController candidate = camera;
+    if (!CameraNavigation::frameBounds(candidate, minBounds, maxBounds, width(), height()))
+        return std::nullopt;
+    return cameraStateFromController(candidate);
+}
+
+bool GLViewport::applyCameraStateForBounds(const Vector3& minBounds,
+                                           const Vector3& maxBounds,
+                                           bool triggerRedraw,
+                                           bool animate)
+{
+    auto targetState = cameraStateForBounds(minBounds, maxBounds);
+    if (!targetState)
         return false;
-    update();
+
+    if (animate) {
+        startCameraAnimation(*targetState);
+    } else {
+        stopCameraAnimation(false);
+        applyCameraState(*targetState);
+    }
+
+    if (triggerRedraw)
+        update();
+    return true;
+}
+
+void GLViewport::startCameraAnimation(const CameraKeyframe& targetState, int durationMs)
+{
+    CameraKeyframe currentState = captureCameraState();
+    if (durationMs <= 0 || cameraStatesApproximatelyEqual(currentState, targetState)) {
+        stopCameraAnimation(false);
+        applyCameraState(targetState);
+        update();
+        return;
+    }
+
+    animationStartState = currentState;
+    animationEndState = targetState;
+    cameraAnimator.stop();
+    cameraAnimator.setDuration(durationMs);
+    cameraAnimator.setStartValue(0.0);
+    cameraAnimator.setEndValue(1.0);
+    cameraAnimator.start();
+}
+
+void GLViewport::stopCameraAnimation(bool applyEndState)
+{
+    if (cameraAnimator.state() == QAbstractAnimation::Stopped)
+        return;
+    cameraAnimator.stop();
+    if (applyEndState)
+        applyCameraState(animationEndState);
+}
+
+void GLViewport::applyAnimatedCameraProgress(float t)
+{
+    const float clamped = std::clamp(t, 0.0f, 1.0f);
+    CameraKeyframe interpolated = interpolateCameraState(animationStartState, animationEndState, clamped);
+    applyCameraState(interpolated);
+}
+
+void GLViewport::cancelAnimationsForImmediateInput()
+{
+    stopCameraAnimation(false);
+}
+
+bool GLViewport::frameSceneToGeometryInternal(bool includeHidden, bool triggerRedraw, bool animate)
+{
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (!computeBounds(false, includeHidden, minBounds, maxBounds)) {
+        resetCameraToHome(triggerRedraw);
+        return false;
+    }
+    if (!applyCameraStateForBounds(minBounds, maxBounds, triggerRedraw, animate)) {
+        resetCameraToHome(triggerRedraw);
+        return false;
+    }
     return true;
 }
 
@@ -1778,38 +2024,103 @@ void GLViewport::refreshCursorShape()
 
 void GLViewport::zoomInStep()
 {
+    cancelAnimationsForImmediateInput();
     camera.zoomCamera(1.0f);
     update();
 }
 
 void GLViewport::zoomOutStep()
 {
+    cancelAnimationsForImmediateInput();
     camera.zoomCamera(-1.0f);
     update();
+}
+
+void GLViewport::setAutoFrameOnGeometryChange(bool enabled)
+{
+    autoFrameOnGeometryChange = enabled;
+    autoFramePending = autoFrameOnGeometryChange;
+}
+
+void GLViewport::requestAutoFrameOnGeometryChange()
+{
+    if (autoFrameOnGeometryChange)
+        autoFramePending = true;
+}
+
+void GLViewport::setAutoFocusSelection(bool enable)
+{
+    autoFocusSelection = enable;
+}
+
+bool GLViewport::focusSelection(bool animate)
+{
+    Vector3 minBounds;
+    Vector3 maxBounds;
+    if (!computeBounds(true, true, minBounds, maxBounds))
+        return false;
+    return applyCameraStateForBounds(minBounds, maxBounds, true, animate);
+}
+
+void GLViewport::notifySelectionChanged()
+{
+    if (!autoFocusSelection)
+        return;
+    focusSelection(true);
+}
+
+bool GLViewport::frameSceneToGeometry()
+{
+    if (frameSceneToGeometryInternal(showHiddenGeometry, true)) {
+        autoFramePending = false;
+        return true;
+    }
+    if (autoFrameOnGeometryChange)
+        autoFramePending = true;
+    return false;
+}
+
+void GLViewport::resetCameraToHome(bool triggerRedraw)
+{
+    stopCameraAnimation(false);
+    CameraController defaults;
+    camera.setYawPitch(defaults.getYaw(), defaults.getPitch());
+    camera.setTarget(0.0f, 0.0f, 0.0f);
+    if (camera.getProjectionMode() == CameraController::ProjectionMode::Parallel) {
+        camera.setOrthoHeight(defaults.getOrthoHeight());
+        camera.setDistance(defaults.getDistance());
+    } else {
+        camera.setFieldOfView(defaults.getFieldOfView());
+        camera.setDistance(defaults.getDistance());
+    }
+    autoFramePending = autoFrameOnGeometryChange;
+    if (triggerRedraw)
+        update();
 }
 
 bool GLViewport::zoomExtents()
 {
     Vector3 minBounds;
     Vector3 maxBounds;
-    if (!computeBounds(false, minBounds, maxBounds)) {
+    if (!computeBounds(false, showHiddenGeometry, minBounds, maxBounds)) {
         return false;
     }
-    return applyZoomToBounds(minBounds, maxBounds);
+    return applyCameraStateForBounds(minBounds, maxBounds, true, true);
 }
 
 bool GLViewport::zoomSelection()
 {
     Vector3 minBounds;
     Vector3 maxBounds;
-    if (!computeBounds(true, minBounds, maxBounds)) {
+    if (!computeBounds(true, true, minBounds, maxBounds)) {
         return false;
     }
-    return applyZoomToBounds(minBounds, maxBounds);
+    return applyCameraStateForBounds(minBounds, maxBounds, true, true);
 }
 
 void GLViewport::mousePressEvent(QMouseEvent* e)
 {
+    cancelAnimationsForImmediateInput();
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
@@ -1939,6 +2250,7 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 
 void GLViewport::wheelEvent(QWheelEvent* e)
 {
+    cancelAnimationsForImmediateInput();
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }

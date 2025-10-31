@@ -86,6 +86,7 @@ add_library(freecrafter_lib
     src/FileIO/Exporters/SceneExporter.cpp
     src/FileIO/Importers/SceneImporter.cpp
     src/ui/MeasurementWidget.cpp
+    src/ui/CommandPaletteDialog.cpp
     src/ui/InspectorPanel.cpp
     src/ui/ViewSettingsDialog.cpp
     src/ui/ChamferOptionsDialog.cpp

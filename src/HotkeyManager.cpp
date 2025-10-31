@@ -52,6 +52,22 @@ void HotkeyManager::registerAction(const QString& id, QAction* action, const QSt
     action->setProperty("hotkeyId", id);
 }
 
+QList<HotkeyManager::CommandInfo> HotkeyManager::commands() const
+{
+    QList<CommandInfo> list;
+    list.reserve(bindings.size());
+
+    for (auto it = bindings.constBegin(); it != bindings.constEnd(); ++it) {
+        CommandInfo info;
+        info.id = it.key();
+        info.action = it.value().action;
+        info.label = it.value().label;
+        list.append(info);
+    }
+
+    return list;
+}
+
 void HotkeyManager::showEditor(QWidget* parent)
 {
     QDialog dialog(parent);

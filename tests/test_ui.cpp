@@ -5,6 +5,8 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMetaObject>
+#include <QLineEdit>
+#include <QListView>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QString>
@@ -15,6 +17,7 @@
 #include "MainWindow.h"
 #include "GLViewport.h"
 #include "Scene/SceneSettings.h"
+#include "ui/CommandPaletteDialog.h"
 
 int main(int argc, char** argv) {
     qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
@@ -155,6 +158,29 @@ int main(int argc, char** argv) {
         assert(std::fabs(shadow.strength - 0.55f) < 1e-6f);
         assert(std::fabs(shadow.bias - 0.002f) < 1e-6f);
         assert(viewport->sunSettings().shadowsEnabled);
+
+        QMetaObject::invokeMethod(&w, "showCommandPalette", Qt::DirectConnection);
+        app.processEvents();
+
+        CommandPaletteDialog* paletteDialog = w.findChild<CommandPaletteDialog*>(QStringLiteral("CommandPaletteDialog"));
+        assert(paletteDialog);
+
+        QLineEdit* paletteSearch = paletteDialog->findChild<QLineEdit*>(QStringLiteral("CommandPaletteSearch"));
+        QListView* paletteResults = paletteDialog->findChild<QListView*>(QStringLiteral("CommandPaletteResults"));
+        assert(paletteSearch && paletteResults);
+        assert(paletteResults->model());
+
+        paletteSearch->setText(QStringLiteral("Line"));
+        app.processEvents();
+        assert(paletteResults->model()->rowCount() > 0);
+
+        paletteDialog->activateCurrent();
+        app.processEvents();
+
+        assert(!paletteDialog->isVisible());
+
+        QAction* lineToolAction = w.findChild<QAction*>(QStringLiteral("LineTool"));
+        assert(lineToolAction && lineToolAction->isChecked());
 
         w.close();
         app.processEvents();

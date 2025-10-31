@@ -928,6 +928,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
             updateSelectionStatus();
             if (viewport)
                 viewport->update();
+            if (viewport)
+                viewport->notifySelectionChanged();
             if (rightTray_)
                 rightTray_->refreshPanels();
         };
@@ -1778,9 +1780,13 @@ void MainWindow::importExternalModel()
         return;
     }
 
+    if (viewport)
+        viewport->requestAutoFrameOnGeometryChange();
+
     const bool ok = doc->importExternalModel(fileName.toStdString(), format);
     if (ok) {
         statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fileName).fileName()), 1500);
+        viewport->frameSceneToGeometry();
         viewport->update();
     } else {
         QString reason = QString::fromStdString(doc->lastImportError());
@@ -3786,9 +3792,17 @@ void MainWindow::newFile()
 
 {
 
-    if (auto* doc = viewport->getDocument()) {
+    if (viewport) {
 
-        doc->reset();
+        if (auto* doc = viewport->getDocument()) {
+
+            doc->reset();
+
+        }
+
+        viewport->resetCameraToHome();
+
+        viewport->setAutoFrameOnGeometryChange(true);
 
     }
 
@@ -3808,11 +3822,16 @@ void MainWindow::openFile()
 
     if (fn.isEmpty()) return;
 
-    bool ok = viewport->getDocument() && viewport->getDocument()->loadFromFile(fn.toStdString());
+    if (viewport) {
+        viewport->setAutoFrameOnGeometryChange(true);
+        viewport->resetCameraToHome();
+    }
 
-    viewport->update();
+    bool ok = viewport && viewport->getDocument() && viewport->getDocument()->loadFromFile(fn.toStdString());
 
     if (ok) {
+
+        viewport->frameSceneToGeometry();
 
         updateAutosaveSource(fn, false);
 
@@ -3823,6 +3842,8 @@ void MainWindow::openFile()
         statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(fn).fileName()), 2000);
 
     }
+
+    viewport->update();
 
 }
 

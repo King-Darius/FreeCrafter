@@ -148,7 +148,7 @@ install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .)
 
-if(COMMAND qt_generate_deploy_app_script)
+if(COMMAND qt_generate_deploy_app_script AND Qt6_VERSION VERSION_GREATER_EQUAL "6.5.0")
   qt_generate_deploy_app_script(
     TARGET ${PROJECT_NAME}
     OUTPUT_SCRIPT qt_deploy_script
@@ -219,6 +219,11 @@ add_executable(test_tool_activation tests/test_tool_activation.cpp)
 target_include_directories(test_tool_activation PRIVATE src)
 target_link_libraries(test_tool_activation PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME tool_activation COMMAND $<TARGET_FILE:test_tool_activation>)
+
+add_executable(test_cursor_overlay tests/test_cursor_overlay.cpp)
+target_include_directories(test_cursor_overlay PRIVATE src)
+target_link_libraries(test_cursor_overlay PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME cursor_overlay COMMAND $<TARGET_FILE:test_cursor_overlay>)
 
 add_executable(test_advanced_tools tests/test_advanced_tools.cpp)
 target_include_directories(test_advanced_tools PRIVATE src)

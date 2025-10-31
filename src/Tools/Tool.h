@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <vector>
 
+#include <QString>
+
 namespace Core {
 class CommandStack;
 }
@@ -63,6 +65,26 @@ public:
         std::vector<PreviewGhost> ghosts;
     };
 
+    struct CursorDescriptor {
+        enum class Mode {
+            Pointer,
+            Draw,
+            Move,
+            Rotate,
+            Annotate,
+            Navigate
+        };
+
+        Mode mode = Mode::Pointer;
+        bool showCrosshair = false;
+        bool showPickCircle = false;
+        bool preferSystemCursor = false;
+        float pickRadius = 6.0f;
+        float crosshairRadius = 18.0f;
+        float crosshairGap = 4.0f;
+        QString modifierHint;
+    };
+
     enum class MeasurementKind {
         None,
         Distance,
@@ -116,6 +138,7 @@ public:
     virtual MeasurementKind getMeasurementKind() const { return MeasurementKind::None; }
     virtual OverrideResult applyMeasurementOverride(double) { return OverrideResult::Ignored; }
     virtual bool isNavigationTool() const { return false; }
+    virtual CursorDescriptor cursorDescriptor() const;
 
     void setDocument(Scene::Document* doc) { document = doc; }
     void setCommandStack(Core::CommandStack* stack) { commandStack = stack; }

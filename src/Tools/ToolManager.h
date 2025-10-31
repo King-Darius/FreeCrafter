@@ -22,6 +22,17 @@ struct ToolInferenceUpdateRequest {
     float pixelRadius = 6.0f;
 };
 
+struct ToolCursorOverlayState {
+    bool hasTool = false;
+    QString toolName;
+    Tool::CursorDescriptor descriptor;
+    Interaction::InferenceResult inference;
+    bool stickyLock = false;
+    bool axisLocked = false;
+    Vector3 axisDirection;
+    Tool::ModifierState modifiers;
+};
+
 class ToolManager {
 public:
     ToolManager(Scene::Document* document, CameraController* c, Core::CommandStack* stack = nullptr);
@@ -43,6 +54,7 @@ public:
     void handleKeyPress(int key);
     void handleKeyRelease(int key);
     void updatePointerModifiers(const Tool::ModifierState& modifiers);
+    ToolCursorOverlayState cursorOverlayState() const;
 
     Tool::MeasurementKind getMeasurementKind() const;
     bool applyMeasurementOverride(double value);

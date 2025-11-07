@@ -51,6 +51,13 @@ void exerciseLineTool()
     tool.setInferenceResult(inference);
     tool.handleMouseDown(input);
 
+    const auto preview = tool.getPreviewState();
+    assert(!preview.polylines.empty());
+    const auto& previewPoints = preview.polylines.front().points;
+    assert(previewPoints.size() == 3);
+    assert(std::fabs(previewPoints[1].x - 1.0f) < 1e-5f);
+    assert(std::fabs(previewPoints[1].z - 0.0f) < 1e-5f);
+
     tool.commit();
 
     assert(kernel.getObjects().size() == 1);

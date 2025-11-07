@@ -9,21 +9,31 @@
 
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
-
-
-
-
-
-LineTool::LineTool(GeometryKernel* g, CameraController* c)
-    : Tool(g, c)
-{
-}
-
-void LineTool::onPointerDown(const PointerInput& input)
-{
-    lastX = input.x;
-    lastY = input.y;
-
+    if (points.empty()) {
+        setState(State::Active);
+        points.push_back(point);
+    } else if ((point - points.back()).lengthSquared() > 1e-8f) {
+        points.push_back(point);
+
+    previewPoint = point;
+    previewValid = true;
+    if (points.size() >= 2) {
+        if (auto* stack = getCommandStack()) {
+            auto command = std::make_unique<Tools::CreateCurveCommand>(points, QStringLiteral("Draw Line"));
+            stack->push(std::move(command));
+        } else if (geometry) {
+            geometry->addCurve(points);
+        }
+    }
+
+    resetChain();
+}
+void LineTool::onStateChanged(State previous, State next)
+{
+    if (next == State::Idle) {
+        previewValid = false;
+    }
+}
     Vector3 point;
     if (!resolvePoint(input, point)) {
         previewValid = false;
@@ -86,9 +96,12 @@ void LineTool::onPointerHover(const PointerInput& input)
 
     Vector3 point;
     if (resolvePoint(input, point)) {
-        previewPoint = point;
-        previewValid = true;
-    } else if (resolveFallback(input, point)) {
+void LineTool::resetChain()
+{
+    points.clear();
+    previewValid = false;
+}
+
         previewPoint = point;
         previewValid = true;
     } else {

@@ -27,7 +27,7 @@ public:
     void rotate(const Vector3& pivot, const Vector3& axis, float angleRadians);
     void scale(const Vector3& pivot, const Vector3& factors);
 
-private:
+protected:
     Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness);
 
     std::vector<Vector3> boundaryLoop;

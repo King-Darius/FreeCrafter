@@ -82,6 +82,21 @@ public:
         std::unordered_map<TagId, bool> tagVisibility;
     };
 
+    struct PrototypeNode {
+        NodeKind kind = NodeKind::Geometry;
+        std::string name;
+        GeometryObject* geometry = nullptr;
+        std::vector<TagId> tags;
+        std::vector<std::unique_ptr<PrototypeNode>> children;
+    };
+
+    struct ComponentDefinition {
+        ComponentDefinitionId id = 0;
+        std::string name;
+        GeometryKernel geometry;
+        std::vector<std::unique_ptr<PrototypeNode>> roots;
+    };
+
     Document();
 
     GeometryKernel& geometry() { return geometryKernel; }
@@ -184,21 +199,6 @@ public:
 private:
     friend class SceneSerializer;
 
-    struct PrototypeNode {
-        NodeKind kind = NodeKind::Geometry;
-        std::string name;
-        GeometryObject* geometry = nullptr;
-        std::vector<TagId> tags;
-        std::vector<std::unique_ptr<PrototypeNode>> children;
-    };
-
-    struct ComponentDefinition {
-        ComponentDefinitionId id = 0;
-        std::string name;
-        GeometryKernel geometry;
-        std::vector<std::unique_ptr<PrototypeNode>> roots;
-    };
-
     ObjectNode* addNode(NodeKind kind, const std::string& name, ObjectNode* parent);
     void removeNode(ObjectNode* node);
     void removeChildGeometry(ObjectNode& node);
@@ -266,5 +266,10 @@ private:
     std::string lastImportErrorMessage;
     mutable std::string lastSceneIoErrorMessage;
 };
+
+using ObjectId = Document::ObjectId;
+using TagId = Document::TagId;
+using ComponentDefinitionId = Document::ComponentDefinitionId;
+using SceneId = Document::SceneId;
 
 } // namespace Scene

@@ -50,16 +50,6 @@ bool populatePolylineData(std::vector<Vector3>&& sanitized,
     return true;
 }
 
-std::unique_ptr<Curve> makePolyline(std::vector<Vector3>&& sanitized,
-                                    const std::vector<bool>& hardnessOverride)
-{
-    std::vector<Vector3> boundary;
-    HalfEdgeMesh mesh;
-    std::vector<bool> hardness;
-    if (!populatePolylineData(std::move(sanitized), hardnessOverride, boundary, mesh, hardness))
-        return nullptr;
-    return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
-}
 }
 
 Curve::Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness)
@@ -122,14 +112,24 @@ std::unique_ptr<Curve> Curve::createFromPoints(const std::vector<Vector3>& pts, 
         return nullptr;
 
     if (sanitized.size() < 3) {
-        return makePolyline(std::move(sanitized), edgeHardness);
+        std::vector<Vector3> boundary;
+        HalfEdgeMesh mesh;
+        std::vector<bool> hardness;
+        if (!populatePolylineData(std::move(sanitized), edgeHardness, boundary, mesh, hardness))
+            return nullptr;
+        return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
     }
 
     std::vector<Vector3> loop;
     HalfEdgeMesh mesh;
     std::vector<bool> hardness;
     if (!buildCurve(sanitized, loop, mesh, hardness)) {
-        return makePolyline(std::move(sanitized), edgeHardness);
+        std::vector<Vector3> boundary;
+        HalfEdgeMesh fallbackMesh;
+        std::vector<bool> fallbackHardness;
+        if (!populatePolylineData(std::move(sanitized), edgeHardness, boundary, fallbackMesh, fallbackHardness))
+            return nullptr;
+        return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(fallbackMesh), std::move(fallbackHardness)));
     }
     if (!edgeHardness.empty()) {
         hardness = edgeHardness;
@@ -177,7 +177,12 @@ std::unique_ptr<Curve> Curve::createOpenPolyline(const std::vector<Vector3>& pts
     auto sanitized = sanitizePoints(pts);
     if (sanitized.size() < 2)
         return nullptr;
-    return makePolyline(std::move(sanitized), edgeHardness);
+    std::vector<Vector3> boundary;
+    HalfEdgeMesh mesh;
+    std::vector<bool> hardness;
+    if (!populatePolylineData(std::move(sanitized), edgeHardness, boundary, mesh, hardness))
+        return nullptr;
+    return std::unique_ptr<Curve>(new Curve(std::move(boundary), std::move(mesh), std::move(hardness)));
 }
 
 std::unique_ptr<GeometryObject> Curve::clone() const

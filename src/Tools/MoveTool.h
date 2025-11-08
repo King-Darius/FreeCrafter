@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "../Scene/Document.h"
+
 class MoveTool : public Tool {
 public:
     MoveTool(GeometryKernel* g, CameraController* c);
@@ -26,7 +28,7 @@ private:
     Vector3 applyAxisConstraint(const Vector3& delta) const;
     std::vector<GeometryObject*> gatherSelection() const;
     void applyTranslation(const Vector3& delta);
-    std::vector<Scene::Document::ObjectId> selectionIds() const;
+    std::vector<Scene::ObjectId> selectionIds() const;
 
     bool dragging = false;
     Vector3 anchor;

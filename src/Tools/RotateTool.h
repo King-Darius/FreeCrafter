@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "../Scene/Document.h"
+
 class RotateTool : public Tool {
 public:
     RotateTool(GeometryKernel* g, CameraController* c);
@@ -26,7 +28,7 @@ private:
     std::vector<GeometryObject*> gatherSelection() const;
     Vector3 determineAxis() const;
     void applyRotation(float angleRadians);
-    std::vector<Scene::Document::ObjectId> selectionIds() const;
+    std::vector<Scene::ObjectId> selectionIds() const;
 
     bool dragging = false;
     Vector3 pivot;

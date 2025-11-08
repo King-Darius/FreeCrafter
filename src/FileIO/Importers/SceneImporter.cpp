@@ -140,7 +140,7 @@ std::array<float, 16> readNodeTransform(const QJsonObject& node)
     return composeTrs(node);
 }
 
-bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
+bool parseAsciiStl(const std::filesystem::path& path, ImportedMesh& mesh, std::string* error)
 {
     std::ifstream file(path);
     if (!file) {
@@ -150,7 +150,7 @@ bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>&
         return false;
     }
 
-    ImportedMesh mesh;
+    mesh = ImportedMesh{};
     mesh.name = path.stem().string();
     mesh.transform = GeometryKernel::identityTransform();
 
@@ -170,11 +170,10 @@ bool parseAsciiStl(const std::filesystem::path& path, std::vector<ImportedMesh>&
         }
         return false;
     }
-    meshes.push_back(std::move(mesh));
     return true;
 }
 
-bool parseBinaryStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
+bool parseBinaryStl(const std::filesystem::path& path, ImportedMesh& mesh, std::string* error)
 {
     std::ifstream file(path, std::ios::binary);
     if (!file) {
@@ -202,7 +201,7 @@ bool parseBinaryStl(const std::filesystem::path& path, std::vector<ImportedMesh>
         return false;
     }
 
-    ImportedMesh mesh;
+    mesh = ImportedMesh{};
     mesh.name = path.stem().string();
     mesh.transform = GeometryKernel::identityTransform();
     mesh.positions.reserve(static_cast<std::size_t>(triangleCount) * 3);
@@ -241,7 +240,6 @@ bool parseBinaryStl(const std::filesystem::path& path, std::vector<ImportedMesh>
         }
     }
 
-    meshes.push_back(std::move(mesh));
     return true;
 }
 
@@ -351,6 +349,64 @@ bool parseObj(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
     return true;
 }
 
+struct StlMetadataEntry {
+    std::string name;
+    std::string material;
+    std::size_t triangles = 0;
+};
+
+enum class StlMetadataStatus {
+    Missing,
+    Loaded,
+    Error
+};
+
+StlMetadataStatus loadStlMetadata(const std::filesystem::path& path, std::vector<StlMetadataEntry>& entries, std::string* error)
+{
+    entries.clear();
+    QFile metaFile(QString::fromStdString(path.string()) + QStringLiteral(".meta.json"));
+    if (!metaFile.exists()) {
+        return StlMetadataStatus::Missing;
+    }
+    if (!metaFile.open(QIODevice::ReadOnly)) {
+        if (error) {
+            *error = "Unable to open STL metadata sidecar";
+        }
+        return StlMetadataStatus::Error;
+    }
+    QByteArray data = metaFile.readAll();
+    metaFile.close();
+
+    QJsonParseError parseError{};
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        if (error) {
+            *error = "Invalid STL metadata sidecar";
+        }
+        return StlMetadataStatus::Error;
+    }
+
+    const QJsonArray instances = doc.object().value(QStringLiteral("instances")).toArray();
+    entries.reserve(instances.size());
+    for (const auto& value : instances) {
+        QJsonObject obj = value.toObject();
+        int triangleCount = obj.value(QStringLiteral("triangles")).toInt(-1);
+        if (triangleCount <= 0) {
+            continue;
+        }
+        StlMetadataEntry entry;
+        entry.name = obj.value(QStringLiteral("name")).toString().toStdString();
+        entry.material = obj.value(QStringLiteral("material")).toString().toStdString();
+        entry.triangles = static_cast<std::size_t>(triangleCount);
+        entries.push_back(std::move(entry));
+    }
+
+    if (entries.empty()) {
+        return StlMetadataStatus::Missing;
+    }
+    return StlMetadataStatus::Loaded;
+}
+
 bool parseStl(const std::filesystem::path& path, std::vector<ImportedMesh>& meshes, std::string* error)
 {
     std::error_code ec;
@@ -368,16 +424,79 @@ bool parseStl(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
     std::uint32_t triangleCount = 0;
     stream.read(reinterpret_cast<char*>(&triangleCount), sizeof(triangleCount));
     bool binaryCandidate = stream.good() && !ec && fileSize >= 84;
+    stream.close();
+
+    ImportedMesh combined;
+    bool parsed = false;
     if (binaryCandidate) {
         const std::uintmax_t expectedSize = 84 + static_cast<std::uintmax_t>(triangleCount) * 50;
         if (fileSize == expectedSize) {
-            stream.close();
-            return parseBinaryStl(path, meshes, error);
+            parsed = parseBinaryStl(path, combined, error);
         }
     }
 
-    stream.close();
-    return parseAsciiStl(path, meshes, error);
+    if (!parsed) {
+        if (!parseAsciiStl(path, combined, error)) {
+            return false;
+        }
+    }
+
+    std::vector<StlMetadataEntry> metadataEntries;
+    switch (loadStlMetadata(path, metadataEntries, error)) {
+    case StlMetadataStatus::Error:
+        if (error)
+            error->clear();
+        [[fallthrough]];
+    case StlMetadataStatus::Missing:
+        break;
+    case StlMetadataStatus::Loaded: {
+        const std::size_t totalTriangles = combined.indices.size() / 3;
+        std::size_t sumTriangles = 0;
+        for (const auto& entry : metadataEntries) {
+            sumTriangles += entry.triangles;
+        }
+        if (totalTriangles > 0 && sumTriangles == totalTriangles) {
+            std::vector<ImportedMesh> splitMeshes;
+            splitMeshes.reserve(metadataEntries.size());
+            std::size_t vertexCursor = 0;
+            std::size_t unnamedCounter = 0;
+            std::string baseName = combined.name.empty() ? path.stem().string() : combined.name;
+            for (const auto& entry : metadataEntries) {
+                std::size_t vertexCount = entry.triangles * 3;
+                if (vertexCursor + vertexCount > combined.positions.size()) {
+                    splitMeshes.clear();
+                    break;
+                }
+                ImportedMesh split;
+                split.transform = combined.transform;
+                if (!entry.name.empty()) {
+                    split.name = entry.name;
+                } else {
+                    split.name = baseName + std::string("_part") + std::to_string(++unnamedCounter);
+                }
+                split.material = entry.material;
+                split.positions.reserve(vertexCount);
+                split.indices.reserve(vertexCount);
+                for (std::size_t i = 0; i < vertexCount; ++i) {
+                    split.positions.push_back(combined.positions[vertexCursor + i]);
+                    split.indices.push_back(static_cast<std::uint32_t>(i));
+                }
+                vertexCursor += vertexCount;
+                splitMeshes.push_back(std::move(split));
+            }
+            if (!splitMeshes.empty() && vertexCursor == combined.positions.size()) {
+                for (auto& split : splitMeshes) {
+                    meshes.push_back(std::move(split));
+                }
+                return true;
+            }
+        }
+        break;
+    }
+    }
+
+    meshes.push_back(std::move(combined));
+    return true;
 }
 
 int componentWidth(int componentType)

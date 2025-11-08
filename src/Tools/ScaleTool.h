@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "../Scene/Document.h"
+
 class ScaleTool : public Tool {
 public:
     ScaleTool(GeometryKernel* g, CameraController* c);
@@ -26,7 +28,8 @@ private:
     std::vector<GeometryObject*> gatherSelection() const;
     void applyScale(const Vector3& factors);
     Vector3 determineAxis() const;
-    std::vector<Scene::Document::ObjectId> selectionIds() const;
+    std::vector<Scene::ObjectId> selectionIds() const;
+    void resetState();
 
     bool dragging = false;
     bool axisScaling = false;

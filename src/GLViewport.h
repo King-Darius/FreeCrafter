@@ -82,6 +82,7 @@ public:
     bool frameSceneToGeometry();
     void resetCameraToHome(bool triggerRedraw = true);
     std::pair<float, float> depthRangeForAspect(float aspect) const;
+    bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
 
     struct CursorOverlaySnapshot {
         bool hasTool = false;
@@ -133,7 +134,6 @@ private:
     QMatrix4x4 buildProjectionMatrix(float aspect) const;
     QMatrix4x4 buildViewMatrix() const;
     bool projectCursorToGround(const QPointF& pos, QVector3D& world) const;
-    bool computePickRay(const QPoint& devicePos, QVector3D& origin, QVector3D& direction) const;
     bool projectWorldToScreen(const QVector3D& world, const QMatrix4x4& projection, const QMatrix4x4& view, QPointF& out) const;
     void drawInferenceOverlay(QPainter& painter, const QMatrix4x4& projection, const QMatrix4x4& view);
     void drawCursorOverlay(QPainter& painter);

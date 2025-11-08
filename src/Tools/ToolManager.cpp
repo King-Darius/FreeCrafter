@@ -3,6 +3,8 @@
 #include "ToolRegistry.h"
 #include "ZoomTool.h"
 
+#include "../Scene/Document.h"
+
 #ifdef _MSC_VER
 #pragma execution_character_set("utf-8")
 #endif

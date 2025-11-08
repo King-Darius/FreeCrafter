@@ -1680,7 +1680,7 @@ void GLViewport::drawCursorOverlay(QPainter& painter)
     if (!cursorOverlaySnapshot.badgeLabel.isEmpty()) {
         QFont badgeFont = baseFont;
         badgeFont.setBold(true);
-        badgeFont.setPointSizeF(std::max(9.5f, badgeFont.pointSizeF() - 1.0f));
+        badgeFont.setPointSizeF(std::max<qreal>(9.5, badgeFont.pointSizeF() - 1.0));
         painter.setFont(badgeFont);
         const QFontMetricsF metrics(badgeFont);
         const QSizeF size(metrics.horizontalAdvance(cursorOverlaySnapshot.badgeLabel) + 12.0,
@@ -1699,7 +1699,7 @@ void GLViewport::drawCursorOverlay(QPainter& painter)
     if (!cursorOverlaySnapshot.inferenceLabel.isEmpty()) {
         QFont inferenceFont = baseFont;
         inferenceFont.setBold(true);
-        inferenceFont.setPointSizeF(std::max(11.0f, baseFont.pointSizeF() + 1.0f));
+        inferenceFont.setPointSizeF(std::max<qreal>(11.0, baseFont.pointSizeF() + 1.0));
         painter.setFont(inferenceFont);
         QString text = cursorOverlaySnapshot.inferenceLabel;
         if (cursorOverlaySnapshot.inferenceLocked)
@@ -1719,7 +1719,7 @@ void GLViewport::drawCursorOverlay(QPainter& painter)
 
     if (!cursorOverlaySnapshot.modifierHint.isEmpty()) {
         QFont hintFont = baseFont;
-        hintFont.setPointSizeF(std::max(9.0f, baseFont.pointSizeF() - 0.5f));
+        hintFont.setPointSizeF(std::max<qreal>(9.0, baseFont.pointSizeF() - 0.5));
         painter.setFont(hintFont);
         const QFontMetricsF metrics(hintFont);
         const QSizeF size(metrics.horizontalAdvance(cursorOverlaySnapshot.modifierHint) + 16.0,

@@ -3,6 +3,7 @@
 #include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
 #include "../CameraNavigation.h"
+#include "../Core/CommandStack.h"
 #include "../Scene/Document.h"
 #include "../GeometryKernel/Curve.h"
 #include "../GeometryKernel/GeometryKernel.h"

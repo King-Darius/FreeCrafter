@@ -1,22 +1,18 @@
 #include "SunModel.h"
 
 #include <QtMath>
-
 #include <algorithm>
-#include <cmath>
 
 namespace {
-
 constexpr float kMinValidAltitude = -5.0f;
 
 float normalizeAzimuth(float azimuthDegrees)
 {
-    float azimuth = std::fmod(azimuthDegrees, 360.0f);
-    if (azimuth < 0.0f)
-        azimuth += 360.0f;
-    return azimuth;
+    float wrapped = std::fmod(azimuthDegrees, 360.0f);
+    if (wrapped < 0.0f)
+        wrapped += 360.0f;
+    return wrapped;
 }
-
 } // namespace
 
 SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azimuthDegrees)
@@ -29,9 +25,8 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     result.altitudeDegrees = clampedAltitude;
     result.azimuthDegrees = normalizedAzimuth;
 
-    if (clampedAltitude <= kMinValidAltitude) {
+    if (clampedAltitude <= kMinValidAltitude)
         return result;
-    }
 
     const float altitudeRad = qDegreesToRadians(clampedAltitude);
     const float azimuthRad = qDegreesToRadians(normalizedAzimuth);
@@ -42,46 +37,14 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     const float up = std::sin(altitudeRad);
 
     QVector3D direction(east, up, north);
-    if (direction.isNull()) {
+    if (direction.isNull())
         return result;
-    }
 
     direction.normalize();
     result.direction = direction;
     result.valid = true;
     return result;
 }
-    double azimuth = std::atan2(std::sin(hourAngleRad), std::cos(hourAngleRad) * std::sin(latitudeRad) - std::tan(sunDeclination) * std::cos(latitudeRad));
-
-    double azimuthDeg = radToDeg(azimuth) + 180.0;
-
-    if (azimuthDeg < 0.0)
-
-        azimuthDeg += 360.0;
-
-    if (azimuthDeg >= 360.0)
-
-        azimuthDeg -= 360.0;
-
-
-
-    result.altitudeDegrees = static_cast<float>(radToDeg(altitude));
-
-    result.azimuthDegrees = static_cast<float>(azimuthDeg);
-
-
-
-    if (result.altitudeDegrees <= -0.5f) {
-
-        result.valid = false;
-
-        return result;
-
-    }
-
-
-
-    const double altitudeRad = degToRad(result.altitudeDegrees);
 
     const double azimuthRad = degToRad(result.azimuthDegrees);
 

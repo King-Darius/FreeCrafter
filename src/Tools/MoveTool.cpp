@@ -6,6 +6,9 @@
 #include "CameraNavigation.h"
 #include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
+
+#include "../Core/CommandStack.h"
+#include "../Scene/Document.h"
 #include <QString>
 
 MoveTool::MoveTool(GeometryKernel* g, CameraController* c)
@@ -206,9 +209,9 @@ void MoveTool::applyTranslation(const Vector3& delta)
     }
 }
 
-std::vector<Scene::Document::ObjectId> MoveTool::selectionIds() const
+std::vector<Scene::ObjectId> MoveTool::selectionIds() const
 {
-    std::vector<Scene::Document::ObjectId> ids;
+    std::vector<Scene::ObjectId> ids;
     Scene::Document* doc = getDocument();
     if (!doc)
         return ids;
@@ -216,7 +219,7 @@ std::vector<Scene::Document::ObjectId> MoveTool::selectionIds() const
     for (GeometryObject* obj : selection) {
         if (!obj)
             continue;
-        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        Scene::ObjectId id = doc->objectIdForGeometry(obj);
         if (id != 0)
             ids.push_back(id);
     }

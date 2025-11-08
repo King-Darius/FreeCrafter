@@ -6,6 +6,7 @@
 
 #include "GroundProjection.h"
 #include "ToolCommands.h"
+#include "../Core/CommandStack.h"
 #include "../GeometryKernel/ShapeBuilder.h"
 
 #include <algorithm>

@@ -197,6 +197,8 @@ bool writeStl(const std::filesystem::path& output,
         return false;
     }
     stl << "solid FreeCrafter\n";
+    QJsonArray metadata;
+    std::size_t autoNameCounter = 0;
     for (const auto& instance : instances) {
         const auto& mesh = instance.mesh;
         for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
@@ -212,8 +214,42 @@ bool writeStl(const std::filesystem::path& output,
             stl << "    endloop\n";
             stl << "  endfacet\n";
         }
+        if (!mesh.indices.empty()) {
+            QJsonObject entry;
+            std::string safeName = instance.name;
+            if (safeName.empty()) {
+                safeName = std::string("Instance_") + std::to_string(++autoNameCounter);
+            }
+            entry.insert("name", QString::fromStdString(safeName));
+            if (!instance.material.empty()) {
+                entry.insert("material", QString::fromStdString(instance.material));
+            }
+            entry.insert("triangles", static_cast<int>(mesh.indices.size() / 3));
+            metadata.append(entry);
+        }
     }
     stl << "endsolid FreeCrafter\n";
+    stl.close();
+
+    if (!metadata.isEmpty()) {
+        QJsonObject root;
+        root.insert("version", 1);
+        root.insert("instances", metadata);
+        QFile metaFile(QString::fromStdString(output.string()) + QStringLiteral(".meta.json"));
+        if (!metaFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            if (error) {
+                *error = "Failed to write STL metadata";
+            }
+            std::error_code removeError;
+            std::filesystem::remove(output, removeError);
+            return false;
+        }
+        QJsonDocument doc(root);
+        metaFile.write(doc.toJson(QJsonDocument::Compact));
+        metaFile.close();
+    } else {
+        QFile::remove(QString::fromStdString(output.string()) + QStringLiteral(".meta.json"));
+    }
     return true;
 }
 

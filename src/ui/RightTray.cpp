@@ -11,6 +11,8 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "Scene/SceneGraphCommands.h"
 
+#include "../Core/CommandStack.h"
+
 #include <QColor>
 #include <vector>
 #include <memory>

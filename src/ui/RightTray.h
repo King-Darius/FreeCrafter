@@ -3,7 +3,7 @@
 #include <QColor>
 #include <QWidget>
 
-#include "Scene/Document.h"
+#include "../Scene/Document.h"
 
 class QUndoStack;
 class InspectorPanel;

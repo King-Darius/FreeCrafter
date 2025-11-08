@@ -37,6 +37,7 @@ struct LoftOptions;
 }
 
 #include "HotkeyManager.h"
+#include "Phase6/AdvancedModeling.h"
 #include "Renderer.h"
 #include "Tools/ToolManager.h"
 #include "Tools/ToolRegistry.h"
@@ -81,6 +82,8 @@ private slots:
     void toggleTerminalDock();
     void showGitPopover();
     void showKeyboardShortcuts();
+    void showChamferOptionsDialog();
+    void showLoftOptionsDialog();
     void activateSelect();
     void activateLine();
     void activateRectangle();

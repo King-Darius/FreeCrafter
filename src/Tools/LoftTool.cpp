@@ -2,7 +2,9 @@
 
 #include "ToolCommands.h"
 
+#include "../Core/CommandStack.h"
 #include "../GeometryKernel/GeometryKernel.h"
+#include "../Scene/Document.h"
 
 #include <algorithm>
 #include <cmath>
@@ -87,7 +89,7 @@ void LoftTool::onPointerDown(const PointerInput&)
 
 void LoftTool::onPointerUp(const PointerInput&)
 {
-    if (state != State::Active)
+    if (getState() != State::Active)
         return;
     if (!previewValid)
         return;

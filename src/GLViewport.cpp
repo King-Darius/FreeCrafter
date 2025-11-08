@@ -7,8 +7,6 @@
 #include <QVector2D>
 #include <QOpenGLShader>
 #include <QResizeEvent>
-#include <QShowEvent>
-#include <QHideEvent>
 
 #include <QOpenGLContext>
 #include <QCursor>
@@ -191,10 +189,8 @@ GLViewport::GLViewport(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     // small timer to keep UI responsive during drags
     repaintTimer.setInterval(16);
-    repaintTimer.setTimerType(Qt::PreciseTimer);
     connect(&repaintTimer, &QTimer::timeout, this, QOverload<>::of(&GLViewport::update));
-    if (isVisible())
-        repaintTimer.start();
+    repaintTimer.start();
     frameTimer.start();
     paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
     setCursor(currentCursorShape);
@@ -242,19 +238,6 @@ void GLViewport::resizeEvent(QResizeEvent* event)
 {
     QOpenGLWidget::resizeEvent(event);
     emit viewportResized(event->size());
-}
-
-void GLViewport::showEvent(QShowEvent* event)
-{
-    QOpenGLWidget::showEvent(event);
-    if (!repaintTimer.isActive())
-        repaintTimer.start();
-}
-
-void GLViewport::hideEvent(QHideEvent* event)
-{
-    QOpenGLWidget::hideEvent(event);
-    repaintTimer.stop();
 }
 
 void GLViewport::setToolManager(ToolManager* manager)

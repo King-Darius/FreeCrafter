@@ -28,8 +28,6 @@ class InspectorPanel;
 class TerminalDock;
 class QUndoStack;
 class QSize;
-class QCloseEvent;
-class QResizeEvent;
 class AutosaveManager;
 class CommandPaletteDialog;
 
@@ -164,10 +162,7 @@ private:
     void syncViewSettingsUI();
     void handleSunSettingsChanged(const SunSettings& settings);
     void updateShadowStatus(const SunSettings& previous, const SunSettings& current);
-    void applyViewportTheme();
-    void enforceViewportLayout();
     void closeEvent(QCloseEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
     void initializeAutosave();
     void maybeRestoreAutosave();
     void updateAutosaveSource(const QString& path, bool purgePreviousPrefix);

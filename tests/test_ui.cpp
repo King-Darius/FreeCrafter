@@ -10,9 +10,6 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QString>
-#include <QScreen>
-#include <QColor>
-#include <QGuiApplication>
 #include <cmath>
 #include <cassert>
 
@@ -37,9 +34,6 @@ int main(int argc, char** argv) {
     QSettings settings("FreeCrafter", "FreeCrafter");
     settings.clear();
     settings.sync();
-
-    bool expectedDarkTheme = true;
-    QColor expectedSkyColor;
 
     {
         MainWindow w;
@@ -81,17 +75,6 @@ int main(int argc, char** argv) {
         assert(viewport);
         Scene::Document* document = viewport->getDocument();
         assert(document);
-
-        QAction* themeToggle = w.findChild<QAction*>(QStringLiteral("actionToggleTheme"));
-        assert(themeToggle);
-        expectedDarkTheme = themeToggle->isChecked();
-        QColor initialSky = viewport->skyBackgroundColor();
-        themeToggle->trigger();
-        app.processEvents();
-        assert(themeToggle->isChecked() != expectedDarkTheme);
-        expectedDarkTheme = themeToggle->isChecked();
-        expectedSkyColor = viewport->skyBackgroundColor();
-        assert(initialSky != expectedSkyColor);
 
         QAction* sectionPlanesAction = w.findChild<QAction*>(QStringLiteral("actionShowSectionPlanes"));
         QAction* sectionFillsAction = w.findChild<QAction*>(QStringLiteral("actionShowSectionFills"));
@@ -253,54 +236,7 @@ int main(int argc, char** argv) {
         assert(!reopenedGuides->isChecked());
         assert(reopenedShadows->isChecked());
 
-        QAction* reopenedThemeToggle = reopened.findChild<QAction*>(QStringLiteral("actionToggleTheme"));
-        assert(reopenedThemeToggle);
-        assert(reopenedThemeToggle->isChecked() == expectedDarkTheme);
-        QColor reopenedSky = reopenedViewport->skyBackgroundColor();
-        assert(reopenedSky == expectedSkyColor);
-
         reopened.close();
-        app.processEvents();
-    }
-
-    {
-        MainWindow baseline;
-        baseline.resize(820, 640);
-        baseline.move(3800, 2200);
-        baseline.show();
-        app.processEvents();
-        QByteArray offscreenGeometry = baseline.saveGeometry();
-        baseline.close();
-        app.processEvents();
-
-        QSettings settings("FreeCrafter", "FreeCrafter");
-        settings.beginGroup(QStringLiteral("MainWindow"));
-        settings.setValue("geometry", offscreenGeometry);
-        settings.endGroup();
-
-        MainWindow sanitized;
-        sanitized.show();
-        app.processEvents();
-
-        QScreen* primary = QGuiApplication::primaryScreen();
-        assert(primary);
-        const QRect available = primary->availableGeometry();
-        const QRect frame = sanitized.frameGeometry();
-        assert(available.intersects(frame));
-
-        QDockWidget* sanitizedPanels = sanitized.findChild<QDockWidget*>(QStringLiteral("PanelsDock"));
-        assert(sanitizedPanels);
-        const int leftWidth = LeftToolPalette::preferredWidth();
-        assert(sanitizedPanels->width() <= sanitized.width() - leftWidth);
-
-        QAction* sanitizedThemeToggle = sanitized.findChild<QAction*>(QStringLiteral("actionToggleTheme"));
-        assert(sanitizedThemeToggle);
-        assert(sanitizedThemeToggle->isChecked() == expectedDarkTheme);
-        GLViewport* sanitizedViewport = sanitized.findChild<GLViewport*>(QStringLiteral("MainViewport"));
-        assert(sanitizedViewport);
-        assert(sanitizedViewport->skyBackgroundColor() == expectedSkyColor);
-
-        sanitized.close();
         app.processEvents();
     }
 

@@ -34,8 +34,6 @@
 class ToolManager;
 class Tool;
 class NavigationPreferences;
-class QShowEvent;
-class QHideEvent;
 
 class QPainter;
 
@@ -58,9 +56,6 @@ public:
     bool frameStatsVisible() const { return frameStatsHudVisible; }
     void setSunSettings(const SunSettings& settings);
     void setBackgroundPalette(const QColor& sky, const QColor& ground, const QColor& horizonLine);
-    QColor skyBackgroundColor() const { return skyColor; }
-    QColor groundBackgroundColor() const { return groundColor; }
-    QColor horizonBackgroundColor() const { return horizonLineColor; }
     const SunSettings& sunSettings() const { return environmentSettings; }
     ToolManager* getToolManager() const { return toolManager; }
     GeometryKernel* getGeometry() { return &document.geometry(); }
@@ -120,8 +115,6 @@ protected:
     void resizeGL(int w, int h) override;
     void paintGL() override;
     void resizeEvent(QResizeEvent* event) override;
-    void showEvent(QShowEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
 
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;

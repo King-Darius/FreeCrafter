@@ -46,6 +46,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QDir>
+#include <QGuiApplication>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
@@ -53,6 +54,7 @@
 #include <QMessageBox>
 #include <QObject>
 #include <QPushButton>
+#include <QScreen>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -62,6 +64,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QResizeEvent>
 #include <QVBoxLayout>
 #include <QWidgetAction>
 #include <QStringList>
@@ -84,7 +87,78 @@ constexpr int kToolbarHeight = 48;
 
 constexpr int kStatusHeight = 28;
 
+constexpr int kRightDockMaxWidth = 420;
+constexpr int kRightDockCompactMinWidth = 240;
+constexpr int kPreferredViewportMinWidth = 720;
+
 const char* kSettingsGroup = "MainWindow";
+constexpr int kWindowStateVersion = 2;
+
+QRect unionAvailableGeometry()
+{
+    QRect bounds;
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    for (QScreen* screen : screens) {
+        if (!screen)
+            continue;
+        const QRect available = screen->availableGeometry();
+        bounds = bounds.isNull() ? available : bounds.united(available);
+    }
+    return bounds;
+}
+
+QRect sanitizedGeometry(const QRect& desired)
+{
+    QRect available = unionAvailableGeometry();
+    if (available.isNull())
+        return desired;
+
+    QRect result = desired;
+    if (result.width() > available.width())
+        result.setWidth(available.width());
+    if (result.height() > available.height())
+        result.setHeight(available.height());
+
+    const int clampedX = std::clamp(result.left(), available.left(), available.right() - result.width());
+    const int clampedY = std::clamp(result.top(), available.top(), available.bottom() - result.height());
+    result.moveTo(clampedX, clampedY);
+    return result;
+}
+
+QSize initialWindowSize()
+{
+    QSize preferred(1440, 900);
+    QRect available = unionAvailableGeometry();
+    if (!available.isNull()) {
+        int availableWidth = std::max(available.width() - 40, 640);
+        int availableHeight = std::max(available.height() - 40, 540);
+        availableWidth = std::min(availableWidth, available.width());
+        availableHeight = std::min(availableHeight, available.height());
+        int minimumWidth = std::min(960, available.width());
+        int minimumHeight = std::min(720, available.height());
+        if (minimumWidth > availableWidth)
+            minimumWidth = availableWidth;
+        if (minimumHeight > availableHeight)
+            minimumHeight = availableHeight;
+        preferred.setWidth(std::clamp(preferred.width(), minimumWidth, availableWidth));
+        preferred.setHeight(std::clamp(preferred.height(), minimumHeight, availableHeight));
+    }
+    return preferred;
+}
+
+struct ViewportThemePalette {
+    QColor sky;
+    QColor ground;
+    QColor horizon;
+};
+
+ViewportThemePalette viewportPaletteForTheme(bool dark)
+{
+    if (dark) {
+        return { QColor(32, 42, 58), QColor(44, 52, 58), QColor(78, 92, 104) };
+    }
+    return { QColor(179, 210, 240), QColor(188, 206, 188), QColor(140, 158, 140) };
+}
 
 QString primitiveDisplayName(Scene::PrimitiveType type)
 {
@@ -851,7 +925,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     setWindowTitle("FreeCrafter");
 
-    resize(1440, 900);
+    const QSize preferredSize = initialWindowSize();
+    resize(preferredSize);
 
     QWidget* central = new QWidget(this);
 
@@ -2089,6 +2164,8 @@ void MainWindow::createToolbars()
 
     primaryToolbar = addToolBar(tr("Primary"));
 
+    if (primaryToolbar)
+        primaryToolbar->setObjectName(QStringLiteral("PrimaryToolbar"));
     primaryToolbar->setMovable(false);
 
     primaryToolbar->setFixedHeight(kToolbarHeight);
@@ -2604,8 +2681,8 @@ void MainWindow::createRightDock()
     rightDock_->setObjectName(QStringLiteral("PanelsDock"));
     rightDock_->setAllowedAreas(Qt::RightDockWidgetArea);
     rightDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    rightDock_->setMinimumWidth(320);
-    rightDock_->setMaximumWidth(420);
+    rightDock_->setMinimumWidth(kRightDockCompactMinWidth);
+    rightDock_->setMaximumWidth(kRightDockMaxWidth);
 
     Scene::Document* document = viewport ? viewport->getDocument() : nullptr;
     GeometryKernel* geometry = viewport ? viewport->getGeometry() : nullptr;
@@ -2631,6 +2708,8 @@ void MainWindow::createRightDock()
 
     if (rightTray_)
         rightTray_->refreshPanels();
+
+    enforceViewportLayout();
 }
 
 void MainWindow::createTerminalDock()
@@ -2678,9 +2757,7 @@ void MainWindow::customizeViewport()
         return;
 
     viewportWidget_ = viewport;
-    viewport->setBackgroundPalette(QColor(179, 210, 240),
-                                   QColor(188, 206, 188),
-                                   QColor(140, 158, 140));
+    applyViewportTheme();
 
     if (!overlay_) {
         overlay_ = new ViewportOverlay(viewportWidget_);
@@ -2692,6 +2769,45 @@ void MainWindow::customizeViewport()
     overlay_->show();
 
     connect(viewport, &GLViewport::viewportResized, this, &MainWindow::handleViewportResize, Qt::UniqueConnection);
+}
+
+void MainWindow::enforceViewportLayout()
+
+{
+
+    if (!rightDock_ || !rightDock_->isVisible())
+        return;
+
+    const int leftWidth = leftDock_ ? leftDock_->width() : 0;
+    const int availableWidth = std::max(width() - leftWidth, 0);
+    if (availableWidth <= 0)
+        return;
+
+    const int maxAllowed = std::min(kRightDockMaxWidth, availableWidth);
+    const int minAllowed = std::min(kRightDockCompactMinWidth, maxAllowed);
+
+    rightDock_->setMinimumWidth(minAllowed);
+    rightDock_->setMaximumWidth(maxAllowed);
+
+    int desiredWidth = rightDock_->width();
+    if (desiredWidth < minAllowed || desiredWidth > maxAllowed)
+        desiredWidth = std::clamp(desiredWidth, minAllowed, maxAllowed);
+
+    const int viewportHardMinimum = 320;
+    const int preferredViewportWidth = std::max(viewportHardMinimum, std::min(kPreferredViewportMinWidth, availableWidth));
+    const int currentViewportWidth = availableWidth - desiredWidth;
+    if (currentViewportWidth < viewportHardMinimum) {
+        const int adjustedWidth = std::clamp(availableWidth - viewportHardMinimum, minAllowed, maxAllowed);
+        if (adjustedWidth != desiredWidth)
+            desiredWidth = adjustedWidth;
+    } else if (currentViewportWidth > preferredViewportWidth) {
+        const int adjustedWidth = std::clamp(availableWidth - preferredViewportWidth, minAllowed, maxAllowed);
+        if (adjustedWidth != desiredWidth)
+            desiredWidth = adjustedWidth;
+    }
+
+    if (desiredWidth != rightDock_->width())
+        rightDock_->resize(desiredWidth, rightDock_->height());
 }
 void MainWindow::createStatusBarWidgets()
 
@@ -2909,6 +3025,19 @@ void MainWindow::applyThemeStylesheet()
 
     updateThemeActionIcon();
 
+    applyViewportTheme();
+
+}
+
+void MainWindow::applyViewportTheme()
+
+{
+
+    if (!viewport)
+        return;
+
+    const ViewportThemePalette palette = viewportPaletteForTheme(darkTheme);
+    viewport->setBackgroundPalette(palette.sky, palette.ground, palette.horizon);
 }
 
 void MainWindow::restoreWindowState()
@@ -2929,13 +3058,18 @@ void MainWindow::restoreWindowState()
 
     isRestoringWindowState_ = true;
 
-    if (!geometry.isEmpty())
+    if (!geometry.isEmpty()) {
 
-        restoreGeometry(geometry);
+        if (restoreGeometry(geometry)) {
+            const QRect sanitized = sanitizedGeometry(frameGeometry());
+            if (sanitized != frameGeometry())
+                setGeometry(sanitized);
+        }
+    }
 
     if (!state.isEmpty())
 
-        restoreState(state);
+        restoreState(state, kWindowStateVersion);
 
     isRestoringWindowState_ = false;
 
@@ -2943,6 +3077,8 @@ void MainWindow::restoreWindowState()
         darkTheme = settings.value("darkTheme", darkTheme).toBool();
 
     settings.endGroup();
+
+    enforceViewportLayout();
 
 }
 
@@ -2957,7 +3093,7 @@ void MainWindow::persistWindowState()
 
     settings.setValue("geometry", saveGeometry());
 
-    settings.setValue("state", saveState());
+    settings.setValue("state", saveState(kWindowStateVersion));
 
     settings.setValue("darkTheme", darkTheme);
 
@@ -3247,6 +3383,14 @@ void MainWindow::handleViewportResize(const QSize& size)
         return;
 
     overlay_->move(size.width() - overlay_->width() - 10, 10);
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+
+{
+
+    QMainWindow::resizeEvent(event);
+    enforceViewportLayout();
 }
 
 void MainWindow::updateUndoRedoActionText()
@@ -4119,6 +4263,7 @@ void MainWindow::toggleRightDock()
         return;
 
     rightDock_->setVisible(!rightDock_->isVisible());
+    enforceViewportLayout();
 }
 
 void MainWindow::setDarkTheme(bool enabled)
@@ -4134,7 +4279,8 @@ void MainWindow::setDarkTheme(bool enabled)
         actionToggleTheme->setChecked(enabled);
     }
 
-    persistWindowState();
+    if (!isRestoringWindowState_)
+        persistWindowState();
 }
 
 void MainWindow::runTask()

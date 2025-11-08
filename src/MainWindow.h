@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QPointer>
 #include <QString>
+#include <functional>
 #include <memory>
 #include <vector>
 

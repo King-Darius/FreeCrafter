@@ -2705,7 +2705,8 @@ void MainWindow::createDockPanels()
     createLeftDock();
     createRightDock();
     createTerminalDock();
-    customizeViewport();
+    if (viewport)
+        customizeViewport(viewport);
 }
 
 void MainWindow::createLeftDock()

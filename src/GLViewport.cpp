@@ -189,6 +189,8 @@ GLViewport::GLViewport(QWidget* parent)
 {
     setObjectName(QStringLiteral("MainViewport"));
     setFocusPolicy(Qt::StrongFocus);
+    ownedDocument = std::make_unique<Scene::Document>();
+    documentPtr = ownedDocument.get();
     // small timer to keep UI responsive during drags
     repaintTimer.setInterval(16);
     repaintTimer.setTimerType(Qt::PreciseTimer);
@@ -196,9 +198,10 @@ GLViewport::GLViewport(QWidget* parent)
     if (isVisible())
         repaintTimer.start();
     frameTimer.start();
-    paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
+    if (documentPtr)
+        paletteColors = PalettePreferences::colorsFromState(documentPtr->settings().palette());
     setCursor(currentCursorShape);
-    lastGeometryRevision = document.geometry().revision();
+    lastGeometryRevision = documentPtr ? documentPtr->geometry().revision() : 0;
     autoFramePending = autoFrameOnGeometryChange;
 
     cameraAnimator.setStartValue(0.0);
@@ -269,6 +272,27 @@ void GLViewport::setToolManager(ToolManager* manager)
     }
 }
 
+void GLViewport::setDocument(Scene::Document* document)
+{
+    if (document) {
+        documentPtr = document;
+    } else {
+        ownedDocument = std::make_unique<Scene::Document>();
+        documentPtr = ownedDocument.get();
+    }
+
+    if (documentPtr) {
+        paletteColors = PalettePreferences::colorsFromState(documentPtr->settings().palette());
+        lastGeometryRevision = documentPtr->geometry().revision();
+    } else {
+        paletteColors = PalettePreferences::ColorSet{};
+        lastGeometryRevision = 0;
+    }
+
+    autoFramePending = autoFrameOnGeometryChange;
+    update();
+}
+
 void GLViewport::setNavigationPreferences(NavigationPreferences* prefs)
 {
     if (navigationPrefs == prefs)
@@ -304,8 +328,10 @@ void GLViewport::setPalettePreferences(PalettePreferences* prefs)
                     paletteColors = colors;
                     update();
                 });
+    } else if (documentPtr) {
+        paletteColors = PalettePreferences::colorsFromState(documentPtr->settings().palette());
     } else {
-        paletteColors = PalettePreferences::colorsFromState(document.settings().palette());
+        paletteColors = PalettePreferences::ColorSet{};
     }
     update();
 }
@@ -459,6 +485,11 @@ void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    if (!documentPtr)
+        return;
+
+    Scene::Document& document = *documentPtr;
 
     GeometryKernel& geometry = document.geometry();
     const std::uint64_t revision = geometry.revision();
@@ -615,6 +646,10 @@ void GLViewport::drawAxes()
 
 void GLViewport::drawGrid()
 {
+    if (!documentPtr)
+        return;
+
+    Scene::Document& document = *documentPtr;
     const Scene::SceneSettings::GridSettings& gridSettings = document.settings().grid();
     const float majorSpacing = std::max(0.001f, gridSettings.majorSpacing);
     const int minorDivisions = std::max(1, gridSettings.minorDivisions);
@@ -1030,6 +1065,10 @@ void drawGhostSolid(Renderer& renderer,
 
 void GLViewport::drawSceneGeometry()
 {
+    if (!documentPtr)
+        return;
+
+    Scene::Document& document = *documentPtr;
     std::vector<QVector4D> clipPlanes;
     const Scene::SceneSettings& sceneSettings = document.settings();
     if (sceneSettings.sectionPlanesVisible()) {
@@ -1079,6 +1118,10 @@ void GLViewport::drawSceneGeometry()
 
 void GLViewport::drawSceneOverlays()
 {
+    if (!documentPtr)
+        return;
+
+    Scene::Document& document = *documentPtr;
     renderer.setClipPlanes(std::vector<QVector4D>{});
 
     const Scene::SceneSettings& settings = document.settings();
@@ -1757,8 +1800,12 @@ void GLViewport::drawCursorOverlay(QPainter& painter)
 
 bool GLViewport::computeBounds(bool selectedOnly, bool includeHidden, Vector3& outMin, Vector3& outMax) const
 {
+    if (!documentPtr)
+        return false;
+
+    const Scene::Document* document = documentPtr;
     bool hasBounds = false;
-    const auto& objects = document.geometry().getObjects();
+    const auto& objects = document->geometry().getObjects();
     for (const auto& object : objects) {
         if (!object) {
             continue;
@@ -2138,6 +2185,7 @@ bool GLViewport::zoomSelection()
 void GLViewport::mousePressEvent(QMouseEvent* e)
 {
     cancelAnimationsForImmediateInput();
+    emit activated(this);
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }
@@ -2268,6 +2316,7 @@ void GLViewport::mouseReleaseEvent(QMouseEvent* e)
 void GLViewport::wheelEvent(QWheelEvent* e)
 {
     cancelAnimationsForImmediateInput();
+    emit activated(this);
     if (toolManager) {
         toolManager->updatePointerModifiers(toModifierState(e->modifiers()));
     }

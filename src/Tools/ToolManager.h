@@ -16,6 +16,10 @@ namespace Core {
 class CommandStack;
 }
 
+namespace Scene {
+class Document;
+}
+
 struct ToolInferenceUpdateRequest {
     bool hasRay = false;
     Interaction::PickRay ray;
@@ -41,6 +45,8 @@ public:
     void restorePreviousTool();
     void setNavigationConfig(const NavigationConfig& config);
     void setViewportSize(int w, int h);
+    void setCamera(CameraController* cameraController);
+    void setDocument(Scene::Document* document);
 
     void handlePointerDown(const Tool::PointerInput& input);
     void handlePointerMove(const Tool::PointerInput& input);

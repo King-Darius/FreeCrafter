@@ -145,6 +145,31 @@ void ToolManager::setViewportSize(int w, int h)
     propagateViewport();
 }
 
+void ToolManager::setCamera(CameraController* c)
+{
+    if (camera == c)
+        return;
+
+    camera = c;
+    for (auto& tool : tools) {
+        tool->setCamera(camera);
+    }
+}
+
+void ToolManager::setDocument(Scene::Document* doc)
+{
+    if (document == doc)
+        return;
+
+    document = doc;
+    geometry = document ? &document->geometry() : nullptr;
+    for (auto& tool : tools) {
+        tool->setDocument(document);
+        tool->setGeometry(geometry);
+    }
+    geometryRevision = geometry ? geometry->revision() : 0;
+}
+
 void ToolManager::handlePointerDown(const Tool::PointerInput& input)
 {
     if (!active)

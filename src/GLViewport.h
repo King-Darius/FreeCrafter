@@ -30,6 +30,7 @@
 #include "NavigationConfig.h"
 
 #include <optional>
+#include <memory>
 
 class ToolManager;
 class Tool;
@@ -63,8 +64,10 @@ public:
     QColor horizonBackgroundColor() const { return horizonLineColor; }
     const SunSettings& sunSettings() const { return environmentSettings; }
     ToolManager* getToolManager() const { return toolManager; }
-    GeometryKernel* getGeometry() { return &document.geometry(); }
-    Scene::Document* getDocument() { return &document; }
+    GeometryKernel* getGeometry() { return documentPtr ? &documentPtr->geometry() : nullptr; }
+    Scene::Document* getDocument() { return documentPtr; }
+    const Scene::Document* getDocument() const { return documentPtr; }
+    void setDocument(Scene::Document* document);
     CameraController* getCamera() { return &camera; }
     CameraController::ProjectionMode projectionMode() const { return camera.getProjectionMode(); }
     void setProjectionMode(CameraController::ProjectionMode mode);
@@ -114,6 +117,7 @@ signals:
     void cursorPositionChanged(double x, double y, double z);
     void frameStatsUpdated(double fps, double frameMs, int drawCalls);
     void viewportResized(const QSize& size);
+    void activated(GLViewport* viewport);
 
 protected:
     void initializeGL() override;
@@ -169,7 +173,8 @@ private:
     void cancelAnimationsForImmediateInput();
     void refreshCursorShape();
 
-    Scene::Document document;
+    std::unique_ptr<Scene::Document> ownedDocument;
+    Scene::Document* documentPtr = nullptr;
     CameraController camera;
     ToolManager* toolManager = nullptr;
     NavigationPreferences* navigationPrefs = nullptr;

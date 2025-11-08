@@ -142,6 +142,8 @@ public:
 
     void setDocument(Scene::Document* doc) { document = doc; }
     void setCommandStack(Core::CommandStack* stack) { commandStack = stack; }
+    void setGeometry(GeometryKernel* g) { geometry = g; }
+    void setCamera(CameraController* c) { camera = c; }
 
 protected:
     virtual void onPointerDown(const PointerInput&) {}
@@ -164,8 +166,8 @@ protected:
 
     int viewportWidth = 1;
     int viewportHeight = 1;
-    GeometryKernel* geometry;
-    CameraController* camera;
+    GeometryKernel* geometry = nullptr;
+    CameraController* camera = nullptr;
 
 private:
     void updateModifiers(const ModifierState& modifiers);

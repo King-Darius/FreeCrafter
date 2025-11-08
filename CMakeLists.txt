@@ -106,6 +106,7 @@ add_library(freecrafter_lib
     src/ui/RightTray.cpp
     src/ui/TerminalDock.cpp
     src/ui/ViewportOverlay.cpp
+    src/ui/ViewportContainer.cpp
     src/Scene/SceneGraphCommands.cpp
     resources.qrc
 )

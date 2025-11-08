@@ -127,6 +127,21 @@ int main(int argc, char** argv) {
         assert(!gridToggleAction->isChecked());
         assert(!viewport->showGrid());
 
+        QAction* splitViewAction = w.findChild<QAction*>(QStringLiteral("actionSplitView"));
+        assert(splitViewAction);
+        assert(!splitViewAction->isChecked());
+        splitViewAction->trigger();
+        app.processEvents();
+        assert(splitViewAction->isChecked());
+        GLViewport* secondaryViewport = w.findChild<GLViewport*>(QStringLiteral("SecondaryViewport"));
+        assert(secondaryViewport);
+        assert(secondaryViewport->isVisible());
+        assert(secondaryViewport->getDocument() == viewport->getDocument());
+        splitViewAction->trigger();
+        app.processEvents();
+        assert(!splitViewAction->isChecked());
+        assert(!secondaryViewport->isVisible());
+
         toggleProjectionAction->trigger();
         assert(toggleProjectionAction->isChecked());
         assert(parallelAction->isChecked());

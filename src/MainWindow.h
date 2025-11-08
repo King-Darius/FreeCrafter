@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QPointer>
 #include <QString>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -32,10 +33,15 @@ class QCloseEvent;
 class QResizeEvent;
 class AutosaveManager;
 class CommandPaletteDialog;
+class ViewportContainer;
 
 namespace Phase6 {
 struct RoundCornerOptions;
 struct LoftOptions;
+}
+
+namespace Scene {
+class Document;
 }
 
 #include "HotkeyManager.h"
@@ -132,7 +138,7 @@ private:
     void createLeftDock();
     void createRightDock();
     void createTerminalDock();
-    void customizeViewport();
+    void customizeViewport(GLViewport* viewportInstance);
     void createStatusBarWidgets();
     void registerShortcuts();
     void applyThemeStylesheet();
@@ -172,8 +178,13 @@ private:
     void maybeRestoreAutosave();
     void updateAutosaveSource(const QString& path, bool purgePreviousPrefix);
     void recordPaletteCommand(const QString& commandId);
+    void attachViewport(GLViewport* viewportInstance);
+    void forEachViewport(const std::function<void(GLViewport*)>& fn);
+    void updateViewportOverlay(GLViewport* viewportInstance);
+    void handleViewportActivated(GLViewport* viewportInstance);
 
     GLViewport* viewport = nullptr;
+    std::unique_ptr<Scene::Document> document_;
     std::unique_ptr<ToolManager> toolManager;
     std::unique_ptr<Core::CommandStack> commandStack;
     std::unique_ptr<NavigationPreferences> navigationPrefs;
@@ -194,8 +205,9 @@ private:
     QDockWidget* leftDock_ = nullptr;
     QDockWidget* rightDock_ = nullptr;
     QDockWidget* terminalDock_ = nullptr;
-    QWidget* viewportWidget_ = nullptr;
-    ViewportOverlay* overlay_ = nullptr;
+    ViewportContainer* viewportContainer_ = nullptr;
+    QHash<GLViewport*, ViewportOverlay*> viewportOverlays_;
+    bool splitViewPreference_ = false;
     RightTray* rightTray_ = nullptr;
     TerminalDock* terminalWidget_ = nullptr;
 
@@ -215,6 +227,7 @@ private:
     QAction* actionZoomExtents = nullptr;
     QAction* actionZoomSelection = nullptr;
     QAction* actionToggleRightDock = nullptr;
+    QAction* actionSplitView = nullptr;
     QAction* actionToggleTheme = nullptr;
     QAction* actionViewIso = nullptr;
     QAction* actionViewTop = nullptr;

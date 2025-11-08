@@ -30,6 +30,7 @@
 #include "ui/PluginManagerDialog.h"
 #include "ui/TerminalDock.h"
 #include "ui/ViewSettingsDialog.h"
+#include "ui/ViewportContainer.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -49,6 +50,7 @@
 #include <QGuiApplication>
 #include <QKeySequence>
 #include <QLabel>
+#include <QList>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -957,18 +959,39 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     centralLayout->addWidget(documentTabs);
 
-    viewport = new GLViewport(central);
-    viewportWidget_ = viewport;
-
-    centralLayout->addWidget(viewport, 1);
+    viewportContainer_ = new ViewportContainer(central);
+    centralLayout->addWidget(viewportContainer_, 1);
 
     setCentralWidget(central);
+
+    document_ = std::make_unique<Scene::Document>();
 
     navigationPrefs = std::make_unique<NavigationPreferences>(this);
 
     undoStack = new QUndoStack(this);
     commandStack = std::make_unique<Core::CommandStack>(undoStack);
-    toolManager = std::make_unique<ToolManager>(viewport->getDocument(), viewport->getCamera(), commandStack.get());
+
+    viewportContainer_->setDocument(document_.get());
+    viewport = viewportContainer_->primaryViewport();
+    toolManager = std::make_unique<ToolManager>(document_.get(), viewport ? viewport->getCamera() : nullptr, commandStack.get());
+
+    viewportContainer_->setToolManager(toolManager.get());
+    viewportContainer_->setNavigationPreferences(navigationPrefs.get());
+
+    connect(viewportContainer_, &ViewportContainer::viewportActivated, this, &MainWindow::handleViewportActivated);
+    connect(viewportContainer_, &ViewportContainer::splitModeChanged, this, [this](bool enabled) {
+        splitViewPreference_ = enabled;
+        if (actionSplitView) {
+            QSignalBlocker blocker(actionSplitView);
+            actionSplitView->setChecked(enabled);
+        }
+    });
+
+    forEachViewport([this](GLViewport* vp) {
+        attachViewport(vp);
+    });
+
+    handleViewportActivated(viewport);
 
     chamferDefaults_.radius = 0.1f;
     chamferDefaults_.segments = 6;
@@ -984,16 +1007,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     toolManager->setGeometryChangedCallback([this]() {
         updateSelectionStatus();
-        if (viewport)
-            viewport->update();
+        forEachViewport([](GLViewport* vp) {
+            if (vp)
+                vp->update();
+        });
         if (rightTray_)
             rightTray_->refreshPanels();
     });
 
     if (commandStack) {
         Core::CommandContext context;
-        context.document = viewport->getDocument();
-        context.geometry = viewport->getGeometry();
+        context.document = document_.get();
+        context.geometry = document_ ? &document_->geometry() : nullptr;
         context.geometryChanged = [this]() {
             if (toolManager)
                 toolManager->notifyExternalGeometryChange();
@@ -1002,10 +1027,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         };
         context.selectionChanged = [this](const std::vector<Scene::Document::ObjectId>&) {
             updateSelectionStatus();
-            if (viewport)
-                viewport->update();
-            if (viewport)
-                viewport->notifySelectionChanged();
+            forEachViewport([](GLViewport* vp) {
+                if (vp) {
+                    vp->update();
+                    vp->notifySelectionChanged();
+                }
+            });
             if (rightTray_)
                 rightTray_->refreshPanels();
         };
@@ -1110,9 +1137,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         storedShadowQuality = settings.value(QStringLiteral("%1/shadowQuality").arg(kSettingsGroup), storedShadowQuality).toInt();
         storedShadowStrength = settings.value(QStringLiteral("%1/shadowStrength").arg(kSettingsGroup), storedShadowStrength).toDouble();
         storedShadowBias = settings.value(QStringLiteral("%1/shadowBias").arg(kSettingsGroup), storedShadowBias).toDouble();
+        splitViewPreference_ = settings.value(QStringLiteral("%1/splitViewEnabled").arg(kSettingsGroup), splitViewPreference_).toBool();
 
         sunSettings.load(settings, QStringLiteral("Environment"));
 
+    }
+
+    if (viewportContainer_) {
+        viewportContainer_->setSplitEnabled(splitViewPreference_);
+        if (splitViewPreference_) {
+            if (GLViewport* secondary = viewportContainer_->secondaryViewport())
+                attachViewport(secondary);
+        }
     }
 
     Scene::SceneSettings& sceneSettings = viewport->getDocument()->settings();
@@ -1222,11 +1258,7 @@ void MainWindow::initializeAutosave()
 
     autosaveManager = std::make_unique<AutosaveManager>(this);
 
-    if (!viewport)
-
-        return;
-
-    autosaveManager->setDocument(viewport->getDocument());
+    autosaveManager->setDocument(document_.get());
 
     QSettings settings("FreeCrafter", "FreeCrafter");
 
@@ -1246,7 +1278,7 @@ void MainWindow::initializeAutosave()
 
     autosaveManager->setSourcePath(currentDocumentPath);
 
-    autosaveManager->setDocument(viewport->getDocument());
+    autosaveManager->setDocument(document_.get());
 
 }
 
@@ -1254,7 +1286,7 @@ void MainWindow::maybeRestoreAutosave()
 
 {
 
-    if (!autosaveManager || !viewport)
+    if (!autosaveManager)
 
         return;
 
@@ -1295,7 +1327,7 @@ void MainWindow::maybeRestoreAutosave()
 
         return;
 
-    Scene::Document* doc = viewport->getDocument();
+    Scene::Document* doc = document_.get();
 
     if (!doc)
 
@@ -1303,7 +1335,10 @@ void MainWindow::maybeRestoreAutosave()
 
     if (autosaveManager->restoreLatest(doc)) {
 
-        viewport->update();
+        forEachViewport([](GLViewport* vp) {
+            if (vp)
+                vp->update();
+        });
 
         updateSelectionStatus();
 
@@ -1356,6 +1391,74 @@ void MainWindow::recordPaletteCommand(const QString& commandId)
     constexpr int kMaxRecentCommands = 12;
     while (recentPaletteCommands.size() > kMaxRecentCommands)
         recentPaletteCommands.removeLast();
+}
+
+void MainWindow::attachViewport(GLViewport* viewportInstance)
+{
+    if (!viewportInstance)
+        return;
+
+    customizeViewport(viewportInstance);
+
+    connect(viewportInstance,
+            &GLViewport::cursorPositionChanged,
+            this,
+            &MainWindow::updateCursor,
+            Qt::UniqueConnection);
+    connect(viewportInstance,
+            &GLViewport::frameStatsUpdated,
+            this,
+            &MainWindow::updateFrameStats,
+            Qt::UniqueConnection);
+    connect(viewportInstance,
+            &QObject::destroyed,
+            this,
+            [this, viewportInstance]() { viewportOverlays_.remove(viewportInstance); },
+            Qt::UniqueConnection);
+}
+
+void MainWindow::forEachViewport(const std::function<void(GLViewport*)>& fn)
+{
+    if (!viewportContainer_ || !fn)
+        return;
+
+    const QList<GLViewport*> views = viewportContainer_->viewports();
+    for (GLViewport* vp : views) {
+        fn(vp);
+    }
+}
+
+void MainWindow::updateViewportOverlay(GLViewport* viewportInstance)
+{
+    if (!viewportInstance)
+        return;
+
+    ViewportOverlay* overlay = viewportOverlays_.value(viewportInstance, nullptr);
+    if (!overlay) {
+        overlay = new ViewportOverlay(viewportInstance);
+        overlay->setParent(viewportInstance);
+        viewportOverlays_.insert(viewportInstance, overlay);
+    }
+    overlay->raise();
+    overlay->move(viewportInstance->width() - overlay->width() - 10, 10);
+    overlay->show();
+}
+
+void MainWindow::handleViewportActivated(GLViewport* viewportInstance)
+{
+    if (!viewportInstance)
+        return;
+
+    viewport = viewportInstance;
+    updateViewportOverlay(viewportInstance);
+
+    if (toolManager) {
+        toolManager->setCamera(viewportInstance->getCamera());
+        const auto ratio = viewportInstance->devicePixelRatioF();
+        const int pixelW = std::max(1, static_cast<int>(std::lround(viewportInstance->width() * ratio)));
+        const int pixelH = std::max(1, static_cast<int>(std::lround(viewportInstance->height() * ratio)));
+        toolManager->setViewportSize(pixelW, pixelH);
+    }
 }
 
 void MainWindow::createMenus()
@@ -1541,7 +1644,7 @@ void MainWindow::createMenus()
     actionGridSettings->setStatusTip(tr("Configure grid spacing, divisions, and shadow parameters"));
     actionGridSettings->setObjectName(QStringLiteral("actionGridSettings"));
 
-    Scene::Document* menuDocument = viewport ? viewport->getDocument() : nullptr;
+    Scene::Document* menuDocument = document_.get();
     Scene::SceneSettings* menuSceneSettings = menuDocument ? &menuDocument->settings() : nullptr;
 
     actionShowSectionPlanes = viewMenu->addAction(tr("Show Section Planes"));
@@ -1553,11 +1656,12 @@ void MainWindow::createMenus()
         actionShowSectionPlanes->setChecked(menuSceneSettings->sectionPlanesVisible());
     }
     connect(actionShowSectionPlanes, &QAction::toggled, this, [this](bool checked) {
-        if (!viewport)
-            return;
-        if (Scene::Document* document = viewport->getDocument()) {
+        if (Scene::Document* document = document_.get()) {
             document->settings().setSectionPlanesVisible(checked);
-            viewport->update();
+            forEachViewport([](GLViewport* vp) {
+                if (vp)
+                    vp->update();
+            });
             if (statusBar())
                 statusBar()->showMessage(checked ? tr("Section planes shown") : tr("Section planes hidden"), 1500);
             persistViewSettings();
@@ -1573,11 +1677,12 @@ void MainWindow::createMenus()
         actionShowSectionFills->setChecked(menuSceneSettings->sectionFillsVisible());
     }
     connect(actionShowSectionFills, &QAction::toggled, this, [this](bool checked) {
-        if (!viewport)
-            return;
-        if (Scene::Document* document = viewport->getDocument()) {
+        if (Scene::Document* document = document_.get()) {
             document->settings().setSectionFillsVisible(checked);
-            viewport->update();
+            forEachViewport([](GLViewport* vp) {
+                if (vp)
+                    vp->update();
+            });
             if (statusBar())
                 statusBar()->showMessage(checked ? tr("Section fills enabled") : tr("Section fills disabled"), 1500);
             persistViewSettings();
@@ -1593,11 +1698,12 @@ void MainWindow::createMenus()
         actionShowGuides->setChecked(menuSceneSettings->guidesVisible());
     }
     connect(actionShowGuides, &QAction::toggled, this, [this](bool checked) {
-        if (!viewport)
-            return;
-        if (Scene::Document* document = viewport->getDocument()) {
+        if (Scene::Document* document = document_.get()) {
             document->settings().setGuidesVisible(checked);
-            viewport->update();
+            forEachViewport([](GLViewport* vp) {
+                if (vp)
+                    vp->update();
+            });
             if (statusBar())
                 statusBar()->showMessage(checked ? tr("Guides shown") : tr("Guides hidden"), 1500);
             persistViewSettings();
@@ -1610,9 +1716,7 @@ void MainWindow::createMenus()
     actionEnableShadows->setStatusTip(tr("Toggle sun shadows in the viewport"));
     actionEnableShadows->setChecked(sunSettings.shadowsEnabled);
     connect(actionEnableShadows, &QAction::toggled, this, [this](bool enabled) {
-        if (!viewport)
-            return;
-        Scene::Document* document = viewport->getDocument();
+        Scene::Document* document = document_.get();
         if (!document)
             return;
         const Scene::SceneSettings::ShadowSettings& currentShadow = document->settings().shadows();
@@ -1622,10 +1726,23 @@ void MainWindow::createMenus()
                               currentShadow.bias);
     });
 
-    QAction* actionSplitView = viewMenu->addAction(tr("Split View"), this, [this]() {
-        statusBar()->showMessage(tr("Split view is coming soon"), 2000);
+    actionSplitView = viewMenu->addAction(tr("Split View"));
+    actionSplitView->setCheckable(true);
+    actionSplitView->setStatusTip(tr("Toggle between single and dual viewports"));
+    actionSplitView->setObjectName(QStringLiteral("actionSplitView"));
+    connect(actionSplitView, &QAction::toggled, this, [this](bool enabled) {
+        if (!viewportContainer_)
+            return;
+        viewportContainer_->setSplitEnabled(enabled);
+        splitViewPreference_ = enabled;
+        if (enabled) {
+            if (GLViewport* secondary = viewportContainer_->secondaryViewport())
+                attachViewport(secondary);
+        }
+        if (statusBar())
+            statusBar()->showMessage(enabled ? tr("Dual view enabled") : tr("Single view restored"), 1800);
+        persistViewSettings();
     });
-    actionSplitView->setEnabled(false);
 
     actionToggleRightDock = viewMenu->addAction(tr("Toggle Right Panel"), this, &MainWindow::toggleRightDock);
     actionToggleRightDock->setStatusTip(tr("Show or hide the panels dock"));
@@ -1691,9 +1808,10 @@ void MainWindow::createMenus()
     actionViewHiddenGeometry->setChecked(showHiddenGeometry);
     connect(actionViewHiddenGeometry, &QAction::toggled, this, [this](bool checked) {
         showHiddenGeometry = checked;
-        if (viewport) {
-            viewport->setShowHiddenGeometry(checked);
-        }
+        forEachViewport([checked](GLViewport* vp) {
+            if (vp)
+                vp->setShowHiddenGeometry(checked);
+        });
         if (statusBar()) {
             statusBar()->showMessage(checked ? tr("Hidden geometry shown") : tr("Hidden geometry hidden"), 2000);
         }
@@ -2587,7 +2705,8 @@ void MainWindow::createDockPanels()
     createLeftDock();
     createRightDock();
     createTerminalDock();
-    customizeViewport();
+    if (viewport)
+        customizeViewport(viewport);
 }
 
 void MainWindow::createLeftDock()
@@ -2753,24 +2872,14 @@ void MainWindow::createTerminalDock()
     initializingTerminalDock_ = false;
 }
 
-void MainWindow::customizeViewport()
+void MainWindow::customizeViewport(GLViewport* viewportInstance)
 {
-    if (!viewport)
+    if (!viewportInstance)
         return;
 
-    viewportWidget_ = viewport;
     applyViewportTheme();
-
-    if (!overlay_) {
-        overlay_ = new ViewportOverlay(viewportWidget_);
-        overlay_->setParent(viewportWidget_);
-    }
-
-    overlay_->raise();
-    overlay_->move(viewportWidget_->width() - overlay_->width() - 10, 10);
-    overlay_->show();
-
-    connect(viewport, &GLViewport::viewportResized, this, &MainWindow::handleViewportResize, Qt::UniqueConnection);
+    updateViewportOverlay(viewportInstance);
+    connect(viewportInstance, &GLViewport::viewportResized, this, &MainWindow::handleViewportResize, Qt::UniqueConnection);
 }
 
 void MainWindow::enforceViewportLayout()
@@ -3034,12 +3143,11 @@ void MainWindow::applyThemeStylesheet()
 void MainWindow::applyViewportTheme()
 
 {
-
-    if (!viewport)
-        return;
-
     const ViewportThemePalette palette = viewportPaletteForTheme(darkTheme);
-    viewport->setBackgroundPalette(palette.sky, palette.ground, palette.horizon);
+    forEachViewport([&](GLViewport* vp) {
+        if (vp)
+            vp->setBackgroundPalette(palette.sky, palette.ground, palette.horizon);
+    });
 }
 
 void MainWindow::restoreWindowState()
@@ -3381,10 +3489,16 @@ void MainWindow::populateAdvancedToolsMenu()
 
 void MainWindow::handleViewportResize(const QSize& size)
 {
-    if (!overlay_)
-        return;
-
-    overlay_->move(size.width() - overlay_->width() - 10, 10);
+    Q_UNUSED(size);
+    if (auto* resizedViewport = qobject_cast<GLViewport*>(sender())) {
+        updateViewportOverlay(resizedViewport);
+        if (toolManager && resizedViewport == viewport) {
+            const auto ratio = resizedViewport->devicePixelRatioF();
+            const int pixelW = std::max(1, static_cast<int>(std::lround(resizedViewport->width() * ratio)));
+            const int pixelH = std::max(1, static_cast<int>(std::lround(resizedViewport->height() * ratio)));
+            toolManager->setViewportSize(pixelW, pixelH);
+        }
+    }
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)
@@ -3625,7 +3739,19 @@ void MainWindow::persistViewSettings() const
 
 {
 
-    if (!viewport)
+    GLViewport* activeViewport = viewport;
+
+    if (!activeViewport && viewportContainer_) {
+
+        const QList<GLViewport*> views = viewportContainer_->viewports();
+
+        if (!views.isEmpty())
+
+            activeViewport = views.front();
+
+    }
+
+    if (!activeViewport)
 
         return;
 
@@ -3635,23 +3761,25 @@ void MainWindow::persistViewSettings() const
 
     settings.setValue(QStringLiteral("viewPreset"), currentViewPresetId);
 
-    settings.setValue(QStringLiteral("viewFov"), viewport->fieldOfView());
+    settings.setValue(QStringLiteral("viewFov"), activeViewport->fieldOfView());
 
     settings.setValue(QStringLiteral("viewProjection"),
 
-                      viewport->projectionMode() == CameraController::ProjectionMode::Parallel ? QStringLiteral("parallel")
+                      activeViewport->projectionMode() == CameraController::ProjectionMode::Parallel ? QStringLiteral("parallel")
 
-                                                                                              : QStringLiteral("perspective"));
+                                                                                                     : QStringLiteral("perspective"));
 
     settings.setValue(QStringLiteral("renderStyle"), renderStyleToSetting(renderStyleChoice));
 
-    settings.setValue(QStringLiteral("showHiddenGeometry"), viewport->isHiddenGeometryVisible());
+    settings.setValue(QStringLiteral("showHiddenGeometry"), activeViewport->isHiddenGeometryVisible());
 
-    settings.setValue(QStringLiteral("showGrid"), viewport->showGrid());
+    settings.setValue(QStringLiteral("showGrid"), activeViewport->showGrid());
 
     settings.setValue(QStringLiteral("showFrameStatsHud"), showFrameStatsHud);
 
-    if (Scene::Document* document = viewport->getDocument()) {
+    settings.setValue(QStringLiteral("splitViewEnabled"), splitViewPreference_);
+
+    if (Scene::Document* document = document_.get()) {
 
         const Scene::SceneSettings& sceneSettings = document->settings();
 
@@ -3711,6 +3839,14 @@ void MainWindow::persistAutosaveSettings() const
 void MainWindow::syncViewSettingsUI()
 
 {
+
+    if (actionSplitView && viewportContainer_) {
+
+        QSignalBlocker blocker(actionSplitView);
+
+        actionSplitView->setChecked(viewportContainer_->isSplitEnabled());
+
+    }
 
     if (actionToggleProjection && viewport) {
 
@@ -4559,12 +4695,10 @@ void MainWindow::activateMeasure()
 void MainWindow::toggleGrid(bool enabled)
 
 {
-
-    if (!viewport)
-
-        return;
-
-    viewport->setShowGrid(enabled);
+    forEachViewport([enabled](GLViewport* vp) {
+        if (vp)
+            vp->setShowGrid(enabled);
+    });
 
     if (hintLabel)
 
@@ -4582,11 +4716,8 @@ void MainWindow::applyGridSettings(double majorSpacing, int minorDivisions, int 
 
 {
 
-    if (!viewport)
 
-        return;
-
-    Scene::Document* document = viewport->getDocument();
+    Scene::Document* document = document_.get();
 
     if (!document)
 
@@ -4614,7 +4745,10 @@ void MainWindow::applyGridSettings(double majorSpacing, int minorDivisions, int 
 
     if (changed) {
 
-        viewport->update();
+        forEachViewport([](GLViewport* vp) {
+            if (vp)
+                vp->update();
+        });
 
         if (statusBar())
 
@@ -4634,11 +4768,8 @@ void MainWindow::applyShadowParameters(bool enabled, int qualityIndex, double st
 
 {
 
-    if (!viewport)
 
-        return;
-
-    Scene::Document* document = viewport->getDocument();
+    Scene::Document* document = document_.get();
 
     if (!document)
 
@@ -4698,7 +4829,10 @@ void MainWindow::applyShadowParameters(bool enabled, int qualityIndex, double st
 
     }
 
-    viewport->setSunSettings(sunSettings);
+    forEachViewport([this](GLViewport* vp) {
+        if (vp)
+            vp->setSunSettings(sunSettings);
+    });
 
     updateShadowStatus(previous, sunSettings);
 

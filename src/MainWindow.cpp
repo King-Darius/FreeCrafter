@@ -3046,17 +3046,22 @@ void MainWindow::restoreWindowState()
 
     QSettings settings("FreeCrafter", "FreeCrafter");
 
+    isRestoringWindowState_ = true;
+
     const QVariant storedTheme = settings.value(QStringLiteral("ui/darkMode"));
-    if (storedTheme.isValid())
-        darkTheme = storedTheme.toBool();
 
     settings.beginGroup(kSettingsGroup);
+
+    if (storedTheme.isValid()) {
+        setDarkTheme(storedTheme.toBool());
+    } else {
+        const bool legacyTheme = settings.value(QStringLiteral("darkTheme"), darkTheme).toBool();
+        setDarkTheme(legacyTheme);
+    }
 
     const QByteArray geometry = settings.value("geometry").toByteArray();
 
     const QByteArray state = settings.value("state").toByteArray();
-
-    isRestoringWindowState_ = true;
 
     if (!geometry.isEmpty()) {
 
@@ -3072,9 +3077,6 @@ void MainWindow::restoreWindowState()
         restoreState(state, kWindowStateVersion);
 
     isRestoringWindowState_ = false;
-
-    if (!storedTheme.isValid())
-        darkTheme = settings.value("darkTheme", darkTheme).toBool();
 
     settings.endGroup();
 

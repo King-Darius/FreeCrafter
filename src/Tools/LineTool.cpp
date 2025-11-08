@@ -151,20 +151,6 @@ Tool::PreviewState LineTool::buildPreview() const
     return state;
 }
 
-Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
-{
-    if (points.empty() || !previewValid || value <= 0.0)
-        return Tool::OverrideResult::Ignored;
-
-    Vector3 direction = previewPoint - points.back();
-    if (direction.lengthSquared() <= kMinSegmentLengthSq)
-        return Tool::OverrideResult::Ignored;
-
-    direction = direction.normalized();
-    previewPoint = points.back() + direction * static_cast<float>(value);
-    return Tool::OverrideResult::PreviewUpdated;
-}
-
 bool LineTool::resolvePoint(const PointerInput& input, Vector3& out) const
 {
     const auto& snap = getInferenceResult();
@@ -192,30 +178,49 @@ void LineTool::resetChain()
     points.clear();
     previewValid = false;
 }
-
-void LineTool::resetChain()
-{
-    points.clear();
-    previewValid = false;
-}
-
-Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
-{
-    if (points.empty()) {
-        const auto& snap = getInferenceResult();
-        if (!snap.isValid()) {
-            return Tool::OverrideResult::Ignored;
-        }
-        setState(State::Active);
-        points.push_back(snap.position);
-    }
-
-    if (points.empty()) {
-        return Tool::OverrideResult::Ignored;
-    }
-
-    Vector3 origin = points.back();
-    Vector3 direction;
+
+Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
+{
+    if (value <= 0.0)
+        return Tool::OverrideResult::Ignored;
+
+    if (points.empty()) {
+        const auto& snap = getInferenceResult();
+        if (!snap.isValid())
+            return Tool::OverrideResult::Ignored;
+
+        setState(State::Active);
+        points.push_back(snap.position);
+    }
+
+    if (points.empty())
+        return Tool::OverrideResult::Ignored;
+
+    Vector3 origin = points.back();
+    Vector3 direction;
+    if (previewValid)
+        direction = previewPoint - origin;
+
+    if (direction.lengthSquared() <= kMinSegmentLengthSq) {
+        const auto& snap = getInferenceResult();
+        if (snap.direction.lengthSquared() > kMinSegmentLengthSq)
+            direction = snap.direction;
+    }
+
+    if (direction.lengthSquared() <= kMinSegmentLengthSq)
+        return Tool::OverrideResult::Ignored;
+
+    direction = direction.normalized();
+    Vector3 target = origin + direction * static_cast<float>(value);
+    if (points.size() == 1)
+        points.push_back(target);
+    else
+        points.back() = target;
+
+    previewPoint = target;
+    previewValid = true;
+    return Tool::OverrideResult::Commit;
+}
     if (previewValid) {
         direction = previewPoint - origin;
     }

@@ -147,6 +147,7 @@ Tool::PreviewState LineTool::buildPreview() const
         PreviewPolyline marker;
         marker.points.push_back(previewPoint);
         state.polylines.push_back(std::move(marker));
+    }
     return state;
 }
 
@@ -162,6 +163,7 @@ Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
     direction = direction.normalized();
     previewPoint = points.back() + direction * static_cast<float>(value);
     return Tool::OverrideResult::PreviewUpdated;
+}
 
 bool LineTool::resolvePoint(const PointerInput& input, Vector3& out) const
 {
@@ -185,55 +187,11 @@ bool LineTool::resolveFallback(const PointerInput& input, Vector3& out) const
     return true;
 }
 
-    previewPoint = Vector3();
-            } else {
-                previewValid = false;
-            }
-        }
-    } else if (result.isValid()) {
-        previewPoint = result.position;
-        previewValid = true;
-    }
-}
-
-Tool::PreviewState LineTool::buildPreview() const
-{
-    PreviewState state;
-    if (!points.empty()) {
-        PreviewPolyline polyline;
-        polyline.points = points;
-        if (previewValid && (points.empty() || (previewPoint - points.back()).lengthSquared() > 1e-8f)) {
-            polyline.points.push_back(previewPoint);
-        }
-        state.polylines.push_back(polyline);
-    } else if (previewValid) {
-        PreviewPolyline dot;
-        dot.points.push_back(previewPoint);
-        state.polylines.push_back(dot);
-    }
-    return state;
-}
-
-bool LineTool::resolvePoint(const PointerInput& input, Vector3& out) const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.isValid()) {
-        out = snap.position;
-        return true;
-    }
-    return resolveFallback(input, out);
-}
-
-bool LineTool::resolveFallback(const PointerInput& input, Vector3& out) const
-{
-    Vector3 ground;
-    if (!screenToGround(camera, input.x, input.y, viewportWidth, viewportHeight, ground)) {
-        return false;
-    }
-    axisSnap(ground);
-    out = Vector3(ground.x, 0.0f, ground.z);
-    return true;
-}
+void LineTool::resetChain()
+{
+    points.clear();
+    previewValid = false;
+}
 
 void LineTool::resetChain()
 {

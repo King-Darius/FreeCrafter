@@ -45,22 +45,7 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     result.valid = true;
     return result;
 }
-
-    const double azimuthRad = degToRad(result.azimuthDegrees);
-
-
-
-    const double horizontal = std::cos(altitudeRad);
-
-    const double east = horizontal * std::sin(azimuthRad);
-
-    const double north = horizontal * std::cos(azimuthRad);
-
-    const double up = std::sin(altitudeRad);
-
-
-
-    result.direction = QVector3D(static_cast<float>(east), static_cast<float>(up), static_cast<float>(north));
+
 
     if (!result.direction.isNull()) {
 

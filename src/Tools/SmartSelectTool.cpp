@@ -287,51 +287,6 @@ void SmartSelectTool::clearSelection()
         object->setSelected(false);
 }
 
-}
-
-void SmartSelectTool::selectSingle(const PointerInput& input)
-{
-    Vector3 world;
-    if (!pointerToWorld(input, world)) {
-        clearSelection();
-        return;
-    }
-    GeometryObject* candidate = pickObjectAt(world);
-    bool additive = getModifiers().shift;
-    bool toggle = getModifiers().ctrl;
-
-    if (!candidate) {
-        if (!additive && !toggle) {
-            clearSelection();
-        }
-        return;
-    }
-
-    if (!additive && !toggle) {
-        clearSelection();
-    }
-
-    if (toggle) {
-        candidate->setSelected(!candidate->isSelected());
-    } else {
-        candidate->setSelected(true);
-    }
-}
-
-void SmartSelectTool::selectByRectangle(const PointerInput& input)
-{
-    PointerInput a{ anchorX, anchorY, getModifiers() };
-    PointerInput b{ currentX, currentY, getModifiers() };
-    Vector3 start;
-    Vector3 end;
-    if (anchorWorldValid) {
-        start = anchorWorld;
-    } else if (!pointerToWorld(a, start)) {
-        rectangleValid = false;
-        return;
-    }
-    if (!pointerToWorld(b, end)) {
-        rectangleValid = false;
         return;
     }
 

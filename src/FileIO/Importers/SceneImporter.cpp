@@ -444,7 +444,9 @@ bool parseStl(const std::filesystem::path& path, std::vector<ImportedMesh>& mesh
     std::vector<StlMetadataEntry> metadataEntries;
     switch (loadStlMetadata(path, metadataEntries, error)) {
     case StlMetadataStatus::Error:
-        return false;
+        if (error)
+            error->clear();
+        [[fallthrough]];
     case StlMetadataStatus::Missing:
         break;
     case StlMetadataStatus::Loaded: {

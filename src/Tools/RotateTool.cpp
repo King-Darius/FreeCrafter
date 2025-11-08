@@ -254,38 +254,6 @@ std::vector<Scene::ObjectId> RotateTool::selectionIds() const
     }
     return ids;
 }
-
-        ghost.rotationAxis = axis;
-        ghost.rotationAngle = currentAngle;
-        ghost.pivot = pivot;
-        ghost.usePivot = true;
-        state.ghosts.push_back(ghost);
-    }
-    return state;
-}
-
-bool RotateTool::pointerToWorld(const PointerInput& input, Vector3& out) const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.isValid()) {
-        out = snap.position;
-        return true;
-    }
-    if (!camera)
-        return false;
-    return pointerToGround(camera, input.x, input.y, viewportWidth, viewportHeight, out);
-}
-
-std::vector<GeometryObject*> RotateTool::gatherSelection() const
-{
-    std::vector<GeometryObject*> result;
-    if (!geometry)
-        return result;
-    for (const auto& object : geometry->getObjects()) {
-        if (object->isSelected()) {
-            result.push_back(object.get());
-        }
-    }
     return result;
 }
 

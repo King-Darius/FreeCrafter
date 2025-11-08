@@ -291,43 +291,6 @@ void ScaleTool::resetState()
 }
 
     }
-    return state;
-}
-
-bool ScaleTool::pointerToWorld(const PointerInput& input, Vector3& out) const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.isValid()) {
-        out = snap.position;
-        return true;
-    }
-    if (!camera)
-        return false;
-    return pointerToGround(camera, input.x, input.y, viewportWidth, viewportHeight, out);
-}
-
-std::vector<GeometryObject*> ScaleTool::gatherSelection() const
-{
-    std::vector<GeometryObject*> result;
-    if (!geometry)
-        return result;
-    for (const auto& object : geometry->getObjects()) {
-        if (object->isSelected()) {
-            result.push_back(object.get());
-        }
-    }
-    return result;
-}
-
-void ScaleTool::applyScale(const Vector3& factors)
-{
-    if (!geometry)
-        return;
-    for (GeometryObject* obj : selection) {
-        if (!obj)
-            continue;
-        scaleObject(*obj, pivot, factors);
-    }
 }
 
 Vector3 ScaleTool::determineAxis() const

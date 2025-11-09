@@ -919,7 +919,7 @@ void MainWindow::validateToolActionBindings() const
 }
 
 namespace {
-
+constexpr int kMaxRecentFiles = 5;
 }
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
@@ -970,6 +970,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
     undoStack = new QUndoStack(this);
     commandStack = std::make_unique<Core::CommandStack>(undoStack);
+    if (undoStack)
+        connect(undoStack, &QUndoStack::cleanChanged, this, &MainWindow::handleDocumentCleanChanged);
 
     viewportContainer_->setDocument(document_.get());
     viewport = viewportContainer_->primaryViewport();
@@ -1210,6 +1212,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     currentViewPresetId = viewport->currentViewPresetId();
 
     createMenus();
+    loadRecentFiles();
+    rebuildRecentFilesMenu();
 
     createToolbars();
     createDockPanels();
@@ -1225,6 +1229,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     restoreWindowState();
 
     maybeRestoreAutosave();
+    updateDocumentUiIndicators();
 
 }
 
@@ -1269,6 +1274,7 @@ void MainWindow::initializeAutosave()
     const int retention = settings.value(QStringLiteral("retentionCount"), 5).toInt();
 
     currentDocumentPath = settings.value(QStringLiteral("lastSourcePath")).toString();
+    sessionDocumentPathExplicit = false;
 
     settings.endGroup();
 
@@ -1342,6 +1348,11 @@ void MainWindow::maybeRestoreAutosave()
 
         updateSelectionStatus();
 
+        if (!currentDocumentPath.isEmpty()) {
+            sessionDocumentPathExplicit = true;
+            updateDocumentUiIndicators();
+        }
+
         if (statusBar())
 
             statusBar()->showMessage(tr("Autosave restored"), 3000);
@@ -1365,6 +1376,7 @@ void MainWindow::updateAutosaveSource(const QString& path, bool purgePreviousPre
         previousPrefix = autosaveManager->currentPrefix();
 
     currentDocumentPath = path;
+    sessionDocumentPathExplicit = !path.isEmpty();
 
     if (autosaveManager) {
 
@@ -1377,6 +1389,308 @@ void MainWindow::updateAutosaveSource(const QString& path, bool purgePreviousPre
     }
 
     persistAutosaveSettings();
+    updateDocumentUiIndicators();
+
+}
+
+QString MainWindow::documentFilePath() const
+
+{
+
+    if (!hasExplicitDocumentPath())
+
+        return QString();
+
+    return currentDocumentPath;
+
+}
+
+bool MainWindow::hasExplicitDocumentPath() const
+
+{
+
+    return sessionDocumentPathExplicit && !currentDocumentPath.isEmpty();
+
+}
+
+QString MainWindow::promptForSaveFileName(const QString& initialPath)
+
+{
+
+    const QString startPath = initialPath.isEmpty()
+
+        ? (hasExplicitDocumentPath() ? currentDocumentPath : QString())
+
+        : initialPath;
+
+    return QFileDialog::getSaveFileName(this,
+                                        tr("Save FreeCrafter Model"),
+                                        startPath,
+                                        tr("FreeCrafter (*.fcm)"));
+
+}
+
+void MainWindow::loadRecentFiles()
+
+{
+
+    QSettings settings("FreeCrafter", "FreeCrafter");
+
+    settings.beginGroup(QStringLiteral("RecentFiles"));
+
+    recentFiles = settings.value(QStringLiteral("files")).toStringList();
+
+    settings.endGroup();
+
+    for (QString& entry : recentFiles)
+
+        entry = QDir::cleanPath(entry);
+
+    recentFiles.removeAll(QString());
+
+    recentFiles.removeDuplicates();
+
+}
+
+void MainWindow::persistRecentFiles() const
+
+{
+
+    QSettings settings("FreeCrafter", "FreeCrafter");
+
+    settings.beginGroup(QStringLiteral("RecentFiles"));
+
+    settings.setValue(QStringLiteral("files"), recentFiles);
+
+    settings.endGroup();
+
+}
+
+void MainWindow::rebuildRecentFilesMenu()
+
+{
+
+    if (!recentFilesMenu)
+
+        return;
+
+    recentFilesMenu->clear();
+
+    if (recentFiles.isEmpty()) {
+
+        recentPlaceholderAction = recentFilesMenu->addAction(tr("No recent files yet"));
+
+        if (recentPlaceholderAction)
+
+            recentPlaceholderAction->setEnabled(false);
+
+        return;
+
+    }
+
+    recentPlaceholderAction = nullptr;
+
+    for (const QString& path : recentFiles) {
+
+        const QFileInfo info(path);
+
+        QAction* recentAction = recentFilesMenu->addAction(info.fileName());
+
+        if (!recentAction)
+
+            continue;
+
+        recentAction->setData(path);
+
+        connect(recentAction,
+
+                &QAction::triggered,
+
+                this,
+
+                [this, path]() { openDocumentFromPath(path); });
+
+    }
+
+}
+
+void MainWindow::addRecentFile(const QString& path)
+
+{
+
+    if (path.isEmpty())
+
+        return;
+
+    const QString normalized = QDir::cleanPath(path);
+
+    if (normalized.isEmpty())
+
+        return;
+
+    recentFiles.removeAll(normalized);
+
+    recentFiles.prepend(normalized);
+
+    while (recentFiles.size() > kMaxRecentFiles)
+
+        recentFiles.removeLast();
+
+    persistRecentFiles();
+
+    rebuildRecentFilesMenu();
+
+}
+
+void MainWindow::openDocumentFromPath(const QString& path)
+
+{
+
+    if (path.isEmpty() || !viewport)
+
+        return;
+
+    viewport->setAutoFrameOnGeometryChange(true);
+
+    viewport->resetCameraToHome();
+
+    bool ok = viewport->getDocument() && viewport->getDocument()->loadFromFile(path.toStdString());
+
+    if (ok) {
+
+        viewport->frameSceneToGeometry();
+
+        const QString previousPath = currentDocumentPath;
+
+        updateAutosaveSource(path, QDir::cleanPath(previousPath) != QDir::cleanPath(path));
+
+        if (undoStack) {
+
+            undoStack->clear();
+
+            undoStack->setClean();
+
+        }
+
+        addRecentFile(path);
+
+        if (statusBar())
+
+            statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(path).fileName()), 1500);
+
+    } else {
+
+        if (statusBar())
+
+            statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(path).fileName()), 2000);
+
+    }
+
+    viewport->update();
+
+}
+
+bool MainWindow::saveDocumentToPath(const QString& path, bool purgePreviousPrefix)
+
+{
+
+    if (!viewport)
+
+        return false;
+
+    Scene::Document* document = viewport->getDocument();
+
+    if (!document)
+
+        return false;
+
+    const bool ok = document->saveToFile(path.toStdString());
+
+    if (!ok)
+
+        return false;
+
+    updateAutosaveSource(path, purgePreviousPrefix);
+
+    if (autosaveManager)
+
+        autosaveManager->clearAutosaves();
+
+    addRecentFile(path);
+
+    if (undoStack)
+
+        undoStack->setClean();
+
+    updateDocumentUiIndicators();
+
+    if (statusBar())
+
+        statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(path).fileName()), 1500);
+
+    return true;
+
+}
+
+void MainWindow::updateDocumentUiIndicators()
+
+{
+
+    const QString displayName = documentDisplayName();
+
+    bool isDirty = false;
+
+    if (undoStack)
+
+        isDirty = !undoStack->isClean();
+
+    if (!hasExplicitDocumentPath())
+
+        isDirty = true;
+
+    const QString tabLabel = isDirty ? tr("%1 •").arg(displayName) : displayName;
+
+    if (documentTabs && documentTabs->count() > 0)
+
+        documentTabs->setTabText(0, tabLabel);
+
+    QString windowLabel;
+
+    if (displayName.isEmpty())
+
+        windowLabel = tr("FreeCrafter");
+
+    else
+
+        windowLabel = tr("%1 — %2").arg(displayName, tr("FreeCrafter"));
+
+    if (isDirty)
+
+        windowLabel.append(tr(" •"));
+
+    setWindowTitle(windowLabel);
+
+}
+
+QString MainWindow::documentDisplayName() const
+
+{
+
+    if (!hasExplicitDocumentPath())
+
+        return tr("Untitled");
+
+    return QFileInfo(currentDocumentPath).fileName();
+
+}
+
+void MainWindow::handleDocumentCleanChanged(bool clean)
+
+{
+
+    Q_UNUSED(clean);
+
+    updateDocumentUiIndicators();
 
 }
 
@@ -1484,9 +1798,7 @@ void MainWindow::createMenus()
     actionSaveAs = fileMenu->addAction(tr("Save As..."), this, &MainWindow::saveFileAs);
     actionSaveAs->setStatusTip(tr("Save the active document to a new file"));
 
-    QMenu* recentMenu = fileMenu->addMenu(tr("Recent"));
-    QAction* recentPlaceholder = recentMenu->addAction(tr("No recent files yet"));
-    recentPlaceholder->setEnabled(false);
+    recentFilesMenu = fileMenu->addMenu(tr("Recent"));
 
     actionExport = fileMenu->addAction(tr("Export..."), this, &MainWindow::exportFile);
     actionExport->setIcon(QIcon(QStringLiteral(":/icons/export.svg")));
@@ -4088,6 +4400,10 @@ void MainWindow::newFile()
 
     }
 
+    if (undoStack)
+
+        undoStack->clear();
+
     updateAutosaveSource(QString(), true);
 
     viewport->update();
@@ -4102,30 +4418,11 @@ void MainWindow::openFile()
 
     const QString fn = QFileDialog::getOpenFileName(this, tr("Open FreeCrafter Model"), QString(), tr("FreeCrafter (*.fcm)"));
 
-    if (fn.isEmpty()) return;
+    if (fn.isEmpty())
 
-    if (viewport) {
-        viewport->setAutoFrameOnGeometryChange(true);
-        viewport->resetCameraToHome();
-    }
+        return;
 
-    bool ok = viewport && viewport->getDocument() && viewport->getDocument()->loadFromFile(fn.toStdString());
-
-    if (ok) {
-
-        viewport->frameSceneToGeometry();
-
-        updateAutosaveSource(fn, false);
-
-        statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(fn).fileName()), 1500);
-
-    } else {
-
-        statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(fn).fileName()), 2000);
-
-    }
-
-    viewport->update();
+    openDocumentFromPath(fn);
 
 }
 
@@ -4133,27 +4430,35 @@ void MainWindow::saveFile()
 
 {
 
-    const QString fn = QFileDialog::getSaveFileName(this, tr("Save FreeCrafter Model"), QString(), tr("FreeCrafter (*.fcm)"));
+    QString targetPath;
 
-    if (fn.isEmpty()) return;
+    if (hasExplicitDocumentPath())
 
-    bool ok = viewport->getDocument() && viewport->getDocument()->saveToFile(fn.toStdString());
+        targetPath = currentDocumentPath;
 
-    if (ok) {
+    if (targetPath.isEmpty()) {
 
-        updateAutosaveSource(fn, true);
+        targetPath = promptForSaveFileName(QString());
 
-        if (autosaveManager)
+        if (targetPath.isEmpty())
 
-            autosaveManager->clearAutosaves();
-
-        statusBar()->showMessage(tr("Saved %1").arg(QFileInfo(fn).fileName()), 1500);
-
-    } else {
-
-        statusBar()->showMessage(tr("Failed to save %1").arg(QFileInfo(fn).fileName()), 2000);
+            return;
 
     }
+
+    const QString previousPath = hasExplicitDocumentPath() ? currentDocumentPath : QString();
+
+    const bool pathChanged = previousPath.isEmpty()
+
+        || QDir::cleanPath(previousPath) != QDir::cleanPath(targetPath);
+
+    if (saveDocumentToPath(targetPath, pathChanged))
+
+        return;
+
+    if (statusBar())
+
+        statusBar()->showMessage(tr("Failed to save %1").arg(QFileInfo(targetPath).fileName()), 2000);
 
 }
 
@@ -4161,7 +4466,25 @@ void MainWindow::saveFileAs()
 
 {
 
-    saveFile();
+    const QString targetPath = promptForSaveFileName(currentDocumentPath);
+
+    if (targetPath.isEmpty())
+
+        return;
+
+    const QString previousPath = currentDocumentPath;
+
+    const bool pathChanged = previousPath.isEmpty()
+
+        || QDir::cleanPath(previousPath) != QDir::cleanPath(targetPath);
+
+    if (saveDocumentToPath(targetPath, pathChanged))
+
+        return;
+
+    if (statusBar())
+
+        statusBar()->showMessage(tr("Failed to save %1").arg(QFileInfo(targetPath).fileName()), 2000);
 
 }
 

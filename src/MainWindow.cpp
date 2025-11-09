@@ -1335,6 +1335,8 @@ void MainWindow::maybeRestoreAutosave()
 
     if (autosaveManager->restoreLatest(doc)) {
 
+        applyFreshDocumentState();
+
         forEachViewport([](GLViewport* vp) {
             if (vp)
                 vp->update();
@@ -1343,7 +1345,6 @@ void MainWindow::maybeRestoreAutosave()
         updateSelectionStatus();
 
         if (statusBar())
-
             statusBar()->showMessage(tr("Autosave restored"), 3000);
 
     } else {
@@ -1980,15 +1981,23 @@ void MainWindow::importExternalModel()
 
     const bool ok = doc->importExternalModel(fileName.toStdString(), format);
     if (ok) {
-        statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fileName).fileName()), 1500);
-        viewport->frameSceneToGeometry();
-        viewport->update();
+        if (viewport)
+            viewport->frameSceneToGeometry();
+
+        applyFreshDocumentState();
+
+        if (statusBar())
+            statusBar()->showMessage(tr("Imported %1").arg(QFileInfo(fileName).fileName()), 1500);
     } else {
         QString reason = QString::fromStdString(doc->lastImportError());
         if (reason.isEmpty())
             reason = tr("Unknown import error");
-        statusBar()->showMessage(tr("Failed to import %1: %2").arg(QFileInfo(fileName).fileName(), reason), 4000);
+        if (statusBar())
+            statusBar()->showMessage(tr("Failed to import %1: %2").arg(QFileInfo(fileName).fileName(), reason), 4000);
     }
+
+    if (viewport)
+        viewport->update();
 }
 
 void MainWindow::exportFile()
@@ -3501,6 +3510,30 @@ void MainWindow::handleViewportResize(const QSize& size)
     }
 }
 
+void MainWindow::applyFreshDocumentState()
+{
+    // Reset undo/redo affordances before announcing success so the UI never
+    // exposes stale commands after a document swap.
+    if (undoStack)
+        undoStack->clear();
+
+    if (actionUndo)
+        actionUndo->setEnabled(false);
+
+    if (actionRedo)
+        actionRedo->setEnabled(false);
+
+    updateUndoRedoActionText();
+
+    if (toolManager)
+        toolManager->notifyExternalGeometryChange();
+
+    syncActiveToolOptions();
+
+    if (rightTray_)
+        rightTray_->refreshPanels();
+}
+
 void MainWindow::resizeEvent(QResizeEvent* event)
 
 {
@@ -4090,9 +4123,13 @@ void MainWindow::newFile()
 
     updateAutosaveSource(QString(), true);
 
-    viewport->update();
+    applyFreshDocumentState();
 
-    statusBar()->showMessage(tr("New document created"), 1500);
+    if (viewport)
+        viewport->update();
+
+    if (statusBar())
+        statusBar()->showMessage(tr("New document created"), 1500);
 
 }
 
@@ -4104,28 +4141,48 @@ void MainWindow::openFile()
 
     if (fn.isEmpty()) return;
 
+    openFileFromPath(fn);
+
+}
+
+bool MainWindow::openFileFromPath(const QString& path)
+
+{
+
+    if (path.isEmpty())
+
+        return false;
+
     if (viewport) {
         viewport->setAutoFrameOnGeometryChange(true);
         viewport->resetCameraToHome();
     }
 
-    bool ok = viewport && viewport->getDocument() && viewport->getDocument()->loadFromFile(fn.toStdString());
+    const bool ok = viewport && viewport->getDocument() && viewport->getDocument()->loadFromFile(path.toStdString());
 
     if (ok) {
 
-        viewport->frameSceneToGeometry();
+        if (viewport)
+            viewport->frameSceneToGeometry();
 
-        updateAutosaveSource(fn, false);
+        updateAutosaveSource(path, false);
 
-        statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(fn).fileName()), 1500);
+        applyFreshDocumentState();
+
+        if (statusBar())
+            statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(path).fileName()), 1500);
 
     } else {
 
-        statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(fn).fileName()), 2000);
+        if (statusBar())
+            statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(path).fileName()), 2000);
 
     }
 
-    viewport->update();
+    if (viewport)
+        viewport->update();
+
+    return ok;
 
 }
 

@@ -38,6 +38,9 @@ public:
 
     void refreshPanels();
 
+public slots:
+    void refreshHistory();
+
 private:
     void handleRenameObject(Scene::Document::ObjectId id, const QString& name);
     void handleVisibilityChange(Scene::Document::ObjectId id, bool visible);
@@ -51,6 +54,7 @@ private:
     Scene::Document* document_ = nullptr;
     GeometryKernel* geometry_ = nullptr;
     Core::CommandStack* commandStack_ = nullptr;
+    QUndoStack* undoStack_ = nullptr;
     InspectorPanel* inspector_ = nullptr;
     OutlinerPanel* outliner_ = nullptr;
     HistoryPanel* history_ = nullptr;

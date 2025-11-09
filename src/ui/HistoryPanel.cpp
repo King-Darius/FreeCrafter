@@ -43,3 +43,10 @@ void HistoryPanel::updateVisibility()
     if (placeholder_)
         placeholder_->setVisible(!hasStack);
 }
+
+void HistoryPanel::refresh()
+{
+    if (view_)
+        view_->setStack(undoStack_);
+    updateVisibility();
+}

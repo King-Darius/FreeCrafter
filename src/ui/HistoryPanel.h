@@ -12,6 +12,7 @@ public:
     explicit HistoryPanel(QUndoStack* stack, QWidget* parent = nullptr);
 
     void setUndoStack(QUndoStack* stack);
+    void refresh();
 
 private:
     void updateVisibility();

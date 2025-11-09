@@ -13,6 +13,8 @@
 #include <QScreen>
 #include <QColor>
 #include <QGuiApplication>
+#include <QQueue>
+#include <QFileInfo>
 #include <cmath>
 #include <cassert>
 
@@ -21,6 +23,31 @@
 #include "GLViewport.h"
 #include "Scene/SceneSettings.h"
 #include "ui/CommandPaletteDialog.h"
+
+class TestMainWindow : public MainWindow {
+public:
+    using MainWindow::MainWindow;
+
+    void enqueueSavePath(const QString& path) { queuedPaths.enqueue(path); }
+
+    int promptCallCount() const { return promptCalls; }
+
+    QString lastPromptInitial() const { return lastInitialPath; }
+
+protected:
+    QString promptForSaveFileName(const QString& initialPath) override {
+        ++promptCalls;
+        lastInitialPath = initialPath;
+        if (queuedPaths.isEmpty())
+            return QString();
+        return queuedPaths.dequeue();
+    }
+
+private:
+    QQueue<QString> queuedPaths;
+    int promptCalls = 0;
+    QString lastInitialPath;
+};
 
 int main(int argc, char** argv) {
     qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
@@ -316,6 +343,53 @@ int main(int argc, char** argv) {
         assert(sanitizedViewport->skyBackgroundColor() == expectedSkyColor);
 
         sanitized.close();
+        app.processEvents();
+    }
+
+    {
+        TestMainWindow saveWindow;
+        QTemporaryDir saveDir;
+        assert(saveDir.isValid());
+
+        const QString firstPath = saveDir.filePath(QStringLiteral("first.fcm"));
+        const QString secondPath = saveDir.filePath(QStringLiteral("second.fcm"));
+        const QString thirdPath = saveDir.filePath(QStringLiteral("third.fcm"));
+
+        saveWindow.enqueueSavePath(firstPath);
+        bool invoked = QMetaObject::invokeMethod(&saveWindow, "saveFile", Qt::DirectConnection);
+        assert(invoked);
+        assert(saveWindow.promptCallCount() == 1);
+        assert(saveWindow.lastPromptInitial().isEmpty());
+        assert(saveWindow.documentFilePath() == firstPath);
+        assert(QFileInfo::exists(firstPath));
+
+        const int afterFirstSave = saveWindow.promptCallCount();
+        invoked = QMetaObject::invokeMethod(&saveWindow, "saveFile", Qt::DirectConnection);
+        assert(invoked);
+        assert(saveWindow.promptCallCount() == afterFirstSave);
+
+        saveWindow.enqueueSavePath(secondPath);
+        invoked = QMetaObject::invokeMethod(&saveWindow, "saveFileAs", Qt::DirectConnection);
+        assert(invoked);
+        assert(saveWindow.promptCallCount() == afterFirstSave + 1);
+        assert(saveWindow.lastPromptInitial() == firstPath);
+        assert(saveWindow.documentFilePath() == secondPath);
+        assert(QFileInfo::exists(secondPath));
+
+        const int afterSaveAs = saveWindow.promptCallCount();
+        invoked = QMetaObject::invokeMethod(&saveWindow, "saveFile", Qt::DirectConnection);
+        assert(invoked);
+        assert(saveWindow.promptCallCount() == afterSaveAs);
+
+        saveWindow.enqueueSavePath(thirdPath);
+        invoked = QMetaObject::invokeMethod(&saveWindow, "saveFileAs", Qt::DirectConnection);
+        assert(invoked);
+        assert(saveWindow.promptCallCount() == afterSaveAs + 1);
+        assert(saveWindow.lastPromptInitial() == secondPath);
+        assert(saveWindow.documentFilePath() == thirdPath);
+        assert(QFileInfo::exists(thirdPath));
+
+        saveWindow.close();
         app.processEvents();
     }
 

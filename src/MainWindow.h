@@ -67,6 +67,11 @@ public:
     explicit MainWindow(QWidget* parent=nullptr);
     ~MainWindow() override;
 
+    QString documentFilePath() const;
+
+protected:
+    virtual QString promptForSaveFileName(const QString& initialPath);
+
 private slots:
     void newFile();
     void openFile();
@@ -182,6 +187,15 @@ private:
     void forEachViewport(const std::function<void(GLViewport*)>& fn);
     void updateViewportOverlay(GLViewport* viewportInstance);
     void handleViewportActivated(GLViewport* viewportInstance);
+    void loadRecentFiles();
+    void persistRecentFiles() const;
+    void rebuildRecentFilesMenu();
+    void addRecentFile(const QString& path);
+    void openDocumentFromPath(const QString& path);
+    bool saveDocumentToPath(const QString& path, bool purgePreviousPrefix);
+    void updateDocumentUiIndicators();
+    QString documentDisplayName() const;
+    void handleDocumentCleanChanged(bool clean);
 
     GLViewport* viewport = nullptr;
     std::unique_ptr<Scene::Document> document_;
@@ -253,6 +267,7 @@ private:
     QUndoStack* undoStack = nullptr;
 
     QString currentDocumentPath;
+    QStringList recentFiles;
 
     QActionGroup* projectionModeGroup = nullptr;
     QAction* selectAction = nullptr;
@@ -341,6 +356,8 @@ private:
     QToolButton* loftApplyButton = nullptr;
     QToolButton* loftDialogButton = nullptr;
     QMenu* advancedToolsMenu = nullptr;
+    QMenu* recentFilesMenu = nullptr;
+    QAction* recentPlaceholderAction = nullptr;
     Phase6::RoundCornerOptions chamferDefaults_;
     Phase6::LoftOptions loftDefaults_;
     CommandPaletteDialog* commandPaletteDialog = nullptr;

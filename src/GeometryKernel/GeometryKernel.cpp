@@ -2,7 +2,9 @@
 #include "Serialization.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <fstream>
+#include <limits>
 #include <string>
 
 #include "MeshUtils.h"
@@ -375,15 +377,38 @@ bool GeometryKernel::rebuildShapeFromMetadata(GeometryObject* object, const Shap
     return true;
 }
 
-void GeometryKernel::addTextAnnotation(const Vector3& position, std::string text, float height)
+std::size_t GeometryKernel::addTextAnnotation(const Vector3& position, std::string text, float height)
 {
     if (text.empty())
-        return;
+        return std::numeric_limits<std::size_t>::max();
     TextAnnotation annotation;
     annotation.position = position;
     annotation.text = std::move(text);
     annotation.height = std::max(0.01f, height);
     textAnnotations.push_back(std::move(annotation));
+    markModified();
+    return textAnnotations.size() - 1;
+}
+
+void GeometryKernel::removeTextAnnotation(std::size_t index)
+{
+    if (index >= textAnnotations.size())
+        return;
+    textAnnotations.erase(textAnnotations.begin() + static_cast<std::ptrdiff_t>(index));
+    markModified();
+}
+
+void GeometryKernel::insertTextAnnotation(std::size_t index, const Vector3& position, const std::string& text, float height)
+{
+    TextAnnotation annotation;
+    annotation.position = position;
+    annotation.text = text;
+    annotation.height = std::max(0.01f, height);
+    if (index >= textAnnotations.size()) {
+        textAnnotations.push_back(annotation);
+    } else {
+        textAnnotations.insert(textAnnotations.begin() + static_cast<std::ptrdiff_t>(index), annotation);
+    }
     markModified();
 }
 

@@ -1,80 +1,18 @@
 #include "ModificationTools.h"
 
 #include "GroundProjection.h"
+#include "ToolCommands.h"
 #include "../GeometryKernel/Curve.h"
+#include "../Scene/SceneGraphCommands.h"
 
 #include <cmath>
+#include <QString>
+#include <memory>
 
 namespace {
 
 using ToolHelpers::axisSnap;
 using ToolHelpers::screenToGround;
-
-struct Vec2 {
-    float x = 0.0f;
-    float y = 0.0f;
-
-    Vec2() = default;
-    Vec2(float ix, float iy)
-        : x(ix)
-        , y(iy)
-    {
-    }
-
-    Vec2(const Vector3& v)
-        : x(v.x)
-        , y(v.z)
-    {
-    }
-
-    Vec2 operator+(const Vec2& other) const { return { x + other.x, y + other.y }; }
-    Vec2 operator-(const Vec2& other) const { return { x - other.x, y - other.y }; }
-    Vec2 operator*(float s) const { return { x * s, y * s }; }
-    float dot(const Vec2& other) const { return x * other.x + y * other.y; }
-    float cross(const Vec2& other) const { return x * other.y - y * other.x; }
-    float length() const { return std::sqrt(x * x + y * y); }
-    Vec2 normalized() const
-    {
-        float len = length();
-        if (len <= 1e-6f)
-            return {};
-        return { x / len, y / len };
-    }
-};
-
-Vector3 toVec3(const Vec2& v)
-{
-    return { v.x, 0.0f, v.y };
-}
-
-std::vector<Vector3> offsetLoop(const std::vector<Vector3>& loop, float distance)
-{
-    size_t n = loop.size();
-    if (n < 3)
-        return {};
-    std::vector<Vector3> result;
-    result.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-        Vec2 prev(loop[(i + n - 1) % n]);
-        Vec2 curr(loop[i]);
-        Vec2 next(loop[(i + 1) % n]);
-        Vec2 dir1 = (curr - prev).normalized();
-        Vec2 dir2 = (next - curr).normalized();
-        Vec2 normal1(-dir1.y, dir1.x);
-        Vec2 normal2(-dir2.y, dir2.x);
-        Vec2 bisector = (normal1 + normal2).normalized();
-        if (bisector.length() <= 1e-5f) {
-            bisector = normal1;
-        }
-        float denom = bisector.dot(normal1);
-        if (std::fabs(denom) < 1e-5f) {
-            denom = denom < 0.0f ? -1.0f : 1.0f;
-        }
-        Vec2 offset = bisector * (distance / denom);
-        result.push_back(toVec3(Vec2(curr) + offset));
-    }
-    return result;
-}
 
 GeometryObject* findSelectedCurve(GeometryKernel* geometry)
 {
@@ -125,17 +63,22 @@ OffsetTool::OffsetTool(GeometryKernel* g, CameraController* c)
 
 void OffsetTool::onPointerDown(const PointerInput&)
 {
-    if (!geometry)
+    auto* stack = getCommandStack();
+    auto* doc = getDocument();
+    if (!geometry || !stack || !doc)
         return;
-    auto curves = findSelectedCurves(geometry);
-    for (GeometryObject* obj : curves) {
-        auto* curve = static_cast<Curve*>(obj);
-        auto loop = curve->getBoundaryLoop();
-        auto offset = offsetLoop(loop, distance);
-        if (!offset.empty()) {
-            geometry->addCurve(offset);
-        }
+
+    std::vector<Scene::Document::ObjectId> ids;
+    for (GeometryObject* obj : findSelectedCurves(geometry)) {
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
     }
+    if (ids.empty())
+        return;
+
+    auto command = std::make_unique<Tools::OffsetCurveCommand>(ids, distance, QStringLiteral("Offset Curves"));
+    stack->push(std::move(command));
 }
 
 PushPullTool::PushPullTool(GeometryKernel* g, CameraController* c)
@@ -145,12 +88,22 @@ PushPullTool::PushPullTool(GeometryKernel* g, CameraController* c)
 
 void PushPullTool::onPointerDown(const PointerInput&)
 {
-    if (!geometry)
+    auto* stack = getCommandStack();
+    auto* doc = getDocument();
+    if (!geometry || !stack || !doc)
         return;
-    auto curves = findSelectedCurves(geometry);
-    for (GeometryObject* obj : curves) {
-        geometry->extrudeCurve(obj, distance);
+
+    std::vector<Scene::Document::ObjectId> ids;
+    for (GeometryObject* obj : findSelectedCurves(geometry)) {
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
     }
+    if (ids.empty())
+        return;
+
+    auto command = std::make_unique<Tools::PushPullCommand>(ids, distance, QStringLiteral("Push/Pull"));
+    stack->push(std::move(command));
 }
 
 FollowMeTool::FollowMeTool(GeometryKernel* g, CameraController* c)
@@ -160,8 +113,11 @@ FollowMeTool::FollowMeTool(GeometryKernel* g, CameraController* c)
 
 void FollowMeTool::onPointerDown(const PointerInput&)
 {
-    if (!geometry)
+    auto* stack = getCommandStack();
+    auto* doc = getDocument();
+    if (!geometry || !stack || !doc)
         return;
+
     GeometryObject* profileCurve = profile ? profile : findSelectedCurve(geometry);
     if (!profileCurve || profileCurve->getType() != ObjectType::Curve)
         return;
@@ -171,21 +127,13 @@ void FollowMeTool::onPointerDown(const PointerInput&)
     if (!pathCurve || pathCurve->getType() != ObjectType::Curve)
         return;
 
-    const auto& profileLoop = static_cast<Curve*>(profileCurve)->getBoundaryLoop();
-    const auto& pathLoop = static_cast<Curve*>(pathCurve)->getBoundaryLoop();
-    if (profileLoop.empty() || pathLoop.size() < 2)
+    Scene::Document::ObjectId profileId = doc->objectIdForGeometry(profileCurve);
+    Scene::Document::ObjectId pathId = doc->objectIdForGeometry(pathCurve);
+    if (profileId == 0 || pathId == 0)
         return;
 
-    Vector3 start = pathLoop.front();
-    for (const auto& point : pathLoop) {
-        Vector3 offset = point - start;
-        std::vector<Vector3> section;
-        section.reserve(profileLoop.size());
-        for (const auto& p : profileLoop) {
-            section.push_back(p + Vector3(offset.x, 0.0f, offset.z));
-        }
-        geometry->addCurve(section);
-    }
+    auto command = std::make_unique<Tools::FollowMeCommand>(profileId, pathId, QStringLiteral("Follow Me"));
+    stack->push(std::move(command));
 }
 
 PaintBucketTool::PaintBucketTool(GeometryKernel* g, CameraController* c)
@@ -195,12 +143,22 @@ PaintBucketTool::PaintBucketTool(GeometryKernel* g, CameraController* c)
 
 void PaintBucketTool::onPointerDown(const PointerInput&)
 {
-    if (!geometry || materialName.empty())
+    auto* stack = getCommandStack();
+    auto* doc = getDocument();
+    if (!geometry || !stack || !doc || materialName.empty())
         return;
-    auto curves = findSelectedCurves(geometry);
-    for (GeometryObject* obj : curves) {
-        geometry->assignMaterial(obj, materialName);
+
+    std::vector<Scene::Document::ObjectId> ids;
+    for (GeometryObject* obj : findSelectedCurves(geometry)) {
+        Scene::Document::ObjectId id = doc->objectIdForGeometry(obj);
+        if (id != 0)
+            ids.push_back(id);
     }
+    if (ids.empty())
+        return;
+
+    auto command = std::make_unique<Scene::AssignMaterialCommand>(ids, QString::fromStdString(materialName));
+    stack->push(std::move(command));
 }
 
 TextTool::TextTool(GeometryKernel* g, CameraController* c)
@@ -210,12 +168,14 @@ TextTool::TextTool(GeometryKernel* g, CameraController* c)
 
 void TextTool::onPointerDown(const PointerInput& input)
 {
-    if (!geometry || text.empty())
+    auto* stack = getCommandStack();
+    if (!geometry || !stack || text.empty())
         return;
     Vector3 point;
     if (!resolvePoint(input, point))
         return;
-    geometry->addTextAnnotation(point, text, height);
+    auto command = std::make_unique<Tools::CreateTextAnnotationCommand>(point, text, height, QStringLiteral("Add Text"));
+    stack->push(std::move(command));
 }
 
 bool TextTool::resolvePoint(const PointerInput& input, Vector3& out) const

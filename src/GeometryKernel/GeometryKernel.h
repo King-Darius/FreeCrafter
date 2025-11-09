@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 #include <memory>
@@ -89,7 +90,9 @@ public:
         float height = 1.0f;
     };
 
-    void addTextAnnotation(const Vector3& position, std::string text, float height);
+    std::size_t addTextAnnotation(const Vector3& position, std::string text, float height);
+    void removeTextAnnotation(std::size_t index);
+    void insertTextAnnotation(std::size_t index, const Vector3& position, const std::string& text, float height);
     const std::vector<TextAnnotation>& getTextAnnotations() const { return textAnnotations; }
 
     struct LinearDimension {

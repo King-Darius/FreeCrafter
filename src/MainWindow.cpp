@@ -1274,6 +1274,7 @@ void MainWindow::initializeAutosave()
     const int retention = settings.value(QStringLiteral("retentionCount"), 5).toInt();
 
     currentDocumentPath = settings.value(QStringLiteral("lastSourcePath")).toString();
+    sessionDocumentPathExplicit = false;
 
     settings.endGroup();
 
@@ -1347,6 +1348,11 @@ void MainWindow::maybeRestoreAutosave()
 
         updateSelectionStatus();
 
+        if (!currentDocumentPath.isEmpty()) {
+            sessionDocumentPathExplicit = true;
+            updateDocumentUiIndicators();
+        }
+
         if (statusBar())
 
             statusBar()->showMessage(tr("Autosave restored"), 3000);
@@ -1370,6 +1376,7 @@ void MainWindow::updateAutosaveSource(const QString& path, bool purgePreviousPre
         previousPrefix = autosaveManager->currentPrefix();
 
     currentDocumentPath = path;
+    sessionDocumentPathExplicit = !path.isEmpty();
 
     if (autosaveManager) {
 
@@ -1390,7 +1397,19 @@ QString MainWindow::documentFilePath() const
 
 {
 
+    if (!hasExplicitDocumentPath())
+
+        return QString();
+
     return currentDocumentPath;
+
+}
+
+bool MainWindow::hasExplicitDocumentPath() const
+
+{
+
+    return sessionDocumentPathExplicit && !currentDocumentPath.isEmpty();
 
 }
 
@@ -1398,7 +1417,11 @@ QString MainWindow::promptForSaveFileName(const QString& initialPath)
 
 {
 
-    const QString startPath = initialPath.isEmpty() ? currentDocumentPath : initialPath;
+    const QString startPath = initialPath.isEmpty()
+
+        ? (hasExplicitDocumentPath() ? currentDocumentPath : QString())
+
+        : initialPath;
 
     return QFileDialog::getSaveFileName(this,
                                         tr("Save FreeCrafter Model"),
@@ -1621,7 +1644,7 @@ void MainWindow::updateDocumentUiIndicators()
 
         isDirty = !undoStack->isClean();
 
-    if (currentDocumentPath.isEmpty())
+    if (!hasExplicitDocumentPath())
 
         isDirty = true;
 
@@ -1653,7 +1676,7 @@ QString MainWindow::documentDisplayName() const
 
 {
 
-    if (currentDocumentPath.isEmpty())
+    if (!hasExplicitDocumentPath())
 
         return tr("Untitled");
 
@@ -4407,7 +4430,11 @@ void MainWindow::saveFile()
 
 {
 
-    QString targetPath = currentDocumentPath;
+    QString targetPath;
+
+    if (hasExplicitDocumentPath())
+
+        targetPath = currentDocumentPath;
 
     if (targetPath.isEmpty()) {
 
@@ -4419,7 +4446,7 @@ void MainWindow::saveFile()
 
     }
 
-    const QString previousPath = currentDocumentPath;
+    const QString previousPath = hasExplicitDocumentPath() ? currentDocumentPath : QString();
 
     const bool pathChanged = previousPath.isEmpty()
 

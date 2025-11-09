@@ -347,6 +347,38 @@ int main(int argc, char** argv) {
     }
 
     {
+        QTemporaryDir resumeDir;
+        assert(resumeDir.isValid());
+
+        const QString stalePath = resumeDir.filePath(QStringLiteral("stale.fcm"));
+
+        QSettings resumeSettings("FreeCrafter", "FreeCrafter");
+        resumeSettings.beginGroup(QStringLiteral("Autosave"));
+        resumeSettings.setValue(QStringLiteral("lastSourcePath"), stalePath);
+        resumeSettings.endGroup();
+        resumeSettings.sync();
+
+        TestMainWindow resumed;
+        assert(resumed.documentFilePath().isEmpty());
+        assert(resumed.promptCallCount() == 0);
+
+        const QString freshPath = resumeDir.filePath(QStringLiteral("fresh.fcm"));
+
+        resumed.enqueueSavePath(freshPath);
+        bool invoked = QMetaObject::invokeMethod(&resumed, "saveFile", Qt::DirectConnection);
+        assert(invoked);
+        assert(resumed.promptCallCount() == 1);
+        assert(resumed.documentFilePath() == freshPath);
+        assert(QFileInfo::exists(freshPath));
+
+        resumed.close();
+        app.processEvents();
+    }
+
+    settings.clear();
+    settings.sync();
+
+    {
         TestMainWindow saveWindow;
         QTemporaryDir saveDir;
         assert(saveDir.isValid());

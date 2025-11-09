@@ -195,6 +195,7 @@ private:
     bool saveDocumentToPath(const QString& path, bool purgePreviousPrefix);
     void updateDocumentUiIndicators();
     QString documentDisplayName() const;
+    bool hasExplicitDocumentPath() const;
     void handleDocumentCleanChanged(bool clean);
 
     GLViewport* viewport = nullptr;
@@ -267,6 +268,7 @@ private:
     QUndoStack* undoStack = nullptr;
 
     QString currentDocumentPath;
+    bool sessionDocumentPathExplicit = false;
     QStringList recentFiles;
 
     QActionGroup* projectionModeGroup = nullptr;

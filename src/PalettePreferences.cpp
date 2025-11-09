@@ -2,16 +2,17 @@
 
 #include <algorithm>
 
-
 #include "Scene/Document.h"
 
 namespace {
 
+// Linearly interpolate between two colors in vector form.
 QVector4D mix(const QVector4D& a, const QVector4D& b, float t)
 {
     return a * (1.0f - t) + b * t;
 }
 
+// Override the alpha channel while keeping the RGB components untouched.
 QVector4D applyAlpha(const QVector4D& color, float alpha)
 {
     QVector4D result = color;
@@ -19,6 +20,7 @@ QVector4D applyAlpha(const QVector4D& color, float alpha)
     return result;
 }
 
+// Ensure every channel stays in the [0, 1] range before applying to the scene.
 QVector4D clampToUnit(const QVector4D& color)
 {
     return QVector4D(std::clamp(color.x(), 0.0f, 1.0f),
@@ -27,6 +29,7 @@ QVector4D clampToUnit(const QVector4D& color)
                      std::clamp(color.w(), 0.0f, 1.0f));
 }
 
+// Convert a Qt vector color into the scene settings format.
 Scene::SceneSettings::Color toSceneColor(const QVector4D& color)
 {
     Scene::SceneSettings::Color c;
@@ -37,6 +40,7 @@ Scene::SceneSettings::Color toSceneColor(const QVector4D& color)
     return c;
 }
 
+// Convert the serialized scene color back to Qt's QVector4D.
 QVector4D toQtColor(const Scene::SceneSettings::Color& color)
 {
     return QVector4D(color.r, color.g, color.b, color.a);
@@ -74,6 +78,7 @@ PalettePreferences::PalettePreferences(QObject* parent)
         }
     };
 
+    // Default to the first palette so the UI always has a valid state.
     if (!paletteDefinitions.isEmpty()) {
         applyState(stateFromDefinition(paletteDefinitions.front()), false);
     }
@@ -128,6 +133,7 @@ void PalettePreferences::refreshFromDocument()
 
 PalettePreferences::ColorSet PalettePreferences::colorsFromState(const Scene::SceneSettings::PaletteState& state)
 {
+    // Convert the serialized palette state into normalized Qt vectors.
     QVector4D fill = toQtColor(state.fill);
     QVector4D edge = toQtColor(state.edge);
     QVector4D highlight = toQtColor(state.highlight);
@@ -186,6 +192,7 @@ void PalettePreferences::syncDocument()
 {
     if (!attachedDocument)
         return;
+    // Persist the palette into the live document so viewport updates immediately.
     attachedDocument->settings().setPalette(currentState);
 }
 

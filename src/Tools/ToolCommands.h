@@ -4,8 +4,10 @@
 #include "GeometryKernel/Vector3.h"
 #include "Phase6/AdvancedModeling.h"
 
+#include <cstddef>
 #include <memory>
 #include <optional>
+#include <limits>
 #include <QString>
 #include <string>
 #include <vector>
@@ -154,6 +156,86 @@ private:
     Phase6::LoftOptions options_;
     std::string name_;
     Scene::Document::ObjectId createdId_ = 0;
+};
+
+class OffsetCurveCommand : public Core::Command {
+public:
+    OffsetCurveCommand(std::vector<Scene::Document::ObjectId> sourceIds, float distance, const QString& description,
+                       std::string name = {});
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    struct Entry {
+        Scene::Document::ObjectId sourceId = 0;
+        std::vector<Vector3> offsetPoints;
+        Scene::Document::ObjectId createdId = 0;
+        std::string name;
+    };
+
+    std::vector<Entry> entries_;
+    float distance_ = 0.0f;
+    std::string fallbackName_;
+};
+
+class PushPullCommand : public Core::Command {
+public:
+    PushPullCommand(std::vector<Scene::Document::ObjectId> sourceIds, float distance, const QString& description,
+                    std::string name = {});
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    struct Entry {
+        Scene::Document::ObjectId sourceId = 0;
+        Scene::Document::ObjectId createdId = 0;
+        std::string name;
+    };
+
+    std::vector<Entry> entries_;
+    float distance_ = 0.0f;
+    std::string fallbackName_;
+};
+
+class FollowMeCommand : public Core::Command {
+public:
+    FollowMeCommand(Scene::Document::ObjectId profileId, Scene::Document::ObjectId pathId, const QString& description,
+                    std::string name = {});
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Scene::Document::ObjectId profileId_ = 0;
+    Scene::Document::ObjectId pathId_ = 0;
+    std::vector<std::vector<Vector3>> sections_;
+    std::vector<Scene::Document::ObjectId> createdIds_;
+    std::vector<std::string> names_;
+    std::string fallbackName_;
+};
+
+class CreateTextAnnotationCommand : public Core::Command {
+public:
+    CreateTextAnnotationCommand(Vector3 position, std::string text, float height, const QString& description);
+
+protected:
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Vector3 position_{};
+    std::string text_;
+    float height_ = 1.0f;
+    std::size_t index_ = std::numeric_limits<std::size_t>::max();
+    bool created_ = false;
 };
 
 } // namespace Tools

@@ -202,6 +202,11 @@ target_include_directories(test_command_stack PRIVATE src)
 target_link_libraries(test_command_stack PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME command_stack COMMAND $<TARGET_FILE:test_command_stack>)
 
+add_executable(test_modification_commands tests/test_modification_commands.cpp)
+target_include_directories(test_modification_commands PRIVATE src)
+target_link_libraries(test_modification_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME modification_commands COMMAND $<TARGET_FILE:test_modification_commands>)
+
 add_executable(test_phase4 tests/test_phase4.cpp)
 target_include_directories(test_phase4 PRIVATE src)
 target_link_libraries(test_phase4 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)

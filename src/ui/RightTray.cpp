@@ -84,6 +84,8 @@ RightTray::RightTray(Scene::Document* document,
         connect(undoStack_, &QUndoStack::cleanChanged, this, &RightTray::refreshHistory);
         connect(undoStack_, &QObject::destroyed, this, [this]() {
             undoStack_ = nullptr;
+            if (history_)
+                history_->setUndoStack(nullptr);
             refreshHistory();
         });
     }

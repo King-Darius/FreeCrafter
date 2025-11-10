@@ -19,6 +19,8 @@
 
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QUndoStack>
+#include <QObject>
 
 RightTray::RightTray(Scene::Document* document,
                      GeometryKernel* geometry,
@@ -40,7 +42,8 @@ RightTray::RightTray(Scene::Document* document,
 
     inspector_ = new InspectorPanel(container);
     outliner_ = new OutlinerPanel(container);
-    history_ = new HistoryPanel(undoStack, container);
+    undoStack_ = undoStack;
+    history_ = new HistoryPanel(undoStack_, container);
     environment_ = new EnvironmentPanel(container);
     materials_ = new MaterialsPanel(container);
     tags_ = new TagsPanel(container);
@@ -73,6 +76,19 @@ RightTray::RightTray(Scene::Document* document,
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     outer->addWidget(scroll);
+
+    if (undoStack_) {
+        // Keep the History pane in sync with programmatic clears (e.g. new/open)
+        // as well as with regular undo/redo interactions.
+        connect(undoStack_, &QUndoStack::indexChanged, this, &RightTray::refreshHistory);
+        connect(undoStack_, &QUndoStack::cleanChanged, this, &RightTray::refreshHistory);
+        connect(undoStack_, &QObject::destroyed, this, [this]() {
+            undoStack_ = nullptr;
+            if (history_)
+                history_->setUndoStack(nullptr);
+            refreshHistory();
+        });
+    }
 }
 
 void RightTray::refreshPanels()
@@ -83,6 +99,13 @@ void RightTray::refreshPanels()
         materials_->refresh();
     if (tags_)
         tags_->refresh();
+    refreshHistory();
+}
+
+void RightTray::refreshHistory()
+{
+    if (history_)
+        history_->refresh();
 }
 
 void RightTray::handleRenameObject(Scene::Document::ObjectId id, const QString& name)

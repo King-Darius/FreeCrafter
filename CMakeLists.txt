@@ -242,6 +242,11 @@ target_include_directories(test_autosave PRIVATE src)
 target_link_libraries(test_autosave PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME autosave_manager COMMAND $<TARGET_FILE:test_autosave>)
 
+add_executable(test_undo_stack_resets tests/test_undo_stack_resets.cpp)
+target_include_directories(test_undo_stack_resets PRIVATE src)
+target_link_libraries(test_undo_stack_resets PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME undo_stack_resets COMMAND $<TARGET_FILE:test_undo_stack_resets>)
+
 add_executable(test_exporters tests/file_io/test_exporters.cpp)
 target_include_directories(test_exporters PRIVATE src)
 target_link_libraries(test_exporters PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)

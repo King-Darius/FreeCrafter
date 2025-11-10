@@ -75,6 +75,7 @@ protected:
 private slots:
     void newFile();
     void openFile();
+    bool openFileFromPath(const QString& path);
     void importExternalModel();
     void saveFile();
     void saveFileAs();
@@ -170,6 +171,8 @@ private:
     void setProjectionMode(CameraController::ProjectionMode mode, bool showStatus = true);
     void updateViewPresetButtonLabel();
     void updateUndoRedoActionText();
+    //! Clears undo/redo UI state and forces tool panes to match a newly loaded document.
+    void applyFreshDocumentState();
     void handleViewportResize(const QSize& size);
     void persistViewSettings() const;
     void syncViewSettingsUI();

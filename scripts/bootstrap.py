@@ -145,7 +145,7 @@ def verify_checksums(cache: Path) -> None:
             if not file_path.exists() or hash_file(file_path) != digest:
                 raise RuntimeError(f"Checksum mismatch for {file_path}")
 
-def run(cmd, *, retries: int = 3, check: bool = True, **kwargs) -> int:
+def run(cmd, *, retries: int = 3, check: bool = False, **kwargs) -> int:
     """Run *cmd* with retry logic and optional exception raising."""
     for attempt in range(1, retries + 1):
         logging.info("Running: %s", " ".join(map(str, cmd)))
@@ -188,7 +188,7 @@ def ensure_aqt(
         elif use_user_site:
             cmd += ["--user"]
         cmd += ["-r", str(req_file)]
-        run(cmd)
+        run(cmd, check=True)
 
 def ensure_qt(offline: bool) -> Path:
     """Ensure a Qt installation exists and return its prefix."""
@@ -215,7 +215,7 @@ def ensure_qt(offline: bool) -> Path:
     if modules:
         logging.info("Requesting Qt modules: %s", ", ".join(modules))
         cmd += ["--modules", *modules]
-    run(cmd)
+    run(cmd, check=True)
     prefix = detect_qt()
     if not prefix:
         raise RuntimeError("Qt installation failed")
@@ -237,13 +237,13 @@ def run_cmake(
     configure_cmd = ["cmake", "-S", str(root), "-B", str(build_dir), prefix_arg]
     if build_type:
         configure_cmd.append(f"-DCMAKE_BUILD_TYPE={build_type}")
-    run(configure_cmd, env=env)
+    run(configure_cmd, env=env, check=True)
     if not build:
         return
     build_cmd = ["cmake", "--build", str(build_dir)]
     if build_type:
         build_cmd += ["--config", build_type]
-    run(build_cmd, env=env)
+    run(build_cmd, env=env, check=True)
     if install_prefix:
         if not install_prefix.is_absolute():
             install_prefix = root / install_prefix
@@ -256,7 +256,7 @@ def run_cmake(
         ]
         if build_type:
             install_cmd += ["--config", build_type]
-        run(install_cmd, env=env)
+        run(install_cmd, env=env, check=True)
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser()

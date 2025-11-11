@@ -12,6 +12,13 @@ public:
         const std::vector<bool>& edgeHardness = {});
     bool rebuildFromPoints(const std::vector<Vector3>& pts, const std::vector<bool>& edgeHardness = {});
 
+    /// Construct a curve using prevalidated boundary data.
+    ///
+    /// The factory helpers in this header sanitize points and build the accompanying
+    /// mesh before invoking this constructor, so callers should only pass consistent
+    /// loop/mesh/hardness triples.
+    Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness);
+
     ObjectType getType() const override { return ObjectType::Curve; }
     const HalfEdgeMesh& getMesh() const override { return mesh; }
     HalfEdgeMesh& getMesh() override { return mesh; }
@@ -28,8 +35,6 @@ public:
     void scale(const Vector3& pivot, const Vector3& factors);
 
 protected:
-    Curve(std::vector<Vector3> loop, HalfEdgeMesh mesh, std::vector<bool> hardness);
-
     std::vector<Vector3> boundaryLoop;
     HalfEdgeMesh mesh;
     std::vector<bool> hardnessFlags;

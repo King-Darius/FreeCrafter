@@ -28,7 +28,11 @@ constexpr double kAngleMin = 0.0;
 constexpr double kAngleMax = 360.0;
 constexpr double kSweepMin = 0.1;
 constexpr double kSweepMax = 360.0;
-constexpr float kMetadataFloatEpsilon = 1e-4f;
+// Inspector metadata editors work in float precision with up to three visible
+// decimals, so treat values within one micro unit as equal. This keeps
+// user-entered tweaks (even on large coordinates) while avoiding redundant
+// updates from round-tripping through the spin boxes.
+constexpr float kMetadataFloatEpsilon = 1e-6f;
 
 double computeSweepDegrees(const ShapeBuilder::ArcDefinition& definition)
 {
@@ -434,7 +438,7 @@ Vector3 InspectorPanel::pointFromEditors(const PointEditors& editors) const
 
 bool InspectorPanel::fuzzyEqual(float a, float b)
 {
-    return std::fabs(a - b) <= kMetadataFloatEpsilon;
+    return std::fabs(static_cast<double>(a) - static_cast<double>(b)) <= kMetadataFloatEpsilon;
 }
 
 bool InspectorPanel::vectorEqual(const Vector3& a, const Vector3& b)

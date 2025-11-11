@@ -218,6 +218,11 @@ target_include_directories(test_inspector_commands PRIVATE src)
 target_link_libraries(test_inspector_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME inspector_commands COMMAND $<TARGET_FILE:test_inspector_commands>)
 
+add_executable(test_inspector_entity_info tests/test_inspector_entity_info.cpp)
+target_include_directories(test_inspector_entity_info PRIVATE src)
+target_link_libraries(test_inspector_entity_info PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME inspector_entity_info COMMAND $<TARGET_FILE:test_inspector_entity_info>)
+
 add_executable(test_phase4 tests/test_phase4.cpp)
 target_include_directories(test_phase4 PRIVATE src)
 target_link_libraries(test_phase4 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)

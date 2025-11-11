@@ -3,6 +3,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 
 #include <QObject>
+#include <algorithm>
 #include <optional>
 
 namespace Scene {
@@ -38,6 +39,45 @@ void RenameObjectCommand::performUndo()
     document()->renameObject(objectId, previousName);
 }
 
+RenameObjectsCommand::RenameObjectsCommand(const std::vector<Document::ObjectId>& ids, const QString& name)
+    : Core::Command(QObject::tr("Rename Selection"))
+    , objectIds(ids)
+    , newName(name)
+{
+    objectIds.erase(std::remove(objectIds.begin(), objectIds.end(), Document::ObjectId(0)), objectIds.end());
+}
+
+void RenameObjectsCommand::initialize()
+{
+    previousNames.clear();
+    if (!document())
+        return;
+    previousNames.reserve(objectIds.size());
+    for (Document::ObjectId id : objectIds) {
+        if (const Document::ObjectNode* node = document()->findObject(id))
+            previousNames.push_back(node->name);
+        else
+            previousNames.push_back(std::string());
+    }
+}
+
+void RenameObjectsCommand::performRedo()
+{
+    if (!document())
+        return;
+    std::string name = newName.toStdString();
+    for (Document::ObjectId id : objectIds)
+        document()->renameObject(id, name);
+}
+
+void RenameObjectsCommand::performUndo()
+{
+    if (!document())
+        return;
+    for (std::size_t i = 0; i < objectIds.size() && i < previousNames.size(); ++i)
+        document()->renameObject(objectIds[i], previousNames[i]);
+}
+
 SetObjectVisibilityCommand::SetObjectVisibilityCommand(Document::ObjectId id, bool visibleValue)
     : Core::Command(QObject::tr("Toggle Visibility"))
     , objectId(id)
@@ -67,6 +107,44 @@ void SetObjectVisibilityCommand::performUndo()
     if (!document())
         return;
     document()->setObjectVisible(objectId, previous);
+}
+
+SetObjectsVisibilityCommand::SetObjectsVisibilityCommand(const std::vector<Document::ObjectId>& ids, bool visible)
+    : Core::Command(QObject::tr("Toggle Visibility"))
+    , objectIds(ids)
+    , newValue(visible)
+{
+    objectIds.erase(std::remove(objectIds.begin(), objectIds.end(), Document::ObjectId(0)), objectIds.end());
+}
+
+void SetObjectsVisibilityCommand::initialize()
+{
+    previousValues.clear();
+    if (!document())
+        return;
+    previousValues.reserve(objectIds.size());
+    for (Document::ObjectId id : objectIds) {
+        if (const Document::ObjectNode* node = document()->findObject(id))
+            previousValues.push_back(node->visible);
+        else
+            previousValues.push_back(true);
+    }
+}
+
+void SetObjectsVisibilityCommand::performRedo()
+{
+    if (!document())
+        return;
+    for (Document::ObjectId id : objectIds)
+        document()->setObjectVisible(id, newValue);
+}
+
+void SetObjectsVisibilityCommand::performUndo()
+{
+    if (!document())
+        return;
+    for (std::size_t i = 0; i < objectIds.size() && i < previousValues.size(); ++i)
+        document()->setObjectVisible(objectIds[i], previousValues[i]);
 }
 
 AssignMaterialCommand::AssignMaterialCommand(const std::vector<Document::ObjectId>& ids, const QString& materialName)

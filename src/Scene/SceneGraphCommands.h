@@ -26,6 +26,21 @@ private:
     bool captured = false;
 };
 
+class RenameObjectsCommand : public Core::Command {
+public:
+    RenameObjectsCommand(const std::vector<Document::ObjectId>& ids, const QString& name);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    std::vector<Document::ObjectId> objectIds;
+    QString newName;
+    std::vector<std::string> previousNames;
+};
+
 class SetObjectVisibilityCommand : public Core::Command {
 public:
     SetObjectVisibilityCommand(Document::ObjectId id, bool visible);
@@ -40,6 +55,21 @@ private:
     bool visible = true;
     bool previous = true;
     bool captured = false;
+};
+
+class SetObjectsVisibilityCommand : public Core::Command {
+public:
+    SetObjectsVisibilityCommand(const std::vector<Document::ObjectId>& ids, bool visible);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    std::vector<Document::ObjectId> objectIds;
+    bool newValue = true;
+    std::vector<bool> previousValues;
 };
 
 class AssignMaterialCommand : public Core::Command {

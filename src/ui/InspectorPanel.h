@@ -2,6 +2,8 @@
 
 #include <QWidget>
 
+#include <array>
+#include <optional>
 #include <vector>
 
 #include "../GeometryKernel/GeometryKernel.h"
@@ -16,7 +18,10 @@ class Document;
 }
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
+class QFormLayout;
+class QLineEdit;
 class QLabel;
 class QSpinBox;
 class QStackedWidget;
@@ -38,6 +43,13 @@ signals:
     void shapeModified();
 
 private slots:
+    void commitName();
+    void commitVisibility(int state);
+    void commitLock(int state);
+    void commitMaterial(const QString& text);
+    void commitPositionX();
+    void commitPositionY();
+    void commitPositionZ();
     void commitCircle();
     void commitPolygon();
     void commitArc();
@@ -49,6 +61,19 @@ private:
         QDoubleSpinBox* y = nullptr;
         QDoubleSpinBox* z = nullptr;
     };
+
+    struct VectorEditors {
+        QLineEdit* x = nullptr;
+        QLineEdit* y = nullptr;
+        QLineEdit* z = nullptr;
+    };
+
+    void rebuildGeneralProperties();
+    void refreshMaterialChoices();
+    void updateTransformEditors();
+    void applyPositionDelta(int axis, QLineEdit* editor);
+    std::optional<Vector3> centroidForObject(const GeometryObject* object) const;
+    void setVectorEditors(VectorEditors& editors, const Vector3& value, const std::array<bool, 3>& mixedFlags);
 
     QWidget* createMessagePage(const QString& text, QLabel** labelOut);
     void populateFromMetadata();
@@ -66,13 +91,39 @@ private:
     static bool vectorEqual(const Vector3& a, const Vector3& b);
 
     GeometryKernel* currentKernel = nullptr;
+    std::vector<GeometryObject*> currentSelection;
     GeometryObject* currentObject = nullptr;
     GeometryKernel::ShapeMetadata currentMetadata{};
     Scene::Document* currentDocument = nullptr;
     Core::CommandStack* commandStack = nullptr;
     bool updating = false;
 
+    QString mixedValueDisplay;
+    QString currentNameValue;
+    QString currentMaterialValue;
+    bool nameMixed = false;
+    bool visibilityMixed = false;
+    bool lockMixed = false;
+    bool materialMixed = false;
+    bool visibilityValue = true;
+    bool lockValue = false;
+    std::array<bool, 3> positionMixed { false, false, false };
+    Vector3 referencePosition{};
+    std::vector<Vector3> selectionCenters;
+    std::vector<Scene::Document::ObjectId> selectionIds;
+
     QLabel* titleLabel = nullptr;
+    QWidget* generalSection = nullptr;
+    QFormLayout* generalForm = nullptr;
+    QLineEdit* nameEdit = nullptr;
+    QLabel* tagLabel = nullptr;
+    QCheckBox* visibleCheck = nullptr;
+    QCheckBox* lockCheck = nullptr;
+    QComboBox* materialCombo = nullptr;
+    QWidget* transformSection = nullptr;
+    VectorEditors positionEditors;
+    VectorEditors rotationEditors;
+    VectorEditors scaleEditors;
     QStackedWidget* stacked = nullptr;
 
     QWidget* nonePage = nullptr;

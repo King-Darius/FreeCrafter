@@ -13,6 +13,7 @@
 #include <QtMath>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "../GeometryKernel/GeometryObject.h"
@@ -27,6 +28,7 @@ constexpr double kAngleMin = 0.0;
 constexpr double kAngleMax = 360.0;
 constexpr double kSweepMin = 0.1;
 constexpr double kSweepMax = 360.0;
+constexpr float kMetadataFloatEpsilon = 1e-4f;
 
 double computeSweepDegrees(const ShapeBuilder::ArcDefinition& definition)
 {
@@ -432,7 +434,7 @@ Vector3 InspectorPanel::pointFromEditors(const PointEditors& editors) const
 
 bool InspectorPanel::fuzzyEqual(float a, float b)
 {
-    return qFuzzyCompare(1.0f + a, 1.0f + b);
+    return std::fabs(a - b) <= kMetadataFloatEpsilon;
 }
 
 bool InspectorPanel::vectorEqual(const Vector3& a, const Vector3& b)

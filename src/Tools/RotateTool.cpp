@@ -194,7 +194,7 @@ Tool::OverrideResult RotateTool::applyMeasurementOverride(double value)
         return Tool::OverrideResult::Ignored;
 
     currentAngle = static_cast<float>(value);
-    return Tool::OverrideResult::PreviewUpdated;
+    return Tool::OverrideResult::Commit;
 }
 
 bool RotateTool::pointerToWorld(const PointerInput& input, Vector3& out) const
@@ -254,22 +254,7 @@ std::vector<Scene::ObjectId> RotateTool::selectionIds() const
     }
     return ids;
 }
-    return result;
-}
-
-Vector3 RotateTool::determineAxis() const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.direction.lengthSquared() > 1e-6f) {
-        return snap.direction.normalized();
-    }
-    return Vector3(0.0f, 1.0f, 0.0f);
-}
-
-Tool::OverrideResult RotateTool::applyMeasurementOverride(double value)
-{
-    if (!dragging || selection.empty()) {
-        return Tool::OverrideResult::Ignored;
+
     }
     currentAngle = static_cast<float>(value);
     return Tool::OverrideResult::Commit;

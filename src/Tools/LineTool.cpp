@@ -221,19 +221,8 @@ Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
     previewValid = true;
     return Tool::OverrideResult::Commit;
 }
-    if (previewValid) {
-        direction = previewPoint - origin;
-    }
-    if (direction.lengthSquared() <= 1e-8f) {
-        const auto& snap = getInferenceResult();
-        if (snap.direction.lengthSquared() > 1e-8f) {
-            direction = snap.direction;
-        }
-    }
-    if (direction.lengthSquared() <= 1e-8f) {
-        return Tool::OverrideResult::Ignored;
-    }
-
+
+
     direction = direction.normalized();
     Vector3 target = origin + direction * static_cast<float>(value);
     if (points.size() == 1) {

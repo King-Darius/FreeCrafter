@@ -10,6 +10,8 @@
 
 namespace Scene {
 
+using ObjectId = Document::ObjectId;
+
 class AddPrimitiveCommand : public QUndoCommand {
 public:
     AddPrimitiveCommand(Document& document, PrimitiveOptions options, const QString& text = QString());

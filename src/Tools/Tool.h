@@ -3,6 +3,7 @@
 #include "../GeometryKernel/Vector3.h"
 #include "../CameraController.h"
 #include "../Interaction/InferenceEngine.h"
+#include "../Scene/Document.h"
 
 #include <algorithm>
 #include <vector>

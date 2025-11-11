@@ -2,55 +2,32 @@
 
 #include <cmath>
 #include <memory>
+#include <utility>
+
 #include <QString>
 
+#include "CameraNavigation.h"
 #include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
 #include "../Core/CommandStack.h"
 #include "../Scene/Document.h"
 
 namespace {
-constexpr float kPi = 3.14159265358979323846f;
 constexpr float kAngleEpsilon = 1e-5f;
-
-bool pointerToGround(CameraController* cam, int x, int y, int viewportW, int viewportH, Vector3& out)
-{
-    if (!cam || viewportW <= 0 || viewportH <= 0)
-        return false;
-
-    float cx, cy, cz;
-    cam->getCameraPosition(cx, cy, cz);
-    const float yaw = cam->getYaw() * kPi / 180.0f;
-    const float pitch = cam->getPitch() * kPi / 180.0f;
-
-    Vector3 forward(-std::sin(yaw) * std::cos(pitch), -std::sin(pitch), -std::cos(yaw) * std::cos(pitch));
-    forward = forward.normalized();
-    Vector3 up(0.0f, 1.0f, 0.0f);
-    Vector3 right = forward.cross(up).normalized();
-    up = right.cross(forward).normalized();
-
-    const float fov = 60.0f;
-    const float aspect = static_cast<float>(viewportW) / static_cast<float>(viewportH);
-    const float nx = (2.0f * static_cast<float>(x) / static_cast<float>(viewportW)) - 1.0f;
-    const float ny = 1.0f - (2.0f * static_cast<float>(y) / static_cast<float>(viewportH));
-    const float tanHalf = std::tan((fov * kPi / 180.0f) * 0.5f);
-    Vector3 dir = (forward + right * (nx * tanHalf * aspect) + up * (ny * tanHalf)).normalized();
-
-    Vector3 origin(cx, cy, cz);
-    if (std::fabs(dir.y) < 1e-6f)
-        return false;
-
-    const float t = -origin.y / dir.y;
-    if (t < 0.0f)
-        return false;
-
-    out = origin + dir * t;
-    return true;
-}
 
 Vector3 projectOntoPlane(const Vector3& v, const Vector3& axis)
 {
-    return v - axis * v.dot(axis);
+    Vector3 axisNorm = axis.lengthSquared() > 1e-6f ? axis.normalized() : Vector3(0.0f, 1.0f, 0.0f);
+    return v - axisNorm * v.dot(axisNorm);
+}
+
+Vector3 perpendicularTo(const Vector3& axis)
+{
+    Vector3 reference = std::fabs(axis.y) < 0.99f ? Vector3(0.0f, 1.0f, 0.0f) : Vector3(1.0f, 0.0f, 0.0f);
+    Vector3 perpendicular = axis.cross(reference);
+    if (perpendicular.lengthSquared() <= 1e-6f)
+        perpendicular = Vector3(1.0f, 0.0f, 0.0f);
+    return perpendicular.normalized();
 }
 } // namespace
 
@@ -84,8 +61,8 @@ void RotateTool::onPointerDown(const PointerInput& input)
     }
 
     startVector = projectOntoPlane(world - pivot, axis);
-    if (startVector.lengthSquared() <= 1e-10f)
-        startVector = Vector3(1.0f, 0.0f, 0.0f);
+    if (startVector.lengthSquared() <= 1e-8f)
+        startVector = perpendicularTo(axis);
 
     dragging = true;
     currentAngle = 0.0f;
@@ -102,7 +79,7 @@ void RotateTool::onPointerMove(const PointerInput& input)
         return;
 
     Vector3 currentVector = projectOntoPlane(world - pivot, axis);
-    if (currentVector.lengthSquared() <= 1e-10f || startVector.lengthSquared() <= 1e-10f) {
+    if (currentVector.lengthSquared() <= 1e-8f || startVector.lengthSquared() <= 1e-8f) {
         currentAngle = 0.0f;
         return;
     }
@@ -110,7 +87,7 @@ void RotateTool::onPointerMove(const PointerInput& input)
     Vector3 startNorm = startVector.normalized();
     Vector3 currentNorm = currentVector.normalized();
     Vector3 cross = startNorm.cross(currentNorm);
-    const float sinTheta = axis.normalized().dot(cross);
+    const float sinTheta = axis.dot(cross);
     const float cosTheta = startNorm.dot(currentNorm);
     currentAngle = std::atan2(sinTheta, cosTheta);
 }
@@ -133,6 +110,7 @@ void RotateTool::onCancel()
 
 void RotateTool::onStateChanged(State previous, State next)
 {
+    Q_UNUSED(previous);
     if (next == State::Idle) {
         dragging = false;
         currentAngle = 0.0f;
@@ -194,7 +172,7 @@ Tool::OverrideResult RotateTool::applyMeasurementOverride(double value)
         return Tool::OverrideResult::Ignored;
 
     currentAngle = static_cast<float>(value);
-    return Tool::OverrideResult::PreviewUpdated;
+    return Tool::OverrideResult::Commit;
 }
 
 bool RotateTool::pointerToWorld(const PointerInput& input, Vector3& out) const
@@ -204,7 +182,26 @@ bool RotateTool::pointerToWorld(const PointerInput& input, Vector3& out) const
         out = snap.position;
         return true;
     }
-    return pointerToGround(camera, input.x, input.y, viewportWidth, viewportHeight, out);
+
+    if (!camera || viewportWidth <= 0 || viewportHeight <= 0)
+        return false;
+
+    Vector3 origin;
+    Vector3 direction;
+    if (!CameraNavigation::computeRay(*camera, input.x, input.y, viewportWidth, viewportHeight, origin, direction))
+        return false;
+
+    Vector3 planeNormal = axis.lengthSquared() > 1e-6f ? axis.normalized() : Vector3(0.0f, 1.0f, 0.0f);
+    float denom = direction.dot(planeNormal);
+    if (std::fabs(denom) < 1e-6f)
+        return false;
+
+    float t = (pivot - origin).dot(planeNormal) / denom;
+    if (t < 0.0f)
+        return false;
+
+    out = origin + direction * t;
+    return true;
 }
 
 std::vector<GeometryObject*> RotateTool::gatherSelection() const
@@ -254,22 +251,6 @@ std::vector<Scene::ObjectId> RotateTool::selectionIds() const
     }
     return ids;
 }
-    return result;
-}
-
-Vector3 RotateTool::determineAxis() const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.direction.lengthSquared() > 1e-6f) {
-        return snap.direction.normalized();
-    }
-    return Vector3(0.0f, 1.0f, 0.0f);
-}
-
-Tool::OverrideResult RotateTool::applyMeasurementOverride(double value)
-{
-    if (!dragging || selection.empty()) {
-        return Tool::OverrideResult::Ignored;
     }
     currentAngle = static_cast<float>(value);
     return Tool::OverrideResult::Commit;

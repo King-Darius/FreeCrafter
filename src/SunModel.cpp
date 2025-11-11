@@ -45,14 +45,6 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     result.valid = true;
     return result;
 }
-
-
-    if (!result.direction.isNull()) {
-
-        result.direction.normalize();
-
-        result.valid = true;
-
     }
 
 

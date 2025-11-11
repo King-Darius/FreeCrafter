@@ -2,12 +2,11 @@
 
 #include <QtCore/Qt>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
-#include <memory>
-#include <QString>
+#include <utility>
 
-#include "ToolCommands.h"
 #include "ToolGeometryUtils.h"
 #include "../GeometryKernel/Curve.h"
 #include "../GeometryKernel/HalfEdgeMesh.h"
@@ -16,6 +15,7 @@
 namespace {
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kPickRadius = 0.6f;
+constexpr int kDragThreshold = 4;
 
 bool rayToGround(CameraController* cam, int sx, int sy, int viewportW, int viewportH, Vector3& out)
 {
@@ -89,14 +89,32 @@ void SmartSelectTool::onPointerMove(const PointerInput& input)
     currentY = input.y;
     int dx = std::abs(currentX - anchorX);
     int dy = std::abs(currentY - anchorY);
-    if (!dragging && (dx > 4 || dy > 4)) {
+    if (!dragging && (dx > kDragThreshold || dy > kDragThreshold)) {
         dragging = true;
         setState(State::Active);
     }
-    if (dragging) {
-        PointerInput a{ anchorX, anchorY, getModifiers() };
-        PointerInput b{ currentX, currentY, getModifiers() };
-        rectangleValid = pointerToWorld(a, rectStart) && pointerToWorld(b, rectEnd);
+
+    if (!dragging)
+        return;
+
+    PointerInput a{ anchorX, anchorY, getModifiers(), input.devicePixelRatio };
+    PointerInput b = input;
+
+    Vector3 startWorld;
+    Vector3 endWorld;
+    bool startOk = pointerToWorld(a, startWorld);
+    bool endOk = pointerToWorld(b, endWorld);
+    if (!startOk && anchorWorldValid) {
+        startWorld = anchorWorld;
+        startOk = true;
+    }
+
+    if (startOk && endOk) {
+        rectStart = startWorld;
+        rectEnd = endWorld;
+        rectangleValid = true;
+    } else {
+        rectangleValid = false;
     }
 }
 
@@ -104,11 +122,11 @@ void SmartSelectTool::onPointerUp(const PointerInput& input)
 {
     currentX = input.x;
     currentY = input.y;
-    if (dragging) {
+    if (dragging && rectangleValid)
         selectByRectangle(input);
-    } else {
+    else
         selectSingle(input);
-    }
+
     dragging = false;
     rectangleValid = false;
     anchorWorldValid = false;
@@ -136,6 +154,7 @@ void SmartSelectTool::onCancel()
 
 void SmartSelectTool::onStateChanged(State previous, State next)
 {
+    Q_UNUSED(previous);
     if (next == State::Idle) {
         dragging = false;
         rectangleValid = false;
@@ -221,11 +240,10 @@ void SmartSelectTool::applySelection(const std::vector<GeometryObject*>& hits, b
     for (GeometryObject* obj : hits) {
         if (!obj)
             continue;
-        if (toggle) {
+        if (toggle)
             obj->setSelected(!obj->isSelected());
-        } else {
+        else
             obj->setSelected(true);
-        }
     }
 }
 
@@ -253,6 +271,7 @@ void SmartSelectTool::selectSingle(const PointerInput& input)
 
 void SmartSelectTool::selectByRectangle(const PointerInput& input)
 {
+    Q_UNUSED(input);
     if (!geometry || !rectangleValid)
         return;
 
@@ -261,16 +280,19 @@ void SmartSelectTool::selectByRectangle(const PointerInput& input)
     float minZ = std::min(rectStart.z, rectEnd.z);
     float maxZ = std::max(rectStart.z, rectEnd.z);
 
+    bool windowSelection = currentX >= anchorX;
+
     std::vector<GeometryObject*> hits;
+    hits.reserve(geometry->getObjects().size());
     for (const auto& object : geometry->getObjects()) {
         BoundingBox box = computeBoundingBox(*object);
-        if (getModifiers().shift) {
-            if (boxIntersectsXZ(box, minX, maxX, minZ, maxZ))
-                hits.push_back(object.get());
-        } else {
-            if (pointInsideXZ(box, minX, maxX, minZ, maxZ))
-                hits.push_back(object.get());
-        }
+        if (!box.valid)
+            continue;
+
+        bool match = windowSelection ? pointInsideXZ(box, minX, maxX, minZ, maxZ)
+                                     : boxIntersectsXZ(box, minX, maxX, minZ, maxZ);
+        if (match)
+            hits.push_back(object.get());
     }
 
     bool additive = getModifiers().ctrl;
@@ -287,29 +309,6 @@ void SmartSelectTool::clearSelection()
         object->setSelected(false);
 }
 
-        return;
-    }
-
-    float minX = std::min(start.x, end.x);
-    float maxX = std::max(start.x, end.x);
-    float minZ = std::min(start.z, end.z);
-    float maxZ = std::max(start.z, end.z);
-
-    rectStart = start;
-    rectEnd = end;
-    rectangleValid = true;
-
-    bool window = currentX >= anchorX;
-    std::vector<GeometryObject*> hits;
-
-    if (!geometry)
-        return;
-
-    for (const auto& object : geometry->getObjects()) {
-        BoundingBox box = computeBoundingBox(*object);
-        if (!box.valid)
-            continue;
-        if (window) {
             if (pointInsideXZ(box, minX, maxX, minZ, maxZ)) {
                 hits.push_back(object.get());
             }

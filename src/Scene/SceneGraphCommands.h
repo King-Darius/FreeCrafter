@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Command.h"
+#include "GeometryKernel/GeometryKernel.h"
 
 #include <QString>
 #include <string>
@@ -119,6 +120,25 @@ private:
     SceneSettings::Color newColor{};
     SceneSettings::Color previousColor{};
     bool captured = false;
+};
+
+class RebuildCurveFromMetadataCommand : public Core::Command {
+public:
+    RebuildCurveFromMetadataCommand(Document::ObjectId id, const GeometryKernel::ShapeMetadata& metadata);
+
+    bool wasApplied() const { return applied; }
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Document::ObjectId objectId = 0;
+    GeometryKernel::ShapeMetadata newMetadata{};
+    GeometryKernel::ShapeMetadata previousMetadata{};
+    bool captured = false;
+    bool applied = false;
 };
 
 } // namespace Scene

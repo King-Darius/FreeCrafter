@@ -7,6 +7,14 @@
 #include "../GeometryKernel/GeometryKernel.h"
 #include "../GeometryKernel/Vector3.h"
 
+namespace Core {
+class CommandStack;
+}
+
+namespace Scene {
+class Document;
+}
+
 class QCheckBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -22,6 +30,8 @@ class InspectorPanel : public QWidget {
 public:
     explicit InspectorPanel(QWidget* parent = nullptr);
 
+    void setDocument(Scene::Document* document);
+    void setCommandStack(Core::CommandStack* stack);
     void updateSelection(GeometryKernel* kernel, const std::vector<GeometryObject*>& selection);
 
 signals:
@@ -51,10 +61,15 @@ private:
     void connectPointEditors(PointEditors& editors);
     Vector3 pointFromEditors(const PointEditors& editors) const;
     void resetState();
+    bool applyMetadata(const GeometryKernel::ShapeMetadata& metadata);
+    static bool fuzzyEqual(float a, float b);
+    static bool vectorEqual(const Vector3& a, const Vector3& b);
 
     GeometryKernel* currentKernel = nullptr;
     GeometryObject* currentObject = nullptr;
     GeometryKernel::ShapeMetadata currentMetadata{};
+    Scene::Document* currentDocument = nullptr;
+    Core::CommandStack* commandStack = nullptr;
     bool updating = false;
 
     QLabel* titleLabel = nullptr;

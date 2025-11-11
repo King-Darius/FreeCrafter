@@ -193,13 +193,8 @@ Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
         points.push_back(snap.position);
     }
 
-    if (points.empty())
-        return Tool::OverrideResult::Ignored;
-
     Vector3 origin = points.back();
-    Vector3 direction;
-    if (previewValid)
-        direction = previewPoint - origin;
+    Vector3 direction = previewValid ? (previewPoint - origin) : Vector3();
 
     if (direction.lengthSquared() <= kMinSegmentLengthSq) {
         const auto& snap = getInferenceResult();
@@ -221,18 +216,6 @@ Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
     previewValid = true;
     return Tool::OverrideResult::Commit;
 }
-    if (previewValid) {
-        direction = previewPoint - origin;
-    }
-    if (direction.lengthSquared() <= 1e-8f) {
-        const auto& snap = getInferenceResult();
-        if (snap.direction.lengthSquared() > 1e-8f) {
-            direction = snap.direction;
-        }
-    }
-    if (direction.lengthSquared() <= 1e-8f) {
-        return Tool::OverrideResult::Ignored;
-    }
 
     direction = direction.normalized();
     Vector3 target = origin + direction * static_cast<float>(value);

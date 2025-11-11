@@ -253,6 +253,8 @@ void SmartSelectTool::selectSingle(const PointerInput& input)
 
 void SmartSelectTool::selectByRectangle(const PointerInput& input)
 {
+    Q_UNUSED(input);
+
     if (!geometry || !rectangleValid)
         return;
 
@@ -286,29 +288,6 @@ void SmartSelectTool::clearSelection()
     for (const auto& object : geometry->getObjects())
         object->setSelected(false);
 }
-
-        return;
-    }
-
-    float minX = std::min(start.x, end.x);
-    float maxX = std::max(start.x, end.x);
-    float minZ = std::min(start.z, end.z);
-    float maxZ = std::max(start.z, end.z);
-
-    rectStart = start;
-    rectEnd = end;
-    rectangleValid = true;
-
-    bool window = currentX >= anchorX;
-    std::vector<GeometryObject*> hits;
-
-    if (!geometry)
-        return;
-
-    for (const auto& object : geometry->getObjects()) {
-        BoundingBox box = computeBoundingBox(*object);
-        if (!box.valid)
-            continue;
         if (window) {
             if (pointInsideXZ(box, minX, maxX, minZ, maxZ)) {
                 hits.push_back(object.get());

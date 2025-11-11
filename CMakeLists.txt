@@ -177,6 +177,10 @@ add_executable(test_scene_settings tests/test_scene_settings.cpp)
 target_include_directories(test_scene_settings PRIVATE src)
 target_link_libraries(test_scene_settings PRIVATE freecrafter_lib)
 
+add_executable(test_sun_model tests/test_sun_model.cpp)
+target_include_directories(test_sun_model PRIVATE src)
+target_link_libraries(test_sun_model PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+
 set(_qt_bin_dir "${CMAKE_SOURCE_DIR}/qt/6.5.3/msvc2019_64/bin")
 add_test(NAME render_regression COMMAND $<TARGET_FILE:test_render>)
 if(EXISTS "${_qt_bin_dir}")
@@ -191,6 +195,8 @@ if(EXISTS "${_qt_bin_dir}")
 endif()
 
 add_test(NAME scene_settings COMMAND $<TARGET_FILE:test_scene_settings>)
+
+add_test(NAME sun_model COMMAND $<TARGET_FILE:test_sun_model>)
 
 add_executable(test_scene_commands tests/test_scene_commands.cpp)
 target_include_directories(test_scene_commands PRIVATE src)

@@ -25,34 +25,25 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
     result.altitudeDegrees = clampedAltitude;
     result.azimuthDegrees = normalizedAzimuth;
 
-    if (clampedAltitude <= kMinValidAltitude)
-        return result;
+    if (clampedAltitude > kMinValidAltitude) {
+        const float altitudeRad = qDegreesToRadians(clampedAltitude);
+        const float azimuthRad = qDegreesToRadians(normalizedAzimuth);
 
-    const float altitudeRad = qDegreesToRadians(clampedAltitude);
-    const float azimuthRad = qDegreesToRadians(normalizedAzimuth);
+        const float horizontal = std::cos(altitudeRad);
+        const float east = horizontal * std::sin(azimuthRad);
+        const float north = horizontal * std::cos(azimuthRad);
+        const float up = std::sin(altitudeRad);
 
-    const float horizontal = std::cos(altitudeRad);
-    const float east = horizontal * std::sin(azimuthRad);
-    const float north = horizontal * std::cos(azimuthRad);
-    const float up = std::sin(altitudeRad);
+        QVector3D direction(east, up, north);
+        if (!direction.isNull()) {
+            direction.normalize();
+            result.direction = direction;
+            result.valid = true;
+        }
+    }
 
-    QVector3D direction(east, up, north);
-    if (direction.isNull())
-        return result;
-
-    direction.normalize();
-    result.direction = direction;
-    result.valid = true;
     return result;
 }
-
-
-    if (!result.direction.isNull()) {
-
-        result.direction.normalize();
-
-        result.valid = true;
-
     }
 
 

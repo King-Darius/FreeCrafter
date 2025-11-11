@@ -13,8 +13,12 @@
 #include <QtMath>
 
 #include <algorithm>
+#include <memory>
 
 #include "../GeometryKernel/GeometryObject.h"
+#include "Scene/SceneGraphCommands.h"
+#include "../Scene/Document.h"
+#include "../Core/CommandStack.h"
 
 namespace {
 constexpr double kDefaultMinRadius = 0.01;
@@ -92,10 +96,12 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     circleRadius->setRange(kDefaultMinRadius, kMaxRadius);
     circleRadius->setDecimals(3);
     circleRadius->setSingleStep(0.1);
+    circleRadius->setObjectName(QStringLiteral("inspectorCircleRadius"));
     circleLayout->addRow(tr("Radius"), circleRadius);
     circleSegments = new QSpinBox(circlePage);
     circleSegments->setRange(8, 512);
     circleSegments->setSingleStep(1);
+    circleSegments->setObjectName(QStringLiteral("inspectorCircleSegments"));
     circleLayout->addRow(tr("Segments"), circleSegments);
     stacked->addWidget(circlePage);
 
@@ -212,6 +218,16 @@ QWidget* InspectorPanel::createMessagePage(const QString& text, QLabel** labelOu
     if (labelOut)
         *labelOut = label;
     return page;
+}
+
+void InspectorPanel::setDocument(Scene::Document* document)
+{
+    currentDocument = document;
+}
+
+void InspectorPanel::setCommandStack(Core::CommandStack* stack)
+{
+    commandStack = stack;
 }
 
 void InspectorPanel::resetState()
@@ -414,20 +430,64 @@ Vector3 InspectorPanel::pointFromEditors(const PointEditors& editors) const
                    static_cast<float>(editors.z->value()));
 }
 
+bool InspectorPanel::fuzzyEqual(float a, float b)
+{
+    return qFuzzyCompare(1.0f + a, 1.0f + b);
+}
+
+bool InspectorPanel::vectorEqual(const Vector3& a, const Vector3& b)
+{
+    return fuzzyEqual(a.x, b.x) && fuzzyEqual(a.y, b.y) && fuzzyEqual(a.z, b.z);
+}
+
+bool InspectorPanel::applyMetadata(const GeometryKernel::ShapeMetadata& metadata)
+{
+    if (!currentKernel || !currentObject)
+        return false;
+
+    if (commandStack && currentDocument) {
+        Scene::Document::ObjectId objectId = currentDocument->objectIdForGeometry(currentObject);
+        if (objectId == 0)
+            return false;
+
+        auto command = std::make_unique<Scene::RebuildCurveFromMetadataCommand>(objectId, metadata);
+        auto* commandPtr = command.get();
+        commandStack->push(std::move(command));
+        if (!commandPtr->wasApplied())
+            return false;
+
+        if (auto refreshed = currentKernel->shapeMetadata(currentObject))
+            currentMetadata = *refreshed;
+        else
+            currentMetadata = metadata;
+        return true;
+    }
+
+    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata))
+        return false;
+
+    if (auto refreshed = currentKernel->shapeMetadata(currentObject))
+        currentMetadata = *refreshed;
+    else
+        currentMetadata = metadata;
+    return true;
+}
+
 void InspectorPanel::commitCircle()
 {
     if (updating || !currentKernel || !currentObject)
         return;
     GeometryKernel::ShapeMetadata metadata = currentMetadata;
-    metadata.circle.radius = static_cast<float>(circleRadius->value());
-    metadata.circle.segments = circleSegments->value();
-    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
-        populateCircle();
+    float radius = static_cast<float>(circleRadius->value());
+    int segments = circleSegments->value();
+    if (fuzzyEqual(radius, currentMetadata.circle.radius) && segments == currentMetadata.circle.segments)
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.circle.radius = radius;
+    metadata.circle.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateCircle();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitPolygon()
@@ -435,15 +495,16 @@ void InspectorPanel::commitPolygon()
     if (updating || !currentKernel || !currentObject)
         return;
     GeometryKernel::ShapeMetadata metadata = currentMetadata;
-    metadata.polygon.radius = static_cast<float>(polygonRadius->value());
-    metadata.polygon.sides = polygonSides->value();
-    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
-        populatePolygon();
+    float radius = static_cast<float>(polygonRadius->value());
+    int sides = polygonSides->value();
+    if (fuzzyEqual(radius, currentMetadata.polygon.radius) && sides == currentMetadata.polygon.sides)
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.polygon.radius = radius;
+    metadata.polygon.sides = sides;
+    bool applied = applyMetadata(metadata);
     populatePolygon();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitArc()
@@ -452,24 +513,29 @@ void InspectorPanel::commitArc()
         return;
     GeometryKernel::ShapeMetadata metadata = currentMetadata;
     auto& def = metadata.arc.definition;
-    def.radius = static_cast<float>(arcRadius->value());
-    def.startAngle = qDegreesToRadians(static_cast<float>(arcStart->value()));
+    float radius = static_cast<float>(arcRadius->value());
+    float startAngle = qDegreesToRadians(static_cast<float>(arcStart->value()));
     double sweepDeg = arcSweep->value();
     double sweepRad = qDegreesToRadians(sweepDeg);
     bool ccw = arcDirection->isChecked();
-    def.counterClockwise = ccw;
-    if (ccw)
-        def.endAngle = static_cast<float>(def.startAngle + sweepRad);
-    else
-        def.endAngle = static_cast<float>(def.startAngle - sweepRad);
-    def.segments = arcSegments->value();
-    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
-        populateArc();
+    float endAngle = ccw ? static_cast<float>(startAngle + sweepRad) : static_cast<float>(startAngle - sweepRad);
+    int segments = arcSegments->value();
+
+    const auto& currentDef = currentMetadata.arc.definition;
+    if (fuzzyEqual(radius, currentDef.radius) && fuzzyEqual(startAngle, currentDef.startAngle) &&
+        fuzzyEqual(endAngle, currentDef.endAngle) && segments == currentDef.segments &&
+        ccw == currentDef.counterClockwise)
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+
+    def.radius = radius;
+    def.startAngle = startAngle;
+    def.endAngle = endAngle;
+    def.counterClockwise = ccw;
+    def.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateArc();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitBezier()
@@ -477,17 +543,23 @@ void InspectorPanel::commitBezier()
     if (updating || !currentKernel || !currentObject)
         return;
     GeometryKernel::ShapeMetadata metadata = currentMetadata;
-    metadata.bezier.definition.p0 = pointFromEditors(bezierP0);
-    metadata.bezier.definition.h0 = pointFromEditors(bezierH0);
-    metadata.bezier.definition.h1 = pointFromEditors(bezierH1);
-    metadata.bezier.definition.p1 = pointFromEditors(bezierP1);
-    metadata.bezier.definition.segments = bezierSegments->value();
-    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
-        populateBezier();
+    Vector3 p0 = pointFromEditors(bezierP0);
+    Vector3 h0 = pointFromEditors(bezierH0);
+    Vector3 h1 = pointFromEditors(bezierH1);
+    Vector3 p1 = pointFromEditors(bezierP1);
+    int segments = bezierSegments->value();
+    const auto& currentDef = currentMetadata.bezier.definition;
+    if (vectorEqual(p0, currentDef.p0) && vectorEqual(h0, currentDef.h0) && vectorEqual(h1, currentDef.h1) &&
+        vectorEqual(p1, currentDef.p1) && segments == currentDef.segments)
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.bezier.definition.p0 = p0;
+    metadata.bezier.definition.h0 = h0;
+    metadata.bezier.definition.h1 = h1;
+    metadata.bezier.definition.p1 = p1;
+    metadata.bezier.definition.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateBezier();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 

@@ -3,6 +3,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 
 #include <QObject>
+#include <optional>
 
 namespace Scene {
 
@@ -244,6 +245,51 @@ void SetTagColorCommand::performUndo()
     if (!document())
         return;
     document()->setTagColor(tagId, previousColor);
+}
+
+RebuildCurveFromMetadataCommand::RebuildCurveFromMetadataCommand(Document::ObjectId id,
+                                                                 const GeometryKernel::ShapeMetadata& metadata)
+    : Core::Command(QObject::tr("Edit Curve"))
+    , objectId(id)
+    , newMetadata(metadata)
+{
+}
+
+void RebuildCurveFromMetadataCommand::initialize()
+{
+    if (captured || !document() || !geometry())
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object)
+        return;
+    auto metadata = geometry()->shapeMetadata(object);
+    if (!metadata.has_value())
+        return;
+    previousMetadata = *metadata;
+    captured = true;
+}
+
+void RebuildCurveFromMetadataCommand::performRedo()
+{
+    applied = false;
+    if (!captured || !document() || !geometry())
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object)
+        return;
+    applied = geometry()->rebuildShapeFromMetadata(object, newMetadata);
+    if (applied)
+        setFinalSelection({ objectId });
+}
+
+void RebuildCurveFromMetadataCommand::performUndo()
+{
+    if (!captured || !document() || !geometry())
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object)
+        return;
+    geometry()->rebuildShapeFromMetadata(object, previousMetadata);
 }
 
 } // namespace Scene

@@ -286,29 +286,14 @@ std::vector<Scene::ObjectId> ScaleTool::selectionIds() const
 void ScaleTool::resetState()
 {
     dragging = false;
+    axisScaling = false;
+    axis = Vector3(0.0f, 1.0f, 0.0f);
+    pivot = Vector3();
+    startVector = Vector3();
     selection.clear();
     scaleFactors = Vector3(1.0f, 1.0f, 1.0f);
 }
 
-    }
-}
-
-Vector3 ScaleTool::determineAxis() const
-{
-    const auto& snap = getInferenceResult();
-    if (snap.direction.lengthSquared() > 1e-6f) {
-        return snap.direction.normalized();
-    }
-    return Vector3();
-}
-
-Tool::OverrideResult ScaleTool::applyMeasurementOverride(double value)
-{
-    if (!dragging || selection.empty()) {
-        return Tool::OverrideResult::Ignored;
-    }
-    if (value <= 0.0) {
-        return Tool::OverrideResult::Ignored;
     }
 
     float factor = static_cast<float>(value);

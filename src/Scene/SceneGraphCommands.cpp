@@ -3,6 +3,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 
 #include <QObject>
+#include <algorithm>
 
 namespace Scene {
 
@@ -244,6 +245,173 @@ void SetTagColorCommand::performUndo()
     if (!document())
         return;
     document()->setTagColor(tagId, previousColor);
+}
+
+RenameObjectsCommand::RenameObjectsCommand(std::vector<Document::ObjectId> ids, const QString& name)
+    : Core::Command(QObject::tr("Rename Objects"))
+    , objectIds(std::move(ids))
+    , newName(name)
+{
+    objectIds.erase(std::remove(objectIds.begin(), objectIds.end(), Document::ObjectId(0)), objectIds.end());
+}
+
+void RenameObjectsCommand::initialize()
+{
+    if (captured || !document())
+        return;
+    previousNames.clear();
+    previousNames.reserve(objectIds.size());
+    for (Document::ObjectId id : objectIds) {
+        const Document::ObjectNode* node = document()->findObject(id);
+        previousNames.push_back(node ? node->name : std::string());
+    }
+    captured = true;
+}
+
+void RenameObjectsCommand::performRedo()
+{
+    if (!document())
+        return;
+    for (Document::ObjectId id : objectIds)
+        document()->renameObject(id, newName.toStdString());
+}
+
+void RenameObjectsCommand::performUndo()
+{
+    if (!document())
+        return;
+    for (std::size_t index = 0; index < objectIds.size(); ++index)
+        document()->renameObject(objectIds[index], previousNames[index]);
+}
+
+SetObjectsVisibilityCommand::SetObjectsVisibilityCommand(std::vector<Document::ObjectId> ids, bool visibleValue)
+    : Core::Command(QObject::tr("Set Visibility"))
+    , objectIds(std::move(ids))
+    , visible(visibleValue)
+{
+    objectIds.erase(std::remove(objectIds.begin(), objectIds.end(), Document::ObjectId(0)), objectIds.end());
+}
+
+void SetObjectsVisibilityCommand::initialize()
+{
+    if (captured || !document())
+        return;
+    previousValues.clear();
+    previousValues.reserve(objectIds.size());
+    for (Document::ObjectId id : objectIds) {
+        const Document::ObjectNode* node = document()->findObject(id);
+        previousValues.push_back(node ? node->visible : true);
+    }
+    captured = true;
+}
+
+void SetObjectsVisibilityCommand::performRedo()
+{
+    if (!document())
+        return;
+    for (Document::ObjectId id : objectIds)
+        document()->setObjectVisible(id, visible);
+}
+
+void SetObjectsVisibilityCommand::performUndo()
+{
+    if (!document())
+        return;
+    for (std::size_t index = 0; index < objectIds.size(); ++index)
+        document()->setObjectVisible(objectIds[index], previousValues[index]);
+}
+
+SetTagAssignmentsCommand::SetTagAssignmentsCommand(Document::TagId id, std::vector<Document::ObjectId> ids, bool assignValue)
+    : Core::Command(assignValue ? QObject::tr("Assign Tag") : QObject::tr("Remove Tag"))
+    , tagId(id)
+    , objectIds(std::move(ids))
+    , assign(assignValue)
+{
+    objectIds.erase(std::remove(objectIds.begin(), objectIds.end(), Document::ObjectId(0)), objectIds.end());
+}
+
+void SetTagAssignmentsCommand::initialize()
+{
+    if (captured || !document())
+        return;
+    previouslyHad.clear();
+    previouslyHad.reserve(objectIds.size());
+    for (Document::ObjectId id : objectIds) {
+        const Document::ObjectNode* node = document()->findObject(id);
+        bool had = false;
+        if (node) {
+            had = std::find(node->tags.begin(), node->tags.end(), tagId) != node->tags.end();
+        }
+        previouslyHad.push_back(had);
+    }
+    captured = true;
+}
+
+void SetTagAssignmentsCommand::performRedo()
+{
+    if (!document())
+        return;
+    for (Document::ObjectId id : objectIds) {
+        if (assign)
+            document()->assignTag(id, tagId);
+        else
+            document()->removeTag(id, tagId);
+    }
+}
+
+void SetTagAssignmentsCommand::performUndo()
+{
+    if (!document())
+        return;
+    for (std::size_t index = 0; index < objectIds.size(); ++index) {
+        Document::ObjectId id = objectIds[index];
+        bool had = previouslyHad[index];
+        if (had)
+            document()->assignTag(id, tagId);
+        else
+            document()->removeTag(id, tagId);
+    }
+}
+
+RebuildCurveFromMetadataCommand::RebuildCurveFromMetadataCommand(Document::ObjectId id,
+                                                                 GeometryKernel::ShapeMetadata metadata,
+                                                                 const QString& description)
+    : Core::Command(description)
+    , objectId(id)
+    , newMetadata(std::move(metadata))
+{
+}
+
+void RebuildCurveFromMetadataCommand::initialize()
+{
+    if (captured || !document() || !geometry())
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object || object->getType() != ObjectType::Curve)
+        return;
+    previousMetadata = geometry()->shapeMetadata(object);
+    captured = true;
+}
+
+void RebuildCurveFromMetadataCommand::performRedo()
+{
+    if (!document() || !geometry())
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object)
+        return;
+    geometry()->rebuildShapeFromMetadata(object, newMetadata);
+    setFinalSelection({ objectId });
+}
+
+void RebuildCurveFromMetadataCommand::performUndo()
+{
+    if (!document() || !geometry() || !previousMetadata)
+        return;
+    GeometryObject* object = document()->geometryForObject(objectId);
+    if (!object)
+        return;
+    geometry()->rebuildShapeFromMetadata(object, *previousMetadata);
 }
 
 } // namespace Scene

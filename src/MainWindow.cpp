@@ -5343,14 +5343,14 @@ void MainWindow::updateSelectionStatus()
 {
     if (!selectionLabel || !viewport) {
         if (inspectorPanel)
-            inspectorPanel->updateSelection(nullptr, {});
+            inspectorPanel->updateSelection(nullptr, nullptr, {});
         return;
     }
     Scene::Document* doc = viewport->getDocument();
     if (!doc) {
         selectionLabel->setText(tr("Selection: none"));
         if (inspectorPanel)
-            inspectorPanel->updateSelection(nullptr, {});
+            inspectorPanel->updateSelection(nullptr, nullptr, {});
         return;
     }
     const auto& objects = doc->geometry().getObjects();
@@ -5368,7 +5368,7 @@ void MainWindow::updateSelectionStatus()
         }
     }
     if (inspectorPanel)
-        inspectorPanel->updateSelection(&doc->geometry(), selectedObjects);
+        inspectorPanel->updateSelection(doc, &doc->geometry(), selectedObjects);
     QString textValue;
     if (totalCount == 0) {
         textValue = tr("Selection: none");

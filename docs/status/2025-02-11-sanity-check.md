@@ -1,32 +1,31 @@
 # Sanity Check Report — 11 Feb 2025 (refreshed)
 
 ## Summary
-- Ran the bootstrap smoke suite (`pytest tests/test_bootstrap.py`) and the C++ integration harness (`ctest --test-dir build --output-on-failure`) to cover the editor shell, navigation, tool workflows, object management, advanced tools, and import/export code paths. Both suites are currently green.
-- Phases 1–7 from `ROADMAP.md` now have shipping implementations with matching regression coverage. The lone Phase 3 gap is the dynamic cursor/pickbox artwork, which still needs to be wired to tool state updates.
-- Remaining open work is concentrated in Phases 8–11 (performance, polish, QA & release, and surface painting). These are tracked as backlog items for future sprints.
-- Packaging and dependency management continue to rely on `scripts/bootstrap.py`, `scripts/requirements.txt`, the pinned Qt manifest, and the existing CPack configuration.
+- Attempted to run the bootstrap CMake/test loop, but `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug` currently fails until the pinned Qt 6 toolchain is staged locally. As a result, `ctest` cannot be executed in CI.
+- Manual smoke passes confirm the rebuilt Inspector now routes entity info edits (name, visibility, tags, materials, transforms, and curve metadata) through the undo stack, but viewport, docking, and persistence regressions still block production use.
+- Phases 1–7 from `ROADMAP.md` remain partially implemented; the feature surface exists, yet verification depends on restoring automated builds/tests once the Qt runtime is available.
+- Packaging and dependency management still rely on `scripts/bootstrap.py`, `scripts/requirements.txt`, the pinned Qt manifest, and the existing CPack configuration.
 
 ## Test Log
 ```text
-pytest tests/test_bootstrap.py
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug   # fails: Qt6 package not found in this environment
 ```
 
-All tests passed. For raw output, see the execution transcript captured during this run.
+Automated tests remain blocked until the Qt toolchain is staged; rerun `ctest --test-dir build --output-on-failure` after resolving the dependency.
 
 ## Roadmap Snapshot
 - Phase coverage snapshot:
-  - Phase 1 — Core Shell: ☑ implemented & regression-tested.
-  - Phase 2 — Geometry & Interaction: ☑ implemented & regression-tested.
-  - Phase 3 — Navigation & View: ☑ delivered, pending dynamic cursor visuals (☐).
-  - Phase 4 — Drawing & Modification: ☑ implemented & regression-tested.
-  - Phase 5 — Object Management: ☑ implemented & regression-tested.
-  - Phase 6 — Integrated Advanced Tools: ☑ implemented & regression-tested.
-  - Phase 7 — File I/O: ☑ implemented & regression-tested.
+  - Phase 1 — Core Shell: ⚠ partial (dock/toolbar regressions outstanding).
+  - Phase 2 — Geometry & Interaction: ⚠ partial (viewport/redraw bugs under investigation).
+  - Phase 3 — Navigation & View: ⚠ partial (cursor HUD and camera stability pending).
+  - Phase 4 — Drawing & Modification: ⚠ partial (undo/redo coverage improving with Inspector work).
+  - Phase 5 — Object Management: ⚠ partial (tag/material bindings newly routed through undo, more QA needed).
+  - Phase 6 — Integrated Advanced Tools: ⚠ partial (advanced suites compile but lack regression coverage).
+  - Phase 7 — File I/O: ⚠ partial (autosave/persistence issues remain).
 - Outstanding backlog focus:
-  - Phase 3 cursor HUD artwork remains to be integrated.
-  - Phases 8–10 (performance/stability, polish, QA & release) are still open.
-  - Phase 11 surface painting is a planning document without code yet.
+  - Stage the Qt 6 runtime in CI so the build/test loop can run again.
+  - Continue stabilizing viewport performance, docking layouts, and theming consistency.
+  - Resume work on Phases 8–11 (performance/stability, polish, QA & release, surface painting) once the core passes automated validation.
 
 ## Dependency & Packaging Notes
 - `scripts/bootstrap.py` orchestrates dependency installation, Qt acquisition, CMake configuration, and bundling; it respects offline caches, CI-friendly flags, and installation prefixes.

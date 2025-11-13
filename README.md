@@ -1,6 +1,6 @@
 # FreeCrafter <img src="docs/media/freecrafter-logo.svg" alt="FreeCrafter logo" height="48" align="top" />
 
-> **Status snapshot:** FreeCrafter is still in a **pre-alpha** state. The Qt 6 shell boots, but major UI layout, viewport, and styling bugs remain before the editor is usable for day-to-day work.
+> **Status snapshot:** FreeCrafter remains an unstable **pre-release** build. The Qt 6 shell runs with the bundled runtime, but automated builds and tests are currently blocked on staging that toolchain, and significant viewport, layout, and persistence bugs still prevent day-to-day use.
 
 FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD-style precision with a lightweight, top-down workspace. The editor pairs a modern Qt 6 desktop experience with a hardware-accelerated OpenGL viewport, rich inference, and a growing catalog of advanced modeling tools.
 
@@ -9,16 +9,16 @@ FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD
 </div>
 
 ## Project snapshot
-- ✅ **Roadmap coverage:** The foundations for Phases 1–7 (core shell, geometry/inference, navigation/view, drawing, object management, advanced tools, and file I/O) exist in the codebase but require polish.
-- 🚧 **In progress:** Phase 7.5 (comprehensive bug sweep + UX polish) is focused on stabilizing the View menu, undo/redo, autosave, and accessibility/usability audits.
-- ⚠️ **Reality check:** Current desktop builds expose severe regressions in the viewport, docking/layout, and theming pipelines. Expect crashes, broken painting, and inconsistent tool activation until the stabilization work lands.
+- ✅ **Roadmap coverage:** The foundations for Phases 1–7 (core shell, geometry/inference, navigation/view, drawing, object management, advanced tools, and file I/O) exist in the codebase but still require polish and verification.
+- 🚧 **In progress:** Phase 7.5 (comprehensive bug sweep + UX polish) is wiring the Inspector/Entity Info panel into the undo stack, expanding tag/material bindings, and hardening autosave and command history flows.
+- ⚠️ **Reality check:** The viewport, docking/layout, and theming pipelines continue to show severe regressions. Automated CI/test gating is red until a Qt toolchain is staged, so expect crashes, broken painting, and inconsistent tool activation while stabilization work continues.
 - 📅 **Next up:** Phases 8–11 (performance, polish, QA, release, and surface painting) remain on the long-term backlog.
 
 ## Current limitations
 - **Viewport rendering:** Clipping, missing redraws, and camera drift make the main canvas unreliable for production work.
 - **GUI layout & styling:** Dock stacks, toolbars, and theme toggles frequently desync; widgets clip or overlap on smaller displays.
 - **Tool activation:** The action → tool wiring is incomplete, so several modeling tools fail silently or leave the app in an unusable state.
-- **Persistence & recovery:** Autosave/undo/redo paths are fragile. Saving and reopening complex scenes often loses materials or corrupts transforms.
+- **Persistence & recovery:** Autosave/undo/redo paths are fragile. Saving and reopening complex scenes often loses materials or corrupts transforms, and manual rebuilds are still required when the Qt runtime is missing.
 - **Testing coverage:** Automated smoke tests are still being written, so regressions may slip in between builds until we expand the suite.
 
 ## Feature goals & active work

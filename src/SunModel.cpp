@@ -44,10 +44,7 @@ SunModel::Result SunModel::computeSunDirection(float altitudeDegrees, float azim
 
     return result;
 }
-    }
-
-
-
+
     return result;
 
 }

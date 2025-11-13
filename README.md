@@ -1,6 +1,6 @@
 # FreeCrafter <img src="docs/media/freecrafter-logo.svg" alt="FreeCrafter logo" height="48" align="top" />
 
-> **Status snapshot:** FreeCrafter is still in a **pre-alpha** state. The Qt 6 shell boots, but major UI layout, viewport, and styling bugs remain before the editor is usable for day-to-day work.
+> **Status snapshot:** The latest configure pass (`cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug`) fails because Qt 6 development packages are unavailable on a clean machine, so the native build and regression suites could not be exercised. Stabilization work remains focused on tool/viewport regressions once the toolchain is restored.
 
 FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD-style precision with a lightweight, top-down workspace. The editor pairs a modern Qt 6 desktop experience with a hardware-accelerated OpenGL viewport, rich inference, and a growing catalog of advanced modeling tools.
 
@@ -9,17 +9,18 @@ FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD
 </div>
 
 ## Project snapshot
-- ✅ **Roadmap coverage:** The foundations for Phases 1–7 (core shell, geometry/inference, navigation/view, drawing, object management, advanced tools, and file I/O) exist in the codebase but require polish.
-- 🚧 **In progress:** Phase 7.5 (comprehensive bug sweep + UX polish) is focused on stabilizing the View menu, undo/redo, autosave, and accessibility/usability audits.
-- ⚠️ **Reality check:** Current desktop builds expose severe regressions in the viewport, docking/layout, and theming pipelines. Expect crashes, broken painting, and inconsistent tool activation until the stabilization work lands.
-- 📅 **Next up:** Phases 8–11 (performance, polish, QA, release, and surface painting) remain on the long-term backlog.
+- ❌ **Build & test status:** CMake configure currently halts at `find_package(Qt6)` because the SDK is absent, so no binaries or automated tests were produced in this run.
+- 🚧 **Regression triage:** Viewport rendering, docking/layout persistence, and theming/tool activation bugs remain unresolved and unverified until the toolchain is rebuilt.
+- ✅ **Roadmap coverage (code present):** Foundations for Phases 1–7 (core shell through file I/O) continue to live in the repository, but their stability is unknown without fresh builds.
+- 📅 **Next up:** Phases 8–11 (performance, polish, QA/release, and surface painting) stay on the backlog pending restoration of a working toolchain.
 
 ## Current limitations
-- **Viewport rendering:** Clipping, missing redraws, and camera drift make the main canvas unreliable for production work.
+- **Missing dependencies:** Install Qt 6 (or run `scripts/bootstrap.py`) before configuring; otherwise `cmake` cannot create build files and tests will be skipped.
+- **Viewport rendering:** Clipping, missing redraws, and camera drift continue to make the main canvas unreliable for production work.
 - **GUI layout & styling:** Dock stacks, toolbars, and theme toggles frequently desync; widgets clip or overlap on smaller displays.
 - **Tool activation:** The action → tool wiring is incomplete, so several modeling tools fail silently or leave the app in an unusable state.
 - **Persistence & recovery:** Autosave/undo/redo paths are fragile. Saving and reopening complex scenes often loses materials or corrupts transforms.
-- **Testing coverage:** Automated smoke tests are still being written, so regressions may slip in between builds until we expand the suite.
+- **Testing coverage:** Automated smoke tests are still being written; with the toolchain currently broken, there is no recent green run to validate regressions.
 
 ## Feature goals & active work
 The following features are in various stages of implementation. Many ship behind feature flags or require bug fixes before they are production ready.

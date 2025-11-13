@@ -1093,51 +1093,8 @@ void MainWindow::addRecentFile(const QString& path)
 }
 
 void MainWindow::openDocumentFromPath(const QString& path)
-
 {
-
-    if (path.isEmpty() || !viewport)
-
-        return;
-
-    viewport->setAutoFrameOnGeometryChange(true);
-
-    viewport->resetCameraToHome();
-
-    bool ok = viewport->getDocument() && viewport->getDocument()->loadFromFile(path.toStdString());
-
-    if (ok) {
-
-        viewport->frameSceneToGeometry();
-
-        const QString previousPath = currentDocumentPath;
-
-        updateAutosaveSource(path, QDir::cleanPath(previousPath) != QDir::cleanPath(path));
-
-        if (undoStack) {
-
-            undoStack->clear();
-
-            undoStack->setClean();
-
-        }
-
-        addRecentFile(path);
-
-        if (statusBar())
-
-            statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(path).fileName()), 1500);
-
-    } else {
-
-        if (statusBar())
-
-            statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(path).fileName()), 2000);
-
-    }
-
-    viewport->update();
-
+    openFileFromPath(path);
 }
 
 bool MainWindow::saveDocumentToPath(const QString& path, bool purgePreviousPrefix)
@@ -4005,6 +3962,7 @@ void MainWindow::openFile()
     const QString fn = QFileDialog::getOpenFileName(this, tr("Open FreeCrafter Model"), QString(), tr("FreeCrafter (*.fcm)"));
 
     if (fn.isEmpty())
+        return;
 
     openFileFromPath(fn);
 
@@ -4014,55 +3972,60 @@ bool MainWindow::openFileFromPath(const QString& path)
 
 {
 
-    if (path.isEmpty())
-
+    if (path.isEmpty() || !viewport)
         return false;
 
-    if (viewport) {
-        viewport->setAutoFrameOnGeometryChange(true);
-        viewport->resetCameraToHome();
+    const QString normalizedPath = QDir::cleanPath(path);
+    if (normalizedPath.isEmpty())
+        return false;
+
+    viewport->setAutoFrameOnGeometryChange(true);
+    viewport->resetCameraToHome();
+
+    Scene::Document* document = viewport->getDocument();
+    const bool ok = document && document->loadFromFile(normalizedPath.toStdString());
+
+    if (ok) {
+        viewport->frameSceneToGeometry();
+        const QString previousPath = currentDocumentPath;
+        const bool pathChanged = QDir::cleanPath(previousPath) != QDir::cleanPath(normalizedPath);
+        updateAutosaveSource(normalizedPath, pathChanged);
+        applyFreshDocumentState();
+        if (undoStack) {
+            undoStack->clear();
+            undoStack->setClean();
+        }
+        addRecentFile(normalizedPath);
+        if (statusBar())
+            statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(normalizedPath).fileName()), 1500);
+    } else if (statusBar()) {
+        statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(normalizedPath).fileName()), 2000);
     }
 
-    const bool ok = viewport && viewport->getDocument() && viewport->getDocument()->loadFromFile(path.toStdString());
-
+    viewport->update();
+    return ok;
 }
 
-        if (viewport)
-            viewport->frameSceneToGeometry();
+void MainWindow::saveFile()
 
-        updateAutosaveSource(path, false);
+{
 
-        applyFreshDocumentState();
+    QString targetPath = currentDocumentPath;
 
-        if (statusBar())
-            statusBar()->showMessage(tr("Opened %1").arg(QFileInfo(path).fileName()), 1500);
-
-        targetPath = currentDocumentPath;
-
-    if (targetPath.isEmpty()) {
-
+    if (targetPath.isEmpty())
         targetPath = promptForSaveFileName(QString());
 
-        if (statusBar())
-            statusBar()->showMessage(tr("Failed to open %1").arg(QFileInfo(path).fileName()), 2000);
+    if (targetPath.isEmpty())
+        return;
 
-    }
-
-    if (viewport)
-        viewport->update();
-
-    return ok;
-
+    const QString previousPath = currentDocumentPath;
     const bool pathChanged = previousPath.isEmpty()
-
         || QDir::cleanPath(previousPath) != QDir::cleanPath(targetPath);
 
     if (saveDocumentToPath(targetPath, pathChanged))
-
         return;
 
     if (statusBar())
-
         statusBar()->showMessage(tr("Failed to save %1").arg(QFileInfo(targetPath).fileName()), 2000);
 
 }

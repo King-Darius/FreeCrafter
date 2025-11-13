@@ -6,6 +6,11 @@ This document cross-references the current FreeCrafter implementation with the
 items tracked in `ROADMAP.md` so contributors can quickly see which roadmap
 milestones already have code backing them and which ones are still open.
 
+## Verification status (aligned with README)
+
+- `python scripts/bootstrap.py` now reuses the apt-installed Qt stack at `/usr`, rebuilds every target, and installs `FreeCrafter` into `dist/bin/` without additional steps.【074f9f†L1-L11】【F:scripts/bootstrap.py†L320-L349】 Packaging work can therefore focus on runtime bundling rather than unblocking the compiler.
+- `ctest --test-dir build --output-on-failure` runs to completion, but 7/18 suites fail: GPU-dependent tests (`render_regression`, `viewport_depth_range`, `tool_activation`, `cursor_overlay`, `undo_stack_resets`) crash without an OpenGL context in this headless environment, and the regression suites for Phase 4 and Phase 6 (`phase4_tools`, `phase6_advanced_tools`) still assert on offset/follow-me/surface behaviours.【5df591†L1-L68】【324942†L1-L15】 Roadmap checkboxes therefore remain ☑ for implementation coverage but ⚠️ for verification until these regressions are cleared.
+
 ## Release Packaging Readiness
 
 * The Windows release workflow builds the project with CMake, packages it with

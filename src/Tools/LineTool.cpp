@@ -216,13 +216,7 @@ Tool::OverrideResult LineTool::applyMeasurementOverride(double value)
     previewValid = true;
     return Tool::OverrideResult::Commit;
 }
-
-    direction = direction.normalized();
-    Vector3 target = origin + direction * static_cast<float>(value);
-    if (points.size() == 1) {
-        points.push_back(target);
-    } else {
-        points.back() = target;
+
     }
     previewPoint = target;
     previewValid = true;

@@ -131,7 +131,7 @@ void RotateTool::onCancel()
     setState(State::Idle);
 }
 
-void RotateTool::onStateChanged(State previous, State next)
+void RotateTool::onStateChanged(State /*previous*/, State next)
 {
     if (next == State::Idle) {
         dragging = false;
@@ -254,15 +254,6 @@ std::vector<Scene::ObjectId> RotateTool::selectionIds() const
     }
     return ids;
 }
-
-    }
-    currentAngle = static_cast<float>(value);
-    return Tool::OverrideResult::Commit;
-}
-
-void RotateTool::applyRotation(float angleRadians)
-{
-    if (!geometry)
         return;
     for (GeometryObject* obj : selection) {
         if (!obj)

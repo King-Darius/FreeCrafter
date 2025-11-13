@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "CameraController.h"
@@ -8,6 +9,7 @@
 #include "GeometryKernel/Solid.h"
 #include "Tools/DrawingTools.h"
 #include "Tools/ModificationTools.h"
+#include "test_support.h"
 
 using Interaction::InferenceResult;
 using Interaction::InferenceSnapType;
@@ -264,12 +266,15 @@ void testBezierTool()
 
 void testOffsetTool()
 {
-    GeometryKernel kernel;
+    TestSupport::ToolCommandHarness harness;
     CameraController camera;
+    GeometryKernel& kernel = harness.geometry;
     GeometryObject* original = kernel.addCurve(makeSquare(0.0f, 0.0f, 2.0f));
+    harness.registerObject(original, "Offset Source");
     original->setSelected(true);
 
     OffsetTool tool(&kernel, &camera);
+    harness.configureTool(tool);
     tool.setViewportSize(800, 600);
     tool.setDistance(0.5f);
     tool.handleMouseDown({ 0, 0, {} });
@@ -281,12 +286,15 @@ void testOffsetTool()
 
 void testPushPullTool()
 {
-    GeometryKernel kernel;
+    TestSupport::ToolCommandHarness harness;
     CameraController camera;
+    GeometryKernel& kernel = harness.geometry;
     GeometryObject* original = kernel.addCurve(makeSquare(0.0f, 0.0f, 2.0f));
+    harness.registerObject(original, "PushPull Source");
     original->setSelected(true);
 
     PushPullTool tool(&kernel, &camera);
+    harness.configureTool(tool);
     tool.setViewportSize(800, 600);
     tool.setDistance(3.0f);
     tool.handleMouseDown({ 0, 0, {} });
@@ -297,13 +305,17 @@ void testPushPullTool()
 
 void testFollowMeTool()
 {
-    GeometryKernel kernel;
+    TestSupport::ToolCommandHarness harness;
     CameraController camera;
+    GeometryKernel& kernel = harness.geometry;
     GeometryObject* profile = kernel.addCurve(makeSquare(0.0f, 0.0f, 1.0f));
+    harness.registerObject(profile, "FollowMe Profile");
     profile->setSelected(true);
     GeometryObject* path = kernel.addCurve({ { 0.0f, 0.0f, 0.0f }, { 2.0f, 0.0f, 0.0f }, { 2.0f, 0.0f, 2.0f } });
+    harness.registerObject(path, "FollowMe Path");
 
     FollowMeTool tool(&kernel, &camera);
+    harness.configureTool(tool);
     tool.setViewportSize(800, 600);
     tool.setProfile(profile);
     tool.setPath(path);
@@ -314,12 +326,15 @@ void testFollowMeTool()
 
 void testPaintBucketTool()
 {
-    GeometryKernel kernel;
+    TestSupport::ToolCommandHarness harness;
     CameraController camera;
+    GeometryKernel& kernel = harness.geometry;
     GeometryObject* curve = kernel.addCurve(makeSquare(0.0f, 0.0f, 1.0f));
+    harness.registerObject(curve, "Paint Target");
     curve->setSelected(true);
 
     PaintBucketTool tool(&kernel, &camera);
+    harness.configureTool(tool);
     tool.setViewportSize(800, 600);
     tool.setMaterialName("Stone");
     tool.handleMouseDown({ 0, 0, {} });
@@ -329,9 +344,11 @@ void testPaintBucketTool()
 
 void testTextTool()
 {
-    GeometryKernel kernel;
+    TestSupport::ToolCommandHarness harness;
     CameraController camera;
+    GeometryKernel& kernel = harness.geometry;
     TextTool tool(&kernel, &camera);
+    harness.configureTool(tool);
     tool.setViewportSize(800, 600);
     tool.setText("Hello");
     tool.setHeight(2.0f);

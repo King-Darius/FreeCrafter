@@ -13,10 +13,6 @@ namespace Core {
 class CommandStack;
 }
 
-namespace Scene {
-class Document;
-}
-
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;

@@ -14,6 +14,7 @@
 
 #include "GLViewport.h"
 #include "Tools/ToolManager.h"
+#include "test_support.h"
 
 namespace {
 
@@ -37,6 +38,9 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, configDir.path());
 
     QApplication app(argc, argv);
+
+    if (!TestSupport::ensureOpenGL("cursor_overlay"))
+        return 0;
 
     GLViewport viewport;
     viewport.resize(640, 480);

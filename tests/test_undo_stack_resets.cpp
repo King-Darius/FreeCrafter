@@ -13,6 +13,7 @@
 #include "GLViewport.h"
 #include "MainWindow.h"
 #include "Scene/Document.h"
+#include "test_support.h"
 
 int main(int argc, char** argv)
 {
@@ -27,6 +28,9 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, configDir.path());
 
     QApplication app(argc, argv);
+
+    if (!TestSupport::ensureOpenGL("undo_stack_resets"))
+        return 0;
 
     QSettings settings("FreeCrafter", "FreeCrafter");
     settings.clear();

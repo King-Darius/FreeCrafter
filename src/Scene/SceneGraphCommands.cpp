@@ -192,6 +192,46 @@ void AssignMaterialCommand::performUndo()
     }
 }
 
+SetObjectTransformCommand::SetObjectTransformCommand(std::vector<TransformChange> changes, const QString& description)
+    : Core::Command(description)
+    , changes(std::move(changes))
+{
+    changes.erase(std::remove_if(changes.begin(), changes.end(), [](const TransformChange& change) {
+        return change.id == 0;
+    }), changes.end());
+}
+
+void SetObjectTransformCommand::initialize()
+{
+    Core::Command::initialize();
+    if (!document())
+        changes.clear();
+}
+
+void SetObjectTransformCommand::performRedo()
+{
+    if (!document())
+        return;
+
+    std::vector<Document::ObjectId> ids;
+    ids.reserve(changes.size());
+    for (const auto& change : changes) {
+        document()->applyTransform(change.id, change.after, change.mask);
+        ids.push_back(change.id);
+    }
+    if (!ids.empty())
+        setFinalSelection(ids);
+}
+
+void SetObjectTransformCommand::performUndo()
+{
+    if (!document())
+        return;
+
+    for (const auto& change : changes)
+        document()->applyTransform(change.id, change.before, change.mask);
+}
+
 CreateTagCommand::CreateTagCommand(const QString& tagName, const SceneSettings::Color& tagColor)
     : Core::Command(QObject::tr("Create Tag"))
     , name(tagName)

@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QWidget>
+#include <vector>
 
 #include "../Scene/Document.h"
 
@@ -18,6 +19,7 @@ class CommandStack;
 }
 
 class GeometryKernel;
+class GeometryObject;
 
 class RightTray : public QWidget {
     Q_OBJECT
@@ -37,6 +39,7 @@ public:
     TagsPanel* tagsPanel() const { return tags_; }
 
     void refreshPanels();
+    void updateSelection(GeometryKernel* geometry, const std::vector<GeometryObject*>& selection);
 
 public slots:
     void refreshHistory();

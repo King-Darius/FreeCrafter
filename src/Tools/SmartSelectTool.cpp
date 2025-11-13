@@ -288,18 +288,7 @@ void SmartSelectTool::clearSelection()
     for (const auto& object : geometry->getObjects())
         object->setSelected(false);
 }
-        if (window) {
-            if (pointInsideXZ(box, minX, maxX, minZ, maxZ)) {
-                hits.push_back(object.get());
-            }
-        } else {
-            if (boxIntersectsXZ(box, minX, maxX, minZ, maxZ)) {
-                hits.push_back(object.get());
-            }
-        }
-    }
-
-    applySelection(hits, getModifiers().shift, getModifiers().ctrl);
+
 }
 
 void SmartSelectTool::clearSelection()

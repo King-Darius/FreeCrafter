@@ -12,6 +12,7 @@
 #include "Scene/Document.h"
 #include "Tools/ToolManager.h"
 #include "Tools/ToolRegistry.h"
+#include "test_support.h"
 
 using ToolKind = Tool::MeasurementKind;
 
@@ -58,6 +59,9 @@ void testUiBindings()
     char arg0[] = "tool_activation";
     char* argv[] = { arg0, nullptr };
     QApplication app(argc, argv);
+
+    if (!TestSupport::ensureOpenGL("tool_activation_ui"))
+        return;
 
     MainWindow window;
     GLViewport* viewport = window.findChild<GLViewport*>();

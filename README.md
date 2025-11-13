@@ -1,6 +1,6 @@
 # FreeCrafter <img src="docs/media/freecrafter-logo.svg" alt="FreeCrafter logo" height="48" align="top" />
 
-> **Status snapshot:** FreeCrafter is still in a **pre-alpha** state. The Qt 6 shell boots, but major UI layout, viewport, and styling bugs remain before the editor is usable for day-to-day work.
+> **Status snapshot:** The latest bootstrap run (`python scripts/bootstrap.py`) now reuses the apt-provided Qt 6 toolchain at `/usr`, rebuilds the entire suite, and installs `FreeCrafter` into `dist/bin/` without errors.【074f9f†L1-L11】 A follow-up `ctest --test-dir build --output-on-failure` run executed all 18 suites; 11 passed while 7 failed because the headless environment cannot create an OpenGL context and the Phase 4/6 regression suites still trip assertions in the offset, follow-me, and surface workflows.【5df591†L1-L68】【324942†L1-L15】 See the refreshed [sanity check report](docs/status/2025-02-11-sanity-check.md) for detailed logs and remediation notes.
 
 FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD-style precision with a lightweight, top-down workspace. The editor pairs a modern Qt 6 desktop experience with a hardware-accelerated OpenGL viewport, rich inference, and a growing catalog of advanced modeling tools.
 
@@ -15,11 +15,8 @@ FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD
 - 📅 **Next up:** Phases 8–11 (performance, polish, QA, release, and surface painting) remain on the long-term backlog.
 
 ## Current limitations
-- **Viewport rendering:** Clipping, missing redraws, and camera drift make the main canvas unreliable for production work.
-- **GUI layout & styling:** Dock stacks, toolbars, and theme toggles frequently desync; widgets clip or overlap on smaller displays.
-- **Tool activation:** The action → tool wiring is incomplete, so several modeling tools fail silently or leave the app in an unusable state.
-- **Persistence & recovery:** Autosave/undo/redo paths are fragile. Saving and reopening complex scenes often loses materials or corrupts transforms.
-- **Testing coverage:** Automated smoke tests are still being written, so regressions may slip in between builds until we expand the suite.
+- **Bootstrap/build:** `python scripts/bootstrap.py` completes end-to-end with the system Qt stack, drops fresh binaries in `build/`, and stages an install tree under `dist/`. Future packaging work can now focus on bundling the runtime rather than repairing the build.【074f9f†L1-L11】
+- **Automated verification gap:** `ctest --test-dir build --output-on-failure` currently fails 7/18 suites: the render, viewport depth, tool activation, cursor overlay, and undo-reset tests crash without a GPU-capable OpenGL context, while the `phase4_tools` and `phase6_advanced_tools` suites still assert on offset/push-pull/surface behaviors. These remain high-priority roadmap regressions despite the new binary output.【5df591†L1-L68】【324942†L1-L15】
 
 ## Feature goals & active work
 The following features are in various stages of implementation. Many ship behind feature flags or require bug fixes before they are production ready.

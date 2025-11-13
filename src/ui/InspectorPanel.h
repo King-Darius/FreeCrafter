@@ -8,13 +8,10 @@
 
 #include "../GeometryKernel/GeometryKernel.h"
 #include "../GeometryKernel/Vector3.h"
+#include "../Scene/Document.h"
 
 namespace Core {
 class CommandStack;
-}
-
-namespace Scene {
-class Document;
 }
 
 class QCheckBox;

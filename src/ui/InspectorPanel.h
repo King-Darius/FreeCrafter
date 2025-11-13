@@ -3,7 +3,6 @@
 #include <QWidget>
 
 #include <array>
-#include <optional>
 #include <vector>
 
 #include "../GeometryKernel/GeometryKernel.h"
@@ -68,8 +67,7 @@ private:
     void rebuildGeneralProperties();
     void refreshMaterialChoices();
     void updateTransformEditors();
-    void applyPositionDelta(int axis, QLineEdit* editor);
-    std::optional<Vector3> centroidForObject(const GeometryObject* object) const;
+    void applyPositionChange(int axis, QLineEdit* editor);
     void setVectorEditors(VectorEditors& editors, const Vector3& value, const std::array<bool, 3>& mixedFlags);
 
     QWidget* createMessagePage(const QString& text, QLabel** labelOut);
@@ -105,8 +103,8 @@ private:
     bool visibilityValue = true;
     bool lockValue = false;
     std::array<bool, 3> positionMixed { false, false, false };
-    Vector3 referencePosition{};
-    std::vector<Vector3> selectionCenters;
+    Scene::Document::Transform referenceTransform{};
+    std::vector<Scene::Document::Transform> selectionTransforms;
     std::vector<Scene::Document::ObjectId> selectionIds;
 
     QLabel* titleLabel = nullptr;

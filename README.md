@@ -9,10 +9,10 @@ FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD
 </div>
 
 ## Project snapshot
-- ✅ **Roadmap coverage:** The foundations for Phases 1–7 (core shell, geometry/inference, navigation/view, drawing, object management, advanced tools, and file I/O) exist in the codebase but require polish.
-- 🚧 **In progress:** Phase 7.5 (comprehensive bug sweep + UX polish) is focused on stabilizing the View menu, undo/redo, autosave, and accessibility/usability audits.
-- ⚠️ **Reality check:** Current desktop builds expose severe regressions in the viewport, docking/layout, and theming pipelines. Expect crashes, broken painting, and inconsistent tool activation until the stabilization work lands.
-- 📅 **Next up:** Phases 8–11 (performance, polish, QA, release, and surface painting) remain on the long-term backlog.
+- ❌ **Build & test status:** CMake configure currently halts at `find_package(Qt6)` because the SDK is absent, so no binaries or automated tests were produced in this run.
+- 🚧 **Regression triage:** Viewport rendering, docking/layout persistence, and theming/tool activation bugs remain unresolved and unverified until the toolchain is rebuilt.
+- ✅ **Roadmap coverage (code present):** Foundations for Phases 1–7 (core shell through file I/O) continue to live in the repository, but their stability is unknown without fresh builds.
+- 📅 **Next up:** Phases 8–11 (performance, polish, QA/release, and surface painting) stay on the backlog pending restoration of a working toolchain.
 
 ## Current limitations
 - **Bootstrap/build:** `python scripts/bootstrap.py` completes end-to-end with the system Qt stack, drops fresh binaries in `build/`, and stages an install tree under `dist/`. Future packaging work can now focus on bundling the runtime rather than repairing the build.【074f9f†L1-L11】

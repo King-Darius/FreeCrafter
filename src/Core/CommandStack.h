@@ -19,7 +19,7 @@ public:
     const CommandContext& context() const { return context_; }
     QUndoStack* undoStack() const { return undoStack_; }
 
-    void push(std::unique_ptr<Command> command);
+    Command* push(std::unique_ptr<Command> command);
 
 private:
     QUndoStack* undoStack_ = nullptr;

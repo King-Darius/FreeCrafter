@@ -87,6 +87,26 @@ private:
     std::unordered_map<Document::ObjectId, std::string> previous;
 };
 
+class SetObjectTransformCommand : public Core::Command {
+public:
+    struct TransformChange {
+        Document::ObjectId id = 0;
+        Document::Transform before{};
+        Document::Transform after{};
+        Document::TransformMask mask{};
+    };
+
+    SetObjectTransformCommand(std::vector<TransformChange> changes, const QString& description);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    std::vector<TransformChange> changes;
+};
+
 class CreateTagCommand : public Core::Command {
 public:
     CreateTagCommand(const QString& name, const SceneSettings::Color& color);

@@ -1,6 +1,6 @@
 # FreeCrafter <img src="docs/media/freecrafter-logo.svg" alt="FreeCrafter logo" height="48" align="top" />
 
-> **Status snapshot:** The latest bootstrap run (`python scripts/bootstrap.py`) now reuses the apt-provided Qt 6 toolchain at `/usr`, rebuilds the entire suite, and installs `FreeCrafter` into `dist/bin/` without errors.【074f9f†L1-L11】 A follow-up `ctest --test-dir build --output-on-failure` run executed all 18 suites; 11 passed while 7 failed because the headless environment cannot create an OpenGL context and the Phase 4/6 regression suites still trip assertions in the offset, follow-me, and surface workflows.【5df591†L1-L68】【324942†L1-L15】 See the refreshed [sanity check report](docs/status/2025-02-11-sanity-check.md) for detailed logs and remediation notes.
+> **Status snapshot:** FreeCrafter remains an unstable **pre-release** build. The Qt 6 shell runs with the bundled runtime, but automated builds and tests are currently blocked on staging that toolchain, and significant viewport, layout, and persistence bugs still prevent day-to-day use.
 
 FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD-style precision with a lightweight, top-down workspace. The editor pairs a modern Qt 6 desktop experience with a hardware-accelerated OpenGL viewport, rich inference, and a growing catalog of advanced modeling tools.
 
@@ -9,14 +9,17 @@ FreeCrafter is a cross-platform, tool-driven 3D modeling sandbox that blends CAD
 </div>
 
 ## Project snapshot
-- ❌ **Build & test status:** CMake configure currently halts at `find_package(Qt6)` because the SDK is absent, so no binaries or automated tests were produced in this run.
-- 🚧 **Regression triage:** Viewport rendering, docking/layout persistence, and theming/tool activation bugs remain unresolved and unverified until the toolchain is rebuilt.
-- ✅ **Roadmap coverage (code present):** Foundations for Phases 1–7 (core shell through file I/O) continue to live in the repository, but their stability is unknown without fresh builds.
-- 📅 **Next up:** Phases 8–11 (performance, polish, QA/release, and surface painting) stay on the backlog pending restoration of a working toolchain.
+- ✅ **Roadmap coverage:** The foundations for Phases 1–7 (core shell, geometry/inference, navigation/view, drawing, object management, advanced tools, and file I/O) exist in the codebase but still require polish and verification.
+- 🚧 **In progress:** Phase 7.5 (comprehensive bug sweep + UX polish) is wiring the Inspector/Entity Info panel into the undo stack, expanding tag/material bindings, and hardening autosave and command history flows.
+- ⚠️ **Reality check:** The viewport, docking/layout, and theming pipelines continue to show severe regressions. Automated CI/test gating is red until a Qt toolchain is staged, so expect crashes, broken painting, and inconsistent tool activation while stabilization work continues.
+- 📅 **Next up:** Phases 8–11 (performance, polish, QA, release, and surface painting) remain on the long-term backlog.
 
 ## Current limitations
-- **Bootstrap/build:** `python scripts/bootstrap.py` completes end-to-end with the system Qt stack, drops fresh binaries in `build/`, and stages an install tree under `dist/`. Future packaging work can now focus on bundling the runtime rather than repairing the build.【074f9f†L1-L11】
-- **Automated verification gap:** `ctest --test-dir build --output-on-failure` currently fails 7/18 suites: the render, viewport depth, tool activation, cursor overlay, and undo-reset tests crash without a GPU-capable OpenGL context, while the `phase4_tools` and `phase6_advanced_tools` suites still assert on offset/push-pull/surface behaviors. These remain high-priority roadmap regressions despite the new binary output.【5df591†L1-L68】【324942†L1-L15】
+- **Viewport rendering:** Clipping, missing redraws, and camera drift make the main canvas unreliable for production work.
+- **GUI layout & styling:** Dock stacks, toolbars, and theme toggles frequently desync; widgets clip or overlap on smaller displays.
+- **Tool activation:** The action → tool wiring is incomplete, so several modeling tools fail silently or leave the app in an unusable state.
+- **Persistence & recovery:** Autosave/undo/redo paths are fragile. Saving and reopening complex scenes often loses materials or corrupts transforms, and manual rebuilds are still required when the Qt runtime is missing.
+- **Testing coverage:** Automated smoke tests are still being written, so regressions may slip in between builds until we expand the suite.
 
 ## Feature goals & active work
 The following features are in various stages of implementation. Many ship behind feature flags or require bug fixes before they are production ready.

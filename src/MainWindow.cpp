@@ -4854,19 +4854,15 @@ void MainWindow::updateCursor(double x, double y, double z)
 void MainWindow::updateSelectionStatus()
 {
     if (!selectionLabel || !viewport) {
-        if (rightTray_)
-            rightTray_->updateSelection(nullptr, {});
-        else if (inspectorPanel)
-            inspectorPanel->updateSelection(nullptr, {});
+        if (inspectorPanel)
+            inspectorPanel->updateSelection(nullptr, nullptr, {});
         return;
     }
     Scene::Document* doc = viewport->getDocument();
     if (!doc) {
         selectionLabel->setText(tr("Selection: none"));
-        if (rightTray_)
-            rightTray_->updateSelection(nullptr, {});
-        else if (inspectorPanel)
-            inspectorPanel->updateSelection(nullptr, {});
+        if (inspectorPanel)
+            inspectorPanel->updateSelection(nullptr, nullptr, {});
         return;
     }
     const auto& objects = doc->geometry().getObjects();
@@ -4883,10 +4879,8 @@ void MainWindow::updateSelectionStatus()
             selectedObjects.push_back(object.get());
         }
     }
-    if (rightTray_)
-        rightTray_->updateSelection(&doc->geometry(), selectedObjects);
-    else if (inspectorPanel)
-        inspectorPanel->updateSelection(&doc->geometry(), selectedObjects);
+    if (inspectorPanel)
+        inspectorPanel->updateSelection(doc, &doc->geometry(), selectedObjects);
     QString textValue;
     if (totalCount == 0) {
         textValue = tr("Selection: none");

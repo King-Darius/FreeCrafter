@@ -41,8 +41,7 @@ RightTray::RightTray(Scene::Document* document,
     layout->setSpacing(8);
 
     inspector_ = new InspectorPanel(container);
-    inspector_->setDocument(document_);
-    inspector_->setCommandStack(commandStack_);
+    inspector_->setContext(document_, geometry_, commandStack_);
     outliner_ = new OutlinerPanel(container);
     undoStack_ = undoStack;
     history_ = new HistoryPanel(undoStack_, container);

@@ -4,6 +4,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 
 #include <QString>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -172,11 +173,60 @@ private:
     bool captured = false;
 };
 
+class RenameObjectsCommand : public Core::Command {
+public:
+    RenameObjectsCommand(std::vector<Document::ObjectId> ids, const QString& name);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    std::vector<Document::ObjectId> objectIds;
+    QString newName;
+    std::vector<std::string> previousNames;
+    bool captured = false;
+};
+
+class SetObjectsVisibilityCommand : public Core::Command {
+public:
+    SetObjectsVisibilityCommand(std::vector<Document::ObjectId> ids, bool visible);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    std::vector<Document::ObjectId> objectIds;
+    bool visible = true;
+    std::vector<bool> previousValues;
+    bool captured = false;
+};
+
+class SetTagAssignmentsCommand : public Core::Command {
+public:
+    SetTagAssignmentsCommand(Document::TagId tagId, std::vector<Document::ObjectId> ids, bool assign);
+
+protected:
+    void initialize() override;
+    void performRedo() override;
+    void performUndo() override;
+
+private:
+    Document::TagId tagId = 0;
+    std::vector<Document::ObjectId> objectIds;
+    bool assign = true;
+    std::vector<bool> previouslyHad;
+    bool captured = false;
+};
+
 class RebuildCurveFromMetadataCommand : public Core::Command {
 public:
-    RebuildCurveFromMetadataCommand(Document::ObjectId id, const GeometryKernel::ShapeMetadata& metadata);
-
-    bool wasApplied() const { return applied; }
+    RebuildCurveFromMetadataCommand(Document::ObjectId id,
+                                    GeometryKernel::ShapeMetadata metadata,
+                                    const QString& description);
 
 protected:
     void initialize() override;
@@ -186,9 +236,8 @@ protected:
 private:
     Document::ObjectId objectId = 0;
     GeometryKernel::ShapeMetadata newMetadata{};
-    GeometryKernel::ShapeMetadata previousMetadata{};
+    std::optional<GeometryKernel::ShapeMetadata> previousMetadata;
     bool captured = false;
-    bool applied = false;
 };
 
 } // namespace Scene

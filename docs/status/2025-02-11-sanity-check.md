@@ -1,18 +1,18 @@
 # Sanity Check Report — 11 Feb 2025 (refreshed)
 
 ## Summary
-- Ran the bootstrap smoke suite (`pytest tests/test_bootstrap.py`) and the C++ integration harness (`ctest --test-dir build --output-on-failure`) to cover the editor shell, navigation, tool workflows, object management, advanced tools, and import/export code paths. Both suites are currently green.
-- Phases 1–7 from `ROADMAP.md` now have shipping implementations with matching regression coverage. The lone Phase 3 gap is the dynamic cursor/pickbox artwork, which still needs to be wired to tool state updates.
-- Remaining open work is concentrated in Phases 8–11 (performance, polish, QA & release, and surface painting). These are tracked as backlog items for future sprints.
-- Packaging and dependency management continue to rely on `scripts/bootstrap.py`, `scripts/requirements.txt`, the pinned Qt manifest, and the existing CPack configuration.
+- CMake configure fails immediately at `find_package(Qt6)` on a clean environment, blocking the native build and all downstream regression suites until Qt 6 development packages are installed (run `scripts/bootstrap.py` or point `CMAKE_PREFIX_PATH`/`Qt6_DIR` at an existing SDK).
+- Because the build stage did not complete, `ctest` and Python smoke suites were not run; their status remains **unknown** pending restoration of the toolchain.
+- The codebase still contains implementations for Phases 1–7 from `ROADMAP.md`, but their stability is unverified without a successful build.
+- Work continues to be queued for Phases 8–11 (performance, polish, QA & release, surface painting) once the environment is healthy again.
 
 ## Test Log
 ```text
-pytest tests/test_bootstrap.py
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+# → fails: Qt6Config.cmake not found (Qt 6 SDK missing)
 ```
 
-All tests passed. For raw output, see the execution transcript captured during this run.
+With configure failing, no further test executables were built or exercised.
 
 ## Roadmap Snapshot
 - Phase coverage snapshot:

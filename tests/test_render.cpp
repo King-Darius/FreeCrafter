@@ -11,6 +11,7 @@
 #include "GeometryKernel/GeometryKernel.h"
 #include "GeometryKernel/Vector3.h"
 #include "Scene/SectionPlane.h"
+#include "test_support.h"
 
 #include <vector>
 #include <cmath>
@@ -79,6 +80,9 @@ int main(int argc, char** argv)
         qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
     }
     QApplication app(argc, argv);
+
+    if (!TestSupport::ensureOpenGL("render_regression"))
+        return 0;
 
     GLViewport viewport;
     viewport.resize(400, 300);

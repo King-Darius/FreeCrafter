@@ -123,13 +123,13 @@ void ViewportContainer::setSplitEnabled(bool enabled)
         stackedLayout_->setCurrentWidget(splitPage_);
     } else {
         splitter_->hide();
-        splitter_->removeWidget(primaryViewport_);
+        if (primaryViewport_->parentWidget() == splitter_)
+            primaryViewport_->setParent(singlePage_);
         if (secondaryViewport_) {
-            splitter_->removeWidget(secondaryViewport_);
-            secondaryViewport_->setParent(this);
+            if (secondaryViewport_->parentWidget() == splitter_)
+                secondaryViewport_->setParent(this);
             secondaryViewport_->hide();
         }
-        primaryViewport_->setParent(singlePage_);
         singleLayout_->addWidget(primaryViewport_);
         stackedLayout_->setCurrentWidget(singlePage_);
     }

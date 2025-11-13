@@ -19,12 +19,14 @@ void CommandStack::setContext(const CommandContext& context)
     context_ = context;
 }
 
-void CommandStack::push(std::unique_ptr<Command> command)
+Command* CommandStack::push(std::unique_ptr<Command> command)
 {
     if (!undoStack_ || !command)
-        return;
+        return nullptr;
     command->setContext(context_);
+    Command* raw = command.get();
     undoStack_->push(command.release());
+    return raw;
 }
 
 } // namespace Core

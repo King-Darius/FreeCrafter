@@ -102,6 +102,101 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     titleLabel->setFont(titleFont);
     layout->addWidget(titleLabel);
 
+    mixedValueDisplay = tr("--");
+
+    generalSection = new QWidget(this);
+    generalSection->setVisible(false);
+    generalForm = new QFormLayout(generalSection);
+    generalForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    generalForm->setHorizontalSpacing(12);
+    generalForm->setVerticalSpacing(6);
+
+    nameEdit = new QLineEdit(generalSection);
+    nameEdit->setObjectName(QStringLiteral("inspectorNameEdit"));
+    nameEdit->setClearButtonEnabled(true);
+    connect(nameEdit, &QLineEdit::editingFinished, this, &InspectorPanel::commitName);
+    generalForm->addRow(tr("Name"), nameEdit);
+
+    tagLabel = new QLabel(tr("<None>"), generalSection);
+    tagLabel->setObjectName(QStringLiteral("inspectorTagLabel"));
+    generalForm->addRow(tr("Tags"), tagLabel);
+
+    visibleCheck = new QCheckBox(tr("Visible"), generalSection);
+    visibleCheck->setObjectName(QStringLiteral("inspectorVisibleCheck"));
+    connect(visibleCheck, &QCheckBox::stateChanged, this, &InspectorPanel::commitVisibility);
+    generalForm->addRow(tr("Visibility"), visibleCheck);
+
+    lockCheck = new QCheckBox(tr("Locked"), generalSection);
+    lockCheck->setObjectName(QStringLiteral("inspectorLockCheck"));
+    connect(lockCheck, &QCheckBox::stateChanged, this, &InspectorPanel::commitLock);
+    generalForm->addRow(tr("Lock"), lockCheck);
+
+    materialCombo = new QComboBox(generalSection);
+    materialCombo->setEditable(true);
+    materialCombo->setInsertPolicy(QComboBox::NoInsert);
+    materialCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    materialCombo->setObjectName(QStringLiteral("inspectorMaterialCombo"));
+    if (QLineEdit* comboEdit = materialCombo->lineEdit()) {
+        comboEdit->setClearButtonEnabled(true);
+        comboEdit->setPlaceholderText(tr("Material"));
+        connect(comboEdit, &QLineEdit::editingFinished, this, [this]() {
+            commitMaterial(materialCombo->currentText());
+        });
+    }
+    connect(materialCombo, &QComboBox::textActivated, this, &InspectorPanel::commitMaterial);
+    generalForm->addRow(tr("Material"), materialCombo);
+
+    layout->addWidget(new CollapsibleSection(tr("Entity"), generalSection, true, this));
+
+    transformSection = new QWidget(this);
+    transformSection->setVisible(false);
+    auto* transformLayout = new QFormLayout(transformSection);
+    transformLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    transformLayout->setHorizontalSpacing(12);
+    transformLayout->setVerticalSpacing(6);
+
+    auto createVectorRow = [&](const QString& label, VectorEditors& editors, const QString& baseName, bool editable) {
+        QWidget* row = new QWidget(transformSection);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(6);
+        auto makeField = [&](const QString& suffix) {
+            auto* edit = new QLineEdit(row);
+            edit->setAlignment(Qt::AlignRight);
+            edit->setPlaceholderText(mixedValueDisplay);
+            edit->setObjectName(baseName + suffix);
+            if (editable) {
+                edit->setClearButtonEnabled(true);
+            } else {
+                auto* validator = new QDoubleValidator(-kMaxRadius, kMaxRadius, 3, edit);
+                validator->setNotation(QDoubleValidator::StandardNotation);
+                edit->setValidator(validator);
+            }
+            edit->setEnabled(editable);
+            rowLayout->addWidget(edit);
+            return edit;
+        };
+        editors.x = makeField(QStringLiteral("X"));
+        editors.y = makeField(QStringLiteral("Y"));
+        editors.z = makeField(QStringLiteral("Z"));
+        if (editable) {
+            connect(editors.x, &QLineEdit::editingFinished, this, &InspectorPanel::commitPositionX);
+            connect(editors.y, &QLineEdit::editingFinished, this, &InspectorPanel::commitPositionY);
+            connect(editors.z, &QLineEdit::editingFinished, this, &InspectorPanel::commitPositionZ);
+        } else {
+            editors.x->setReadOnly(true);
+            editors.y->setReadOnly(true);
+            editors.z->setReadOnly(true);
+        }
+        transformLayout->addRow(label, row);
+    };
+
+    createVectorRow(tr("Position"), positionEditors, QStringLiteral("inspectorPosition"), true);
+    createVectorRow(tr("Rotation"), rotationEditors, QStringLiteral("inspectorRotation"), false);
+    createVectorRow(tr("Scale"), scaleEditors, QStringLiteral("inspectorScale"), false);
+
+    layout->addWidget(new CollapsibleSection(tr("Transform"), transformSection, true, this));
+
     stacked = new QStackedWidget(this);
     layout->addWidget(stacked, 1);
 
@@ -198,10 +293,12 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     circleRadius->setRange(kDefaultMinRadius, kMaxRadius);
     circleRadius->setDecimals(3);
     circleRadius->setSingleStep(0.1);
+    circleRadius->setObjectName(QStringLiteral("inspectorCircleRadius"));
     circleLayout->addRow(tr("Radius"), circleRadius);
     circleSegments = new QSpinBox(circlePage);
     circleSegments->setRange(8, 512);
     circleSegments->setSingleStep(1);
+    circleSegments->setObjectName(QStringLiteral("inspectorCircleSegments"));
     circleLayout->addRow(tr("Segments"), circleSegments);
     typeStack->addWidget(circlePage);
 
@@ -347,6 +444,455 @@ QWidget* InspectorPanel::createMessagePage(const QString& text, QLabel** labelOu
     if (labelOut)
         *labelOut = label;
     return page;
+}
+
+void InspectorPanel::setDocument(Scene::Document* document)
+{
+    currentDocument = document;
+}
+
+void InspectorPanel::setCommandStack(Core::CommandStack* stack)
+{
+    commandStack = stack;
+}
+
+void InspectorPanel::rebuildGeneralProperties()
+{
+    selectionIds.clear();
+    selectionTransforms.clear();
+
+    if (!generalSection) {
+        updateTransformEditors();
+        return;
+    }
+
+    if (!currentDocument || currentSelection.empty()) {
+        generalSection->setVisible(false);
+        if (transformSection)
+            transformSection->setVisible(false);
+        updateTransformEditors();
+        return;
+    }
+
+    std::unordered_set<Scene::Document::ObjectId> seen;
+    seen.reserve(currentSelection.size());
+    selectionIds.reserve(currentSelection.size());
+    selectionTransforms.reserve(currentSelection.size());
+
+    for (GeometryObject* object : currentSelection) {
+        if (!object)
+            continue;
+        Scene::Document::ObjectId id = currentDocument->objectIdForGeometry(object);
+        if (id == 0)
+            continue;
+        if (!seen.insert(id).second)
+            continue;
+        selectionIds.push_back(id);
+        selectionTransforms.push_back(currentDocument->objectTransform(id));
+    }
+
+    if (selectionIds.empty()) {
+        generalSection->setVisible(false);
+        if (transformSection)
+            transformSection->setVisible(false);
+        updateTransformEditors();
+        return;
+    }
+
+    generalSection->setVisible(true);
+    if (transformSection)
+        transformSection->setVisible(true);
+
+    // Name field
+    nameMixed = false;
+    currentNameValue.clear();
+    bool nameInitialized = false;
+    for (Scene::Document::ObjectId id : selectionIds) {
+        const auto* node = currentDocument->findObject(id);
+        if (!node)
+            continue;
+        QString candidate = QString::fromStdString(node->name);
+        if (!nameInitialized) {
+            currentNameValue = candidate;
+            nameInitialized = true;
+        } else if (candidate != currentNameValue) {
+            nameMixed = true;
+            break;
+        }
+    }
+    if (nameEdit) {
+        QSignalBlocker blocker(nameEdit);
+        if (nameMixed)
+            nameEdit->setText(mixedValueDisplay);
+        else
+            nameEdit->setText(currentNameValue);
+        nameEdit->setEnabled(true);
+    }
+
+    // Tags display
+    if (tagLabel) {
+        bool tagsInitialized = false;
+        bool tagsMixed = false;
+        std::vector<Scene::Document::TagId> baseline;
+        for (Scene::Document::ObjectId id : selectionIds) {
+            const auto* node = currentDocument->findObject(id);
+            if (!node)
+                continue;
+            if (!tagsInitialized) {
+                baseline = node->tags;
+                tagsInitialized = true;
+            } else if (node->tags != baseline) {
+                tagsMixed = true;
+                break;
+            }
+        }
+        QString text;
+        if (tagsMixed) {
+            text = mixedValueDisplay;
+        } else if (tagsInitialized && !baseline.empty()) {
+            QStringList names;
+            for (Scene::Document::TagId tagId : baseline) {
+                auto it = currentDocument->tags().find(tagId);
+                if (it != currentDocument->tags().end())
+                    names.append(QString::fromStdString(it->second.name));
+            }
+            text = names.isEmpty() ? tr("<None>") : names.join(QStringLiteral(", "));
+        } else {
+            text = tr("<None>");
+        }
+        tagLabel->setText(text);
+    }
+
+    // Visibility state
+    visibilityMixed = false;
+    visibilityValue = true;
+    bool visibilityInitialized = false;
+    for (Scene::Document::ObjectId id : selectionIds) {
+        if (const auto* node = currentDocument->findObject(id)) {
+            if (!visibilityInitialized) {
+                visibilityValue = node->visible;
+                visibilityInitialized = true;
+            } else if (node->visible != visibilityValue) {
+                visibilityMixed = true;
+                break;
+            }
+        }
+    }
+    if (visibleCheck) {
+        QSignalBlocker blocker(visibleCheck);
+        visibleCheck->setEnabled(true);
+        visibleCheck->setTristate(visibilityMixed);
+        if (visibilityMixed)
+            visibleCheck->setCheckState(Qt::PartiallyChecked);
+        else
+            visibleCheck->setCheckState(visibilityValue ? Qt::Checked : Qt::Unchecked);
+    }
+
+    // Lock state will be updated once document exposes it; default to unchecked/disabled for now.
+    lockMixed = false;
+    lockValue = false;
+    if (lockCheck) {
+        QSignalBlocker blocker(lockCheck);
+        lockCheck->setEnabled(false);
+        lockCheck->setTristate(false);
+        lockCheck->setCheckState(Qt::Unchecked);
+    }
+
+    // Materials
+    materialMixed = false;
+    currentMaterialValue.clear();
+    bool materialInitialized = false;
+    for (GeometryObject* object : currentSelection) {
+        if (!object)
+            continue;
+        QString value = QString::fromStdString(currentDocument->geometry().getMaterial(object));
+        if (!materialInitialized) {
+            currentMaterialValue = value;
+            materialInitialized = true;
+        } else if (value != currentMaterialValue) {
+            materialMixed = true;
+            break;
+        }
+    }
+    refreshMaterialChoices();
+    if (materialCombo) {
+        QSignalBlocker blocker(materialCombo);
+        if (materialMixed) {
+            materialCombo->setEditText(mixedValueDisplay);
+        } else if (!currentMaterialValue.isEmpty()) {
+            int index = materialCombo->findData(currentMaterialValue, Qt::UserRole);
+            if (index < 0)
+                index = materialCombo->findText(currentMaterialValue, Qt::MatchExactly);
+            if (index >= 0)
+                materialCombo->setCurrentIndex(index);
+            else
+                materialCombo->setEditText(currentMaterialValue);
+        } else {
+            int noneIndex = materialCombo->findData(QString(), Qt::UserRole);
+            if (noneIndex >= 0)
+                materialCombo->setCurrentIndex(noneIndex);
+            else
+                materialCombo->setEditText(QString());
+        }
+    }
+
+    // Transform fields
+    if (selectionTransforms.empty())
+        selectionTransforms.resize(selectionIds.size());
+    referenceTransform = selectionTransforms.front();
+    positionMixed = { false, false, false };
+    for (std::size_t i = 1; i < selectionTransforms.size(); ++i) {
+        const Vector3& point = selectionTransforms[i].position;
+        if (!positionMixed[0] && std::fabs(point.x - referenceTransform.position.x) > kMetadataFloatEpsilon)
+            positionMixed[0] = true;
+        if (!positionMixed[1] && std::fabs(point.y - referenceTransform.position.y) > kMetadataFloatEpsilon)
+            positionMixed[1] = true;
+        if (!positionMixed[2] && std::fabs(point.z - referenceTransform.position.z) > kMetadataFloatEpsilon)
+            positionMixed[2] = true;
+    }
+    updateTransformEditors();
+}
+
+void InspectorPanel::refreshMaterialChoices()
+{
+    if (!materialCombo)
+        return;
+
+    QSignalBlocker blocker(materialCombo);
+    QString existing = materialCombo->currentText();
+    materialCombo->clear();
+    materialCombo->setEnabled(!selectionIds.empty());
+    materialCombo->addItem(tr("<None>"), QString());
+
+    std::unordered_set<QString> unique;
+    if (currentDocument) {
+        const auto& assignments = currentDocument->geometry().getMaterials();
+        unique.reserve(assignments.size());
+        for (const auto& entry : assignments) {
+            if (entry.second.empty())
+                continue;
+            unique.insert(QString::fromStdString(entry.second));
+        }
+    }
+    if (!currentMaterialValue.isEmpty())
+        unique.insert(currentMaterialValue);
+
+    std::vector<QString> sorted(unique.begin(), unique.end());
+    std::sort(sorted.begin(), sorted.end(), [](const QString& a, const QString& b) {
+        return a.localeAwareCompare(b) < 0;
+    });
+    for (const QString& value : sorted)
+        materialCombo->addItem(value, value);
+
+    materialCombo->setEditText(existing);
+}
+
+void InspectorPanel::updateTransformEditors()
+{
+    if (positionEditors.x) {
+        bool enabled = !selectionIds.empty();
+        positionEditors.x->setEnabled(enabled);
+        positionEditors.y->setEnabled(enabled);
+        positionEditors.z->setEnabled(enabled);
+        setVectorEditors(positionEditors, referenceTransform.position, positionMixed);
+    }
+    std::array<bool, 3> alwaysMixed { true, true, true };
+    setVectorEditors(rotationEditors, Vector3(), alwaysMixed);
+    setVectorEditors(scaleEditors, Vector3(1.0f, 1.0f, 1.0f), alwaysMixed);
+}
+
+void InspectorPanel::applyPositionChange(int axis, QLineEdit* editor)
+{
+    if (updating || !editor)
+        return;
+    if (!commandStack || selectionIds.empty() || !currentDocument)
+        return;
+
+    QString text = editor->text().trimmed();
+    if (text.isEmpty() || text == mixedValueDisplay) {
+        updateTransformEditors();
+        return;
+    }
+
+    Measurement::ParseResult parsed = Measurement::parseDistanceFlexible(text);
+    if (!parsed.ok) {
+        updateTransformEditors();
+        return;
+    }
+
+    double base = 0.0;
+    switch (axis) {
+    case 0:
+        base = referenceTransform.position.x;
+        break;
+    case 1:
+        base = referenceTransform.position.y;
+        break;
+    default:
+        base = referenceTransform.position.z;
+        break;
+    }
+
+    double deltaComponent = parsed.value - base;
+    if (std::fabs(deltaComponent) <= kMetadataFloatEpsilon) {
+        updateTransformEditors();
+        return;
+    }
+
+    std::vector<Scene::SetObjectTransformCommand::TransformChange> changes;
+    changes.reserve(selectionIds.size());
+    Scene::Document::TransformMask mask;
+    if (axis >= 0 && axis < 3)
+        mask.position[static_cast<std::size_t>(axis)] = true;
+
+    for (Scene::Document::ObjectId id : selectionIds) {
+        Scene::Document::Transform before = currentDocument->objectTransform(id);
+        Scene::Document::Transform after = before;
+        switch (axis) {
+        case 0:
+            after.position.x = before.position.x + static_cast<float>(deltaComponent);
+            break;
+        case 1:
+            after.position.y = before.position.y + static_cast<float>(deltaComponent);
+            break;
+        default:
+            after.position.z = before.position.z + static_cast<float>(deltaComponent);
+            break;
+        }
+        changes.push_back({ id, before, after, mask });
+    }
+
+    if (changes.empty()) {
+        updateTransformEditors();
+        return;
+    }
+
+    auto command = std::make_unique<Scene::SetObjectTransformCommand>(std::move(changes), tr("Move Selection"));
+    commandStack->push(std::move(command));
+
+    updating = true;
+    rebuildGeneralProperties();
+    updating = false;
+}
+
+void InspectorPanel::setVectorEditors(VectorEditors& editors, const Vector3& value, const std::array<bool, 3>& mixedFlags)
+{
+    auto apply = [&](QLineEdit* edit, float component, bool mixed) {
+        if (!edit)
+            return;
+        QSignalBlocker blocker(edit);
+        if (mixed)
+            edit->setText(mixedValueDisplay);
+        else
+            edit->setText(QString::number(component, 'f', 3));
+    };
+    apply(editors.x, value.x, mixedFlags[0]);
+    apply(editors.y, value.y, mixedFlags[1]);
+    apply(editors.z, value.z, mixedFlags[2]);
+}
+
+void InspectorPanel::commitName()
+{
+    if (updating || !nameEdit || !commandStack || selectionIds.empty())
+        return;
+
+    QString text = nameEdit->text().trimmed();
+    if (text == mixedValueDisplay)
+        return;
+
+    if (!nameMixed && text == currentNameValue)
+        return;
+
+    if (selectionIds.size() == 1) {
+        auto command = std::make_unique<Scene::RenameObjectCommand>(selectionIds.front(), text);
+        commandStack->push(std::move(command));
+    } else {
+        auto command = std::make_unique<Scene::RenameObjectsCommand>(selectionIds, text);
+        commandStack->push(std::move(command));
+    }
+
+    updating = true;
+    rebuildGeneralProperties();
+    updating = false;
+}
+
+void InspectorPanel::commitVisibility(int state)
+{
+    if (updating || !visibleCheck || !commandStack || selectionIds.empty())
+        return;
+    if (state == Qt::PartiallyChecked)
+        return;
+
+    bool desired = state == Qt::Checked;
+    if (!visibilityMixed && desired == visibilityValue)
+        return;
+
+    if (selectionIds.size() == 1) {
+        auto command = std::make_unique<Scene::SetObjectVisibilityCommand>(selectionIds.front(), desired);
+        commandStack->push(std::move(command));
+    } else {
+        auto command = std::make_unique<Scene::SetObjectsVisibilityCommand>(selectionIds, desired);
+        commandStack->push(std::move(command));
+    }
+
+    updating = true;
+    rebuildGeneralProperties();
+    updating = false;
+}
+
+void InspectorPanel::commitLock(int state)
+{
+    Q_UNUSED(state);
+    // Lock editing is not yet supported in the document model.
+    if (lockCheck)
+        lockCheck->setCheckState(Qt::Unchecked);
+}
+
+void InspectorPanel::commitMaterial(const QString& text)
+{
+    if (updating || !materialCombo || !commandStack || selectionIds.empty())
+        return;
+
+    QString materialValue;
+    bool fromItem = false;
+    int index = materialCombo->currentIndex();
+    if (index >= 0) {
+        QVariant data = materialCombo->itemData(index, Qt::UserRole);
+        if (data.isValid()) {
+            materialValue = data.toString();
+            fromItem = true;
+        }
+    }
+    if (!fromItem)
+        materialValue = text.trimmed();
+
+    if (materialValue == mixedValueDisplay)
+        return;
+
+    if (!materialMixed && materialValue == currentMaterialValue)
+        return;
+
+    auto command = std::make_unique<Scene::AssignMaterialCommand>(selectionIds, materialValue);
+    commandStack->push(std::move(command));
+
+    updating = true;
+    rebuildGeneralProperties();
+    updating = false;
+}
+
+void InspectorPanel::commitPositionX()
+{
+    applyPositionChange(0, positionEditors.x);
+}
+
+void InspectorPanel::commitPositionY()
+{
+    applyPositionChange(1, positionEditors.y);
+}
+
+void InspectorPanel::commitPositionZ()
+{
+    applyPositionChange(2, positionEditors.z);
 }
 
 void InspectorPanel::resetState()
@@ -1227,10 +1773,12 @@ void InspectorPanel::commitCircle()
     if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
         populateCircle();
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.circle.radius = radius;
+    metadata.circle.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateCircle();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitPolygon()
@@ -1252,10 +1800,12 @@ void InspectorPanel::commitPolygon()
     if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
         populatePolygon();
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.polygon.radius = radius;
+    metadata.polygon.sides = sides;
+    bool applied = applyMetadata(metadata);
     populatePolygon();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitArc()
@@ -1265,8 +1815,8 @@ void InspectorPanel::commitArc()
 
     GeometryKernel::ShapeMetadata metadata = currentMetadata;
     auto& def = metadata.arc.definition;
-    def.radius = static_cast<float>(arcRadius->value());
-    def.startAngle = qDegreesToRadians(static_cast<float>(arcStart->value()));
+    float radius = static_cast<float>(arcRadius->value());
+    float startAngle = qDegreesToRadians(static_cast<float>(arcStart->value()));
     double sweepDeg = arcSweep->value();
     double sweepRad = qDegreesToRadians(sweepDeg);
     bool ccw = arcDirection->isChecked();
@@ -1284,10 +1834,16 @@ void InspectorPanel::commitArc()
     if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
         populateArc();
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+
+    def.radius = radius;
+    def.startAngle = startAngle;
+    def.endAngle = endAngle;
+    def.counterClockwise = ccw;
+    def.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateArc();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 
 void InspectorPanel::commitBezier()
@@ -1312,9 +1868,14 @@ void InspectorPanel::commitBezier()
     if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata)) {
         populateBezier();
         return;
-    }
-    currentMetadata = *currentKernel->shapeMetadata(currentObject);
+    metadata.bezier.definition.p0 = p0;
+    metadata.bezier.definition.h0 = h0;
+    metadata.bezier.definition.h1 = h1;
+    metadata.bezier.definition.p1 = p1;
+    metadata.bezier.definition.segments = segments;
+    bool applied = applyMetadata(metadata);
     populateBezier();
-    emit shapeModified();
+    if (applied)
+        emit shapeModified();
 }
 

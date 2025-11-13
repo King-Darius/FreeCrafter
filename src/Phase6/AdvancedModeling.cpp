@@ -1126,12 +1126,56 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
     if ((projectedPositions.front() - projectedPositions.back()).length() > kEpsilon)
         projectedPositions.push_back(projectedPositions.front());
 
+    mesh.heal(kEpsilon, kEpsilon);
+    mesh.recomputeNormals();
+
+    if (std::fabs(options.extrusionHeight) > kEpsilon) {
+        auto normals = computeVertexNormals(mesh);
+        auto& vertsAfter = mesh.getVertices();
+        if (normals.size() == vertsAfter.size()) {
+            std::vector<float> vertexDistances(vertsAfter.size(), std::numeric_limits<float>::max());
+            for (std::size_t i = 0; i < vertsAfter.size(); ++i)
+                vertexDistances[i] = distanceToPolyline(vertsAfter[i].position, projectedPositions);
+
+            std::unordered_set<int> affected;
+            for (std::size_t i = 0; i < vertexDistances.size(); ++i) {
+                if (vertexDistances[i] <= options.cutWidth + 1e-4f)
+                    affected.insert(static_cast<int>(i));
+            }
+
+            if (affected.empty()) {
+                for (const auto& sample : projectedPositions) {
+                    int closestIndex = -1;
+                    float best = std::numeric_limits<float>::max();
+                    for (std::size_t i = 0; i < vertsAfter.size(); ++i) {
+                        float dist = (vertsAfter[i].position - sample).lengthSquared();
+                        if (dist < best) {
+                            best = dist;
+                            closestIndex = static_cast<int>(i);
+                        }
+                    }
+                    if (closestIndex >= 0)
+                        affected.insert(closestIndex);
+                }
+            }
+
+            for (int index : affected) {
+                std::size_t idx = static_cast<std::size_t>(index);
+                if (idx < vertsAfter.size())
+                    vertsAfter[idx].position -= normals[idx] * options.extrusionHeight;
+            }
+
+            mesh.heal(kEpsilon, kEpsilon);
+            mesh.recomputeNormals();
+        }
+    }
+
     if (options.removeInterior) {
         auto faceLoops = extractFaceLoops(mesh);
         const auto& faces = mesh.getFaces();
-        const auto& vertsBefore = mesh.getVertices();
+        const auto& vertsCurrent = mesh.getVertices();
         HalfEdgeMesh rebuilt;
-        std::vector<int> remap(vertsBefore.size(), -1);
+        std::vector<int> remap(vertsCurrent.size(), -1);
 
         auto mapVertex = [&](int index) {
             if (index < 0)
@@ -1140,7 +1184,7 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
             if (idx >= remap.size())
                 return -1;
             if (remap[idx] == -1)
-                remap[idx] = rebuilt.addVertex(vertsBefore[idx].position);
+                remap[idx] = rebuilt.addVertex(vertsCurrent[idx].position);
             return remap[idx];
         };
 
@@ -1150,7 +1194,7 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
             const auto& loop = faceLoops[faceIndex];
             Vector3 centroid(0.0f, 0.0f, 0.0f);
             for (int vIdx : loop)
-                centroid += vertsBefore[static_cast<std::size_t>(vIdx)].position;
+                centroid += vertsCurrent[static_cast<std::size_t>(vIdx)].position;
             centroid /= static_cast<float>(loop.size());
             float dist = distanceToPolyline(centroid, projectedPositions);
             if (dist <= options.cutWidth)
@@ -1169,20 +1213,6 @@ Curve* BezierKnife::cut(const Solid& solid, const std::vector<Vector3>& controlP
         rebuilt.heal(kEpsilon, kEpsilon);
         rebuilt.recomputeNormals();
         writableSolid.setMesh(std::move(rebuilt));
-    }
-
-    if (std::fabs(options.extrusionHeight) > kEpsilon) {
-        auto normals = computeVertexNormals(mesh);
-        auto& vertsAfter = mesh.getVertices();
-        if (normals.size() == vertsAfter.size()) {
-            for (std::size_t i = 0; i < vertsAfter.size(); ++i) {
-                float dist = distanceToPolyline(vertsAfter[i].position, projectedPositions);
-                if (dist <= options.cutWidth + 1e-4f)
-                    vertsAfter[i].position -= normals[i] * options.extrusionHeight;
-            }
-            mesh.heal(kEpsilon, kEpsilon);
-            mesh.recomputeNormals();
-        }
     }
 
     std::vector<Vector3> imprint = MeshUtils::weldSequential(projectedPositions, options.cutWidth * 0.5f);

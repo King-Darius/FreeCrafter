@@ -7,6 +7,7 @@
 
 #include "GLViewport.h"
 #include "Tools/ToolGeometryUtils.h"
+#include "test_support.h"
 
 #include <algorithm>
 #include <array>
@@ -108,6 +109,9 @@ int main(int argc, char** argv)
         qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
 
     QApplication app(argc, argv);
+
+    if (!TestSupport::ensureOpenGL("viewport_depth_range"))
+        return 0;
 
     GLViewport viewport;
     viewport.resize(640, 480);

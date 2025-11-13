@@ -18,10 +18,12 @@ downloading one.
 """
 
 import argparse
+import importlib
 import hashlib
 import json
 import logging
 import os
+import site
 import subprocess
 import sys
 import time
@@ -102,8 +104,29 @@ def detect_qt() -> Optional[Path]:
                 return prefix
     if _valid_prefix(install_dir):
         return install_dir
+    for exe in ("qtpaths6", "qtpaths", "qmake6", "qmake"):
+        binary = shutil.which(exe)
+        if not binary:
+            continue
+        if exe.startswith("qmake"):
+            query = [binary, "-query", "QT_INSTALL_PREFIX"]
+        else:
+            query = [binary, "--install-prefix"]
+        try:
+            result = subprocess.run(query, capture_output=True, text=True, check=True)
+        except (subprocess.CalledProcessError, OSError):
+            continue
+        prefix = Path(result.stdout.strip())
+        if _valid_prefix(prefix):
+            return prefix
     # Search common installation paths
-    search_roots = [Path.home() / "Qt", Path("C:/Qt"), Path("/opt/Qt")]
+    search_roots = [
+        Path.home() / "Qt",
+        Path("C:/Qt"),
+        Path("/opt/Qt"),
+        Path("/usr/lib/qt6"),
+        Path("/usr"),
+    ]
     if sys.platform == "darwin":
         search_roots.append(Path("/Applications/Qt"))
     for base in search_roots:
@@ -166,15 +189,80 @@ def require_executable(name: str, *, guidance: str) -> None:
         return
     raise RuntimeError(f"Required executable '{name}' was not found. {guidance}")
 
+def _resolve_aqt_module() -> str:
+    """Return the importable module name for the aqt CLI."""
+
+    for module_name in ("aqtinstall", "aqt"):
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            continue
+        return module_name
+    raise ImportError("aqtinstall")
+
+
+def _network_env(env: Optional[dict] = None) -> dict:
+    """Return *env* with unreachable proxy settings stripped."""
+
+    source = dict(env or os.environ)
+    allow_proxy = source.get("FREECRAFTER_ALLOW_PROXY")
+    if allow_proxy:
+        logging.info(
+            "Respecting system proxy configuration (FREECRAFTER_ALLOW_PROXY=%s)",
+            allow_proxy,
+        )
+        return source
+    proxy_keys = {
+        "http_proxy",
+        "https_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+    }
+    values = {key: source.pop(key) for key in proxy_keys if key in source}
+    if not values:
+        return source
+    for key, value in values.items():
+        logging.warning("Ignoring proxy %s=%s for Qt downloads", key, value)
+    if "NO_PROXY" in source:
+        source["NO_PROXY"] = f"{source['NO_PROXY']},*"
+    else:
+        source["NO_PROXY"] = "*"
+    if "no_proxy" in source:
+        source["no_proxy"] = f"{source['no_proxy']},*"
+    else:
+        source["no_proxy"] = "*"
+    return source
+
+
+def _should_use_user_site(requested: bool) -> bool:
+    """Return True if installing to the user site-packages is viable."""
+
+    if not requested:
+        return False
+    # Running as root disables the user site by default (PEP 370), which means
+    # packages installed with ``pip --user`` are not importable in the current
+    # process.  Guard against that so ``python -m aqt install-qt`` can succeed.
+    if not site.ENABLE_USER_SITE:
+        logging.info("User site-packages is disabled; installing requirements globally")
+        return False
+    try:
+        site.getusersitepackages()
+    except (AttributeError, OSError):
+        logging.info("User site-packages path unavailable; installing requirements globally")
+        return False
+    return True
+
+
 def ensure_aqt(
     offline: bool,
     wheel_cache: Optional[Path],
     *,
     use_user_site: bool = True,
-) -> None:
+) -> str:
     try:
-        import aqtinstall  # noqa: F401
-        return
+        return _resolve_aqt_module()
     except ImportError:
         req_file = Path(__file__).with_name("requirements.txt")
         if offline and wheel_cache is None:
@@ -185,25 +273,26 @@ def ensure_aqt(
         if offline:
             verify_checksums(wheel_cache)
             cmd += ["--no-index", "--find-links", str(wheel_cache)]
-        elif use_user_site:
+        elif _should_use_user_site(use_user_site):
             cmd += ["--user"]
         cmd += ["-r", str(req_file)]
-        run(cmd, check=True)
+        run(cmd, check=True, env=_network_env())
+        return _resolve_aqt_module()
 
-def ensure_qt(offline: bool) -> Path:
+def ensure_qt(offline: bool, *, aqt_module: Optional[str] = None) -> Path:
     """Ensure a Qt installation exists and return its prefix."""
+    module_name = aqt_module or ensure_aqt(offline, None)
     prefix = detect_qt()
     if prefix:
         logging.info("Using existing Qt at %s", prefix)
         return prefix
     if offline:
         raise RuntimeError(f"Qt not found in offline mode; looked for {install_dir}")
-    ensure_aqt(offline, None)
     cmd = [
         sys.executable,
         "-m",
-        "aqtinstall",
-        "qt",
+        module_name,
+        "install-qt",
         HOST,
         "desktop",
         QT_VERSION,
@@ -215,7 +304,7 @@ def ensure_qt(offline: bool) -> Path:
     if modules:
         logging.info("Requesting Qt modules: %s", ", ".join(modules))
         cmd += ["--modules", *modules]
-    run(cmd, check=True)
+    run(cmd, check=True, env=_network_env())
     prefix = detect_qt()
     if not prefix:
         raise RuntimeError("Qt installation failed")
@@ -247,6 +336,7 @@ def run_cmake(
     if install_prefix:
         if not install_prefix.is_absolute():
             install_prefix = root / install_prefix
+        install_prefix.mkdir(parents=True, exist_ok=True)
         install_cmd = [
             "cmake",
             "--install",
@@ -299,8 +389,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.wheel_cache and not args.wheel_cache.exists():
             raise RuntimeError(f"Wheel cache directory does not exist: {args.wheel_cache}")
 
-        ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)
-        prefix = ensure_qt(args.offline)
+        aqt_module = ensure_aqt(args.offline, args.wheel_cache, use_user_site=not args.ci)
+        prefix = ensure_qt(args.offline, aqt_module=aqt_module)
         if not args.ci:
             with suppress(OSError):
                 args.install_prefix.parent.mkdir(parents=True, exist_ok=True)

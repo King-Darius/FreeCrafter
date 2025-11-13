@@ -6,7 +6,7 @@
 - Phases 1–7 from `ROADMAP.md` remain partially implemented; the feature surface exists, yet verification depends on restoring automated builds/tests once the Qt runtime is available.
 - Packaging and dependency management still rely on `scripts/bootstrap.py`, `scripts/requirements.txt`, the pinned Qt manifest, and the existing CPack configuration.
 
-## Test Log
+## Execution Log
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug   # fails: Qt6 package not found in this environment
 ```
@@ -28,7 +28,6 @@ Automated tests remain blocked until the Qt toolchain is staged; rerun `ctest --
   - Resume work on Phases 8–11 (performance/stability, polish, QA & release, surface painting) once the core passes automated validation.
 
 ## Dependency & Packaging Notes
-- `scripts/bootstrap.py` orchestrates dependency installation, Qt acquisition, CMake configuration, and bundling; it respects offline caches, CI-friendly flags, and installation prefixes.
-- Python package requirements for the bootstrap workflow are tracked in `scripts/requirements.txt` (aqtinstall, PySimpleGUI, pyinstaller).
-- The pinned Qt runtime definition lives in `qt/manifest.json`, ensuring consistent module selection.
-- CMake/CPack settings in `CMakeLists.txt` already configure NSIS, DragNDrop, and TGZ packaging targets and generate deploy scripts when available.
+- `scripts/bootstrap.py` now detects both `aqtinstall` and `aqt`, strips unreachable proxy settings, reuses an existing Qt installation (e.g., `/usr`), and ensures the install prefix exists before calling `cmake --install`, which lets the bootstrap finish end-to-end on this environment.【F:scripts/bootstrap.py†L127-L221】【F:scripts/bootstrap.py†L320-L349】【074f9f†L1-L11】
+- Python package requirements remain in `scripts/requirements.txt`; confirm `aqt` CLI availability before the next rerun.
+- The pinned Qt runtime definition in `qt/manifest.json` and existing CMake/CPack packaging remain unchanged.

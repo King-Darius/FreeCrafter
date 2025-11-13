@@ -103,6 +103,12 @@ void RightTray::refreshPanels()
     refreshHistory();
 }
 
+void RightTray::updateSelection(GeometryKernel* geometry, const std::vector<GeometryObject*>& selection)
+{
+    if (inspector_)
+        inspector_->updateSelection(geometry, selection);
+}
+
 void RightTray::refreshHistory()
 {
     if (history_)

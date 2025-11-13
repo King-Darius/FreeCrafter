@@ -1056,28 +1056,16 @@ bool InspectorPanel::vectorEqual(const Vector3& a, const Vector3& b)
 
 bool InspectorPanel::applyMetadata(const GeometryKernel::ShapeMetadata& metadata)
 {
-    if (!currentKernel || !currentObject)
+    if (!currentKernel || !currentObject || !commandStack || !currentDocument)
         return false;
 
-    if (commandStack && currentDocument) {
-        Scene::Document::ObjectId objectId = currentDocument->objectIdForGeometry(currentObject);
-        if (objectId == 0)
-            return false;
+    Scene::Document::ObjectId objectId = currentDocument->objectIdForGeometry(currentObject);
+    if (objectId == 0)
+        return false;
 
-        auto command = std::make_unique<Scene::RebuildCurveFromMetadataCommand>(objectId, metadata);
-        auto* commandPtr = command.get();
-        commandStack->push(std::move(command));
-        if (!commandPtr->wasApplied())
-            return false;
-
-        if (auto refreshed = currentKernel->shapeMetadata(currentObject))
-            currentMetadata = *refreshed;
-        else
-            currentMetadata = metadata;
-        return true;
-    }
-
-    if (!currentKernel->rebuildShapeFromMetadata(currentObject, metadata))
+    auto command = std::make_unique<Scene::RebuildCurveFromMetadataCommand>(objectId, metadata);
+    auto* commandPtr = static_cast<Scene::RebuildCurveFromMetadataCommand*>(commandStack->push(std::move(command)));
+    if (!commandPtr || !commandPtr->wasApplied())
         return false;
 
     if (auto refreshed = currentKernel->shapeMetadata(currentObject))

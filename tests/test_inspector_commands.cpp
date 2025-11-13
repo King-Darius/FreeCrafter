@@ -32,64 +32,64 @@ int main(int argc, char** argv)
     context.geometry = &geometry;
     commandStack.setContext(context);
 
-    // Rename command
-    {
-        auto rename = std::make_unique<Scene::RenameObjectCommand>(objectId, QStringLiteral("Renamed"));
-        commandStack.push(std::move(rename));
-        const auto* node = document.findObject(objectId);
-        assert(node != nullptr);
-        assert(node->name == "Renamed");
+    GeometryObject* circle = createCircle(document, 1.0f, 32);
+    assert(circle);
 
-        undoStack.undo();
-        node = document.findObject(objectId);
-        assert(node != nullptr);
-        assert(node->name == "Edge");
+    InspectorPanel panel;
+    panel.setDocument(&document);
+    panel.setCommandStack(&commandStack);
 
-        undoStack.redo();
-        node = document.findObject(objectId);
-        assert(node != nullptr);
-        assert(node->name == "Renamed");
-    }
+    std::vector<GeometryObject*> selection{ circle };
+    panel.updateSelection(&document.geometry(), selection);
 
-    // Visibility toggle
-    {
-        auto hide = std::make_unique<Scene::SetObjectVisibilityCommand>(objectId, false);
-        commandStack.push(std::move(hide));
-        const auto* node = document.findObject(objectId);
-        assert(node != nullptr);
-        assert(!node->visible);
+    auto* radiusSpin = panel.findChild<QDoubleSpinBox*>(QStringLiteral("inspectorCircleRadius"));
+    auto* segmentsSpin = panel.findChild<QSpinBox*>(QStringLiteral("inspectorCircleSegments"));
+    assert(radiusSpin);
+    assert(segmentsSpin);
 
-        undoStack.undo();
-        node = document.findObject(objectId);
-        assert(node != nullptr);
-        assert(node->visible);
-    }
+    double originalRadius = radiusSpin->value();
+    int originalSegments = segmentsSpin->value();
 
-    // Transform command (translation along X)
-    {
-        Scene::Document::Transform before = document.objectTransform(objectId);
-        Scene::Document::Transform after = before;
-        after.position.x = before.position.x + 1.0f;
-        Scene::Document::TransformMask mask;
-        mask.position[0] = true;
+    double targetRadius = 2.5;
+    int targetSegments = originalSegments + 12;
 
-        std::vector<Scene::SetObjectTransformCommand::TransformChange> changes;
-        changes.push_back({ objectId, before, after, mask });
+    radiusSpin->setValue(targetRadius);
+    segmentsSpin->setValue(targetSegments);
+    QMetaObject::invokeMethod(&panel, "commitCircle", Qt::DirectConnection);
 
-        auto move = std::make_unique<Scene::SetObjectTransformCommand>(std::move(changes), QStringLiteral("Move"));
-        commandStack.push(std::move(move));
+    assert(undoStack.canUndo());
+    assert(undoStack.undoText() == QStringLiteral("Edit Curve"));
+    auto metadata = document.geometry().shapeMetadata(circle);
+    assert(metadata.has_value());
+    assert(std::fabs(metadata->circle.radius - static_cast<float>(targetRadius)) < kTolerance);
+    assert(metadata->circle.segments == targetSegments);
 
-        Scene::Document::Transform current = document.objectTransform(objectId);
-        assert(std::fabs(current.position.x - (before.position.x + 1.0f)) < 1e-4f);
+    panel.updateSelection(&document.geometry(), selection);
+    assert(std::fabs(radiusSpin->value() - targetRadius) < kTolerance);
+    assert(segmentsSpin->value() == targetSegments);
 
-        undoStack.undo();
-        current = document.objectTransform(objectId);
-        assert(std::fabs(current.position.x - before.position.x) < 1e-4f);
+    undoStack.undo();
 
-        undoStack.redo();
-        current = document.objectTransform(objectId);
-        assert(std::fabs(current.position.x - (before.position.x + 1.0f)) < 1e-4f);
-    }
+    metadata = document.geometry().shapeMetadata(circle);
+    assert(metadata.has_value());
+    assert(std::fabs(metadata->circle.radius - static_cast<float>(originalRadius)) < kTolerance);
+    assert(metadata->circle.segments == originalSegments);
+    assert(undoStack.canRedo());
+
+    panel.updateSelection(&document.geometry(), selection);
+    assert(std::fabs(radiusSpin->value() - originalRadius) < kTolerance);
+    assert(segmentsSpin->value() == originalSegments);
+
+    undoStack.redo();
+
+    metadata = document.geometry().shapeMetadata(circle);
+    assert(metadata.has_value());
+    assert(std::fabs(metadata->circle.radius - static_cast<float>(targetRadius)) < kTolerance);
+    assert(metadata->circle.segments == targetSegments);
+
+    panel.updateSelection(&document.geometry(), selection);
+    assert(std::fabs(radiusSpin->value() - targetRadius) < kTolerance);
+    assert(segmentsSpin->value() == targetSegments);
 
     return 0;
 }

@@ -43,6 +43,7 @@ add_library(freecrafter_lib
     src/PalettePreferences.cpp
     src/Core/Command.cpp
     src/Core/CommandStack.cpp
+    src/Core/MeasurementParser.cpp
     src/app/AutosaveManager.cpp
     src/Navigation/ViewPresetManager.cpp
     src/GeometryKernel/Curve.cpp
@@ -213,16 +214,6 @@ target_include_directories(test_modification_commands PRIVATE src)
 target_link_libraries(test_modification_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME modification_commands COMMAND $<TARGET_FILE:test_modification_commands>)
 
-add_executable(test_inspector_commands tests/test_inspector_commands.cpp)
-target_include_directories(test_inspector_commands PRIVATE src)
-target_link_libraries(test_inspector_commands PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
-add_test(NAME inspector_commands COMMAND $<TARGET_FILE:test_inspector_commands>)
-
-add_executable(test_inspector_entity_info tests/test_inspector_entity_info.cpp)
-target_include_directories(test_inspector_entity_info PRIVATE src)
-target_link_libraries(test_inspector_entity_info PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
-add_test(NAME inspector_entity_info COMMAND $<TARGET_FILE:test_inspector_entity_info>)
-
 add_executable(test_phase4 tests/test_phase4.cpp)
 target_include_directories(test_phase4 PRIVATE src)
 target_link_libraries(test_phase4 PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
@@ -242,6 +233,16 @@ add_executable(test_tool_activation tests/test_tool_activation.cpp)
 target_include_directories(test_tool_activation PRIVATE src)
 target_link_libraries(test_tool_activation PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
 add_test(NAME tool_activation COMMAND $<TARGET_FILE:test_tool_activation>)
+
+add_executable(test_inspector_commands tests/test_inspector_commands.cpp)
+target_include_directories(test_inspector_commands PRIVATE src)
+target_link_libraries(test_inspector_commands PRIVATE freecrafter_lib Qt6::Core Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME inspector_commands COMMAND $<TARGET_FILE:test_inspector_commands>)
+
+add_executable(test_inspector_entity_info tests/test_inspector_entity_info.cpp)
+target_include_directories(test_inspector_entity_info PRIVATE src)
+target_link_libraries(test_inspector_entity_info PRIVATE freecrafter_lib Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Svg)
+add_test(NAME inspector_entity_info COMMAND $<TARGET_FILE:test_inspector_entity_info>)
 
 add_executable(test_cursor_overlay tests/test_cursor_overlay.cpp)
 target_include_directories(test_cursor_overlay PRIVATE src)

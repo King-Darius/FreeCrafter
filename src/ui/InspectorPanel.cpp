@@ -1,6 +1,7 @@
 #include "InspectorPanel.h"
 
 #include <QCheckBox>
+#include <QDoubleValidator>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -13,7 +14,6 @@
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QVBoxLayout>
-#include <QDoubleValidator>
 #include <QVariant>
 #include <QStringList>
 #include <QtMath>
@@ -24,9 +24,9 @@
 
 #include "../GeometryKernel/GeometryObject.h"
 #include "Scene/SceneGraphCommands.h"
-#include "../Scene/Document.h"
 #include "../Core/CommandStack.h"
-#include "../Tools/ToolCommands.h"
+#include "../Core/MeasurementParser.h"
+#include "CollapsibleSection.h"
 
 #include <unordered_set>
 
@@ -137,7 +137,7 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     connect(materialCombo, &QComboBox::textActivated, this, &InspectorPanel::commitMaterial);
     generalForm->addRow(tr("Material"), materialCombo);
 
-    layout->addWidget(generalSection);
+    layout->addWidget(new CollapsibleSection(tr("Entity"), generalSection, true, this));
 
     transformSection = new QWidget(this);
     transformSection->setVisible(false);
@@ -156,9 +156,13 @@ InspectorPanel::InspectorPanel(QWidget* parent)
             edit->setAlignment(Qt::AlignRight);
             edit->setPlaceholderText(mixedValueDisplay);
             edit->setObjectName(baseName + suffix);
-            auto* validator = new QDoubleValidator(-kMaxRadius, kMaxRadius, 3, edit);
-            validator->setNotation(QDoubleValidator::StandardNotation);
-            edit->setValidator(validator);
+            if (editable) {
+                edit->setClearButtonEnabled(true);
+            } else {
+                auto* validator = new QDoubleValidator(-kMaxRadius, kMaxRadius, 3, edit);
+                validator->setNotation(QDoubleValidator::StandardNotation);
+                edit->setValidator(validator);
+            }
             edit->setEnabled(editable);
             rowLayout->addWidget(edit);
             return edit;
@@ -182,7 +186,7 @@ InspectorPanel::InspectorPanel(QWidget* parent)
     createVectorRow(tr("Rotation"), rotationEditors, QStringLiteral("inspectorRotation"), false);
     createVectorRow(tr("Scale"), scaleEditors, QStringLiteral("inspectorScale"), false);
 
-    layout->addWidget(transformSection);
+    layout->addWidget(new CollapsibleSection(tr("Transform"), transformSection, true, this));
 
     stacked = new QStackedWidget(this);
     layout->addWidget(stacked, 1);
@@ -339,7 +343,7 @@ void InspectorPanel::setCommandStack(Core::CommandStack* stack)
 void InspectorPanel::rebuildGeneralProperties()
 {
     selectionIds.clear();
-    selectionCenters.clear();
+    selectionTransforms.clear();
 
     if (!generalSection) {
         updateTransformEditors();
@@ -357,7 +361,7 @@ void InspectorPanel::rebuildGeneralProperties()
     std::unordered_set<Scene::Document::ObjectId> seen;
     seen.reserve(currentSelection.size());
     selectionIds.reserve(currentSelection.size());
-    selectionCenters.reserve(currentSelection.size());
+    selectionTransforms.reserve(currentSelection.size());
 
     for (GeometryObject* object : currentSelection) {
         if (!object)
@@ -368,10 +372,7 @@ void InspectorPanel::rebuildGeneralProperties()
         if (!seen.insert(id).second)
             continue;
         selectionIds.push_back(id);
-        if (auto centroid = centroidForObject(object))
-            selectionCenters.push_back(*centroid);
-        else
-            selectionCenters.push_back(Vector3());
+        selectionTransforms.push_back(currentDocument->objectTransform(id));
     }
 
     if (selectionIds.empty()) {
@@ -520,17 +521,17 @@ void InspectorPanel::rebuildGeneralProperties()
     }
 
     // Transform fields
-    if (selectionCenters.empty())
-        selectionCenters.resize(selectionIds.size(), Vector3());
-    referencePosition = selectionCenters.front();
+    if (selectionTransforms.empty())
+        selectionTransforms.resize(selectionIds.size());
+    referenceTransform = selectionTransforms.front();
     positionMixed = { false, false, false };
-    for (std::size_t i = 1; i < selectionCenters.size(); ++i) {
-        const Vector3& point = selectionCenters[i];
-        if (!positionMixed[0] && std::fabs(point.x - referencePosition.x) > kMetadataFloatEpsilon)
+    for (std::size_t i = 1; i < selectionTransforms.size(); ++i) {
+        const Vector3& point = selectionTransforms[i].position;
+        if (!positionMixed[0] && std::fabs(point.x - referenceTransform.position.x) > kMetadataFloatEpsilon)
             positionMixed[0] = true;
-        if (!positionMixed[1] && std::fabs(point.y - referencePosition.y) > kMetadataFloatEpsilon)
+        if (!positionMixed[1] && std::fabs(point.y - referenceTransform.position.y) > kMetadataFloatEpsilon)
             positionMixed[1] = true;
-        if (!positionMixed[2] && std::fabs(point.z - referencePosition.z) > kMetadataFloatEpsilon)
+        if (!positionMixed[2] && std::fabs(point.z - referenceTransform.position.z) > kMetadataFloatEpsilon)
             positionMixed[2] = true;
     }
     updateTransformEditors();
@@ -577,27 +578,28 @@ void InspectorPanel::updateTransformEditors()
         positionEditors.x->setEnabled(enabled);
         positionEditors.y->setEnabled(enabled);
         positionEditors.z->setEnabled(enabled);
-        setVectorEditors(positionEditors, referencePosition, positionMixed);
+        setVectorEditors(positionEditors, referenceTransform.position, positionMixed);
     }
     std::array<bool, 3> alwaysMixed { true, true, true };
     setVectorEditors(rotationEditors, Vector3(), alwaysMixed);
     setVectorEditors(scaleEditors, Vector3(1.0f, 1.0f, 1.0f), alwaysMixed);
 }
 
-void InspectorPanel::applyPositionDelta(int axis, QLineEdit* editor)
+void InspectorPanel::applyPositionChange(int axis, QLineEdit* editor)
 {
     if (updating || !editor)
         return;
-    if (!commandStack || selectionIds.empty())
+    if (!commandStack || selectionIds.empty() || !currentDocument)
         return;
 
     QString text = editor->text().trimmed();
-    if (text.isEmpty() || text == mixedValueDisplay)
+    if (text.isEmpty() || text == mixedValueDisplay) {
+        updateTransformEditors();
         return;
+    }
 
-    bool ok = false;
-    double value = text.toDouble(&ok);
-    if (!ok) {
+    Measurement::ParseResult parsed = Measurement::parseDistanceFlexible(text);
+    if (!parsed.ok) {
         updateTransformEditors();
         return;
     }
@@ -605,49 +607,56 @@ void InspectorPanel::applyPositionDelta(int axis, QLineEdit* editor)
     double base = 0.0;
     switch (axis) {
     case 0:
-        base = referencePosition.x;
+        base = referenceTransform.position.x;
         break;
     case 1:
-        base = referencePosition.y;
+        base = referenceTransform.position.y;
         break;
     default:
-        base = referencePosition.z;
+        base = referenceTransform.position.z;
         break;
     }
 
-    double deltaComponent = value - base;
-    if (std::fabs(deltaComponent) <= kMetadataFloatEpsilon)
+    double deltaComponent = parsed.value - base;
+    if (std::fabs(deltaComponent) <= kMetadataFloatEpsilon) {
+        updateTransformEditors();
         return;
+    }
 
-    Vector3 delta(0.0f, 0.0f, 0.0f);
-    if (axis == 0)
-        delta.x = static_cast<float>(deltaComponent);
-    else if (axis == 1)
-        delta.y = static_cast<float>(deltaComponent);
-    else
-        delta.z = static_cast<float>(deltaComponent);
+    std::vector<Scene::SetObjectTransformCommand::TransformChange> changes;
+    changes.reserve(selectionIds.size());
+    Scene::Document::TransformMask mask;
+    if (axis >= 0 && axis < 3)
+        mask.position[static_cast<std::size_t>(axis)] = true;
 
-    auto ids = selectionIds;
-    auto command = std::make_unique<Tools::TranslateObjectsCommand>(ids, delta, tr("Move Selection"));
+    for (Scene::Document::ObjectId id : selectionIds) {
+        Scene::Document::Transform before = currentDocument->objectTransform(id);
+        Scene::Document::Transform after = before;
+        switch (axis) {
+        case 0:
+            after.position.x = before.position.x + static_cast<float>(deltaComponent);
+            break;
+        case 1:
+            after.position.y = before.position.y + static_cast<float>(deltaComponent);
+            break;
+        default:
+            after.position.z = before.position.z + static_cast<float>(deltaComponent);
+            break;
+        }
+        changes.push_back({ id, before, after, mask });
+    }
+
+    if (changes.empty()) {
+        updateTransformEditors();
+        return;
+    }
+
+    auto command = std::make_unique<Scene::SetObjectTransformCommand>(std::move(changes), tr("Move Selection"));
     commandStack->push(std::move(command));
 
     updating = true;
     rebuildGeneralProperties();
     updating = false;
-}
-
-std::optional<Vector3> InspectorPanel::centroidForObject(const GeometryObject* object) const
-{
-    if (!object)
-        return std::nullopt;
-    const auto& vertices = object->getMesh().getVertices();
-    if (vertices.empty())
-        return std::nullopt;
-    Vector3 sum(0.0f, 0.0f, 0.0f);
-    for (const auto& vertex : vertices)
-        sum += vertex.position;
-    float inv = 1.0f / static_cast<float>(vertices.size());
-    return sum * inv;
 }
 
 void InspectorPanel::setVectorEditors(VectorEditors& editors, const Vector3& value, const std::array<bool, 3>& mixedFlags)
@@ -757,17 +766,17 @@ void InspectorPanel::commitMaterial(const QString& text)
 
 void InspectorPanel::commitPositionX()
 {
-    applyPositionDelta(0, positionEditors.x);
+    applyPositionChange(0, positionEditors.x);
 }
 
 void InspectorPanel::commitPositionY()
 {
-    applyPositionDelta(1, positionEditors.y);
+    applyPositionChange(1, positionEditors.y);
 }
 
 void InspectorPanel::commitPositionZ()
 {
-    applyPositionDelta(2, positionEditors.z);
+    applyPositionChange(2, positionEditors.z);
 }
 
 void InspectorPanel::resetState()
@@ -778,8 +787,8 @@ void InspectorPanel::resetState()
     currentObject = nullptr;
     currentMetadata = GeometryKernel::ShapeMetadata{};
     selectionIds.clear();
-    selectionCenters.clear();
-    referencePosition = Vector3();
+    selectionTransforms.clear();
+    referenceTransform = Scene::Document::Transform{};
     nameMixed = false;
     visibilityMixed = false;
     lockMixed = false;

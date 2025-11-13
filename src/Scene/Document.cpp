@@ -5,6 +5,9 @@
 #include "SceneSettings.h"
 #include "../CameraController.h"
 #include "../FileIO/Importers/FileImporter.h"
+#include "../GeometryKernel/Curve.h"
+#include "../GeometryKernel/Solid.h"
+#include "../GeometryKernel/HalfEdgeMesh.h"
 
 #include <algorithm>
 #include <fstream>
@@ -38,6 +41,26 @@ template <typename Container, typename Value>
 bool contains(const Container& container, const Value& value)
 {
     return std::find(container.begin(), container.end(), value) != container.end();
+}
+
+Vector3 centroidFromGeometry(const GeometryObject& object)
+{
+    const auto& vertices = object.getMesh().getVertices();
+    if (vertices.empty())
+        return Vector3();
+    Vector3 sum(0.0f, 0.0f, 0.0f);
+    for (const auto& vertex : vertices)
+        sum += vertex.position;
+    const float inv = 1.0f / static_cast<float>(vertices.size());
+    return sum * inv;
+}
+
+void translateGeometry(GeometryObject& object, const Vector3& delta)
+{
+    if (object.getType() == ObjectType::Curve)
+        static_cast<Curve&>(object).translate(delta);
+    else
+        static_cast<Solid&>(object).translate(delta);
 }
 
 } // namespace
@@ -91,6 +114,44 @@ const GeometryObject* Document::geometryForObject(ObjectId id) const
     if (!node)
         return nullptr;
     return node->geometry;
+}
+
+Document::Transform Document::objectTransform(ObjectId id) const
+{
+    Transform transform;
+    const GeometryObject* object = geometryForObject(id);
+    if (object)
+        transform.position = centroidFromGeometry(*object);
+    transform.rotation = Vector3(0.0f, 0.0f, 0.0f);
+    transform.scale = Vector3(1.0f, 1.0f, 1.0f);
+    return transform;
+}
+
+bool Document::applyTransform(ObjectId id, const Transform& transform, const TransformMask& mask)
+{
+    GeometryObject* object = geometryForObject(id);
+    if (!object)
+        return false;
+
+    bool changed = false;
+    if (mask.position[0] || mask.position[1] || mask.position[2]) {
+        Transform current = objectTransform(id);
+        Vector3 target = current.position;
+        if (mask.position[0])
+            target.x = transform.position.x;
+        if (mask.position[1])
+            target.y = transform.position.y;
+        if (mask.position[2])
+            target.z = transform.position.z;
+        Vector3 delta = target - current.position;
+        if (delta.lengthSquared() > 1e-10f) {
+            translateGeometry(*object, delta);
+            changed = true;
+        }
+    }
+
+    // Rotation and scale editing are not yet supported.
+    return changed;
 }
 
 Document::ObjectId Document::ensureObjectForGeometry(GeometryObject* object, const std::string& name)

@@ -1,5 +1,7 @@
 # Roadmap Progress Snapshot
 
+> **Environment note (aligned with 11 Feb 2025 sanity check):** The current configure step fails because Qt 6 SDK files are missing, so the highlights below describe code that exists in the repository rather than recently validated binaries. Re-run `scripts/bootstrap.py` (or provide Qt 6 via `CMAKE_PREFIX_PATH`) before expecting the workflows to pass.
+
 This document cross-references the current FreeCrafter implementation with the
 items tracked in `ROADMAP.md` so contributors can quickly see which roadmap
 milestones already have code backing them and which ones are still open.

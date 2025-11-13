@@ -8,6 +8,7 @@
 #include <iosfwd>
 #include <cstdint>
 #include <functional>
+#include <array>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -82,6 +83,18 @@ public:
         std::unordered_map<TagId, bool> tagVisibility;
     };
 
+    struct Transform {
+        Vector3 position{ 0.0f, 0.0f, 0.0f };
+        Vector3 rotation{ 0.0f, 0.0f, 0.0f };
+        Vector3 scale{ 1.0f, 1.0f, 1.0f };
+    };
+
+    struct TransformMask {
+        std::array<bool, 3> position{ { false, false, false } };
+        std::array<bool, 3> rotation{ { false, false, false } };
+        std::array<bool, 3> scale{ { false, false, false } };
+    };
+
     struct PrototypeNode {
         NodeKind kind = NodeKind::Geometry;
         std::string name;
@@ -115,6 +128,9 @@ public:
     ObjectId objectIdForGeometry(const GeometryObject* object) const;
     GeometryObject* geometryForObject(ObjectId id);
     const GeometryObject* geometryForObject(ObjectId id) const;
+
+    Transform objectTransform(ObjectId id) const;
+    bool applyTransform(ObjectId id, const Transform& transform, const TransformMask& mask);
 
     ObjectId ensureObjectForGeometry(GeometryObject* object, const std::string& name = std::string());
     void synchronizeWithGeometry();

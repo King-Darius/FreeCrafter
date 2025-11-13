@@ -2,7 +2,6 @@
 #include <QByteArray>
 #include <QDoubleSpinBox>
 #include <QMetaObject>
-#include <QObject>
 #include <QSpinBox>
 #include <QString>
 #include <QUndoStack>
@@ -100,7 +99,7 @@ int main(int argc, char** argv)
     QMetaObject::invokeMethod(&panel, "commitCircle", Qt::DirectConnection);
 
     assert(undoStack.canUndo());
-    assert(undoStack.undoText() == QObject::tr("Edit Curve"));
+    assert(undoStack.undoText() == QStringLiteral("Edit Curve"));
     auto metadata = document.geometry().shapeMetadata(circle);
     assert(metadata.has_value());
     assert(std::fabs(metadata->circle.radius - static_cast<float>(targetRadius)) < kTolerance);

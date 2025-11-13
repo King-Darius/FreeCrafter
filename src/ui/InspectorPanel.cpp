@@ -1055,9 +1055,8 @@ bool InspectorPanel::applyMetadata(const GeometryKernel::ShapeMetadata& metadata
         return false;
 
     auto command = std::make_unique<Scene::RebuildCurveFromMetadataCommand>(objectId, metadata);
-    auto* commandPtr = command.get();
-    commandStack->push(std::move(command));
-    if (!commandPtr->wasApplied())
+    auto* commandPtr = static_cast<Scene::RebuildCurveFromMetadataCommand*>(commandStack->push(std::move(command)));
+    if (!commandPtr || !commandPtr->wasApplied())
         return false;
 
     if (auto refreshed = currentKernel->shapeMetadata(currentObject))

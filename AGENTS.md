@@ -4,7 +4,7 @@
 > Objectives: restore **day‑to‑day usability**, keep the **GUI top‑down look**, and enforce **consistent naming** across tools/actions.  
 > Documentation map (canonical references + where to place new guidance): `docs/documentation_map.md`.
 > Full GUI/tool behaviour spec: see `docs/gui_tool_behaviour_spec.md`.
-> Stack-agnostic contract: see `docs/codex_master_ui_tools_spec.md`.
+> Stack-agnostic contract: see `docs/codex_master_ui_tools_spec.md` (keep in lockstep with `docs/gui_tool_behaviour_spec.md`).
 
 ---
 

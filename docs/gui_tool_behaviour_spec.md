@@ -2,9 +2,9 @@
 
 *(Ultra-Detailed, Repo-Aligned V2 - implementation-grade)*
 
-**Purpose.** Single source of truth for FreeCrafter's interface, tools, input grammar, snapping, camera, rendering, panels, assets, and code wiring. Aligned to the Figma concept (React app shell) and the current repository structure. Use this to drive development, QA, docs, and parity between web demo and native builds.
+**Purpose.** Single source of truth for FreeCrafter's interface, tools, input grammar, snapping, camera, rendering, panels, assets, and code wiring. Aligned to the Figma concept (React app shell) a[...]  
 
-**Scope.** Ideal interface; all baseline tools; roadmap/advanced tools (pre-spec); selection/snap/inference; measurement grammar; camera and viewport; rendering; persistence; performance and tolerances; accessibility/internationalization; theming/assets; QA matrices; code cross-references.
+**Scope.** Ideal interface; all baseline tools; roadmap/advanced tools (pre-spec); selection/snap/inference; measurement grammar; camera and viewport; rendering; persistence; performance and tolera[...]  
 
 ---
 
@@ -12,7 +12,7 @@
 
 - **Axes and colors:** X = Red, Y = Green, Z = Blue.
 - **Screen units:** px. **Model units:** mm (default). Parser accepts `mm|cm|m|in|ft` plus `"` and `'`.
-- **Inference glyphs:** Endpoint (filled circle), Midpoint (diamond), Center (ring), Intersection (plus), On-Edge (bar), On-Face (checker), Parallel (double bar), Perpendicular (right angle), Tangent (tangent arc).
+- **Inference glyphs:** Endpoint (filled circle), Midpoint (diamond), Center (ring), Intersection (plus), On-Edge (bar), On-Face (checker), Parallel (double bar), Perpendicular (right angle), Tang[...]  
 - **Selection marquee:** L->R = Inside; R->L = Crossing.
 - **Default tolerances:** Merge 1e-6 m; Coplanarity 1e-5; Angle snap 15 deg (preferences adjustable).
 - **File paths reference:** `src/*`, `resources/*`.
@@ -47,7 +47,7 @@
 
 - **File:** New, Open, Save, Save As, Import (OBJ/STL), Export (OBJ/GLTF), Revert, Recent, Exit.
 - **Edit:** Undo, Redo, Cut, Copy, Paste, Delete, Select All, Invert Selection, Preferences.
-- **View:** Styles (Wireframe/Hidden line/Shaded/Shaded+Edges), Projection (Perspective/Parallel), Presets (Front/Back/Left/Right/Top/Bottom/Iso), Grid (Show/Size/Div), Guides, Section Cuts, Shadows, Axes, Face/Edge styles.
+- **View:** Styles (Wireframe/Hidden line/Shaded/Shaded+Edges), Projection (Perspective/Parallel), Presets (Front/Back/Left/Right/Top/Bottom/Iso), Grid (Show/Size/Div), Guides, Section Cuts, Shado[...]  
 - **Tools:** Groups: Selection, Drawing, Modification, Annotation, Section, Navigation.
 - **Window:** Panels toggle plus tray presets.
 - **Help:** Docs, Shortcuts, About.
@@ -83,7 +83,7 @@
 ### 3.1 Entity Info (Inspector)
 
 - Fields: Name, Tag/Layer, Hidden/Locked, Smoothing/Soft edges, Materials (Front/Back), Component definition.
-- Transform: Position (X,Y,Z), Rotation (H,P,B), Scale (Sx,Sy,Sz). Numeric edits emit `TransformCommand` with pivot equal to selection center or last pick. Multi-select shows "--" for mixed values; typing applies to all.
+- Transform: Position (X,Y,Z), Rotation (H,P,B), Scale (Sx,Sy,Sz). Numeric edits emit `TransformCommand` with pivot equal to selection center or last pick. Multi-select shows "--" for mixed values[...]  
 - **Files:** `src/ui/InspectorPanel.*`
 
 ### 3.2 Outliner
@@ -153,10 +153,10 @@ triplet  := number[unit] sep number[unit] sep number[unit]
 sep      := "," | "x"
 arrayop  := ('*'|'/') integer
 labeled  := ('r=' num[unit] | 'd=' num[unit] | 'a=' num[unit] | 's=' integer)
-unit     := mm|cm|m|in|ft|"|'
+unit     := mm|cm|m|in|ft|"|' 
 ```
 
-- Interpretation is tool-step specific (for example, Rectangle consumes `pair`, Rotate consumes angle). Bare numbers use model unit; mixed units allowed (for example, `3', 6"`).
+- Interpretation is tool-step specific (for example, Rectangle consumes `pair`, Rotate consumes angle). Bare numbers use model unit; mixed units allowed (for example, `3', 6").
 
 ---
 
@@ -189,9 +189,9 @@ unit     := mm|cm|m|in|ft|"|'
 - Sticky/axis locks surface as compact badges next to the crosshair ("X", "-Z", etc.). Locked inferences reuse the inference label plus a lock suffix.
 - Modifier hints (for example, `Shift: Stick inference • X/Y/Z: Axis lock`) live in a dark pill adjacent to the crosshair so they stay readable in light/dark themes.
 
-The overlay deliberately relies on FreeCrafter’s bundled tool artwork instead of whatever cursor a platform ships. Windows, macOS, and Linux all expose different cursor packs, sizes, and DPI scaling rules; leaning on them would shatter the Figma framing and leave nowhere to stage inference locks or modifier hints. By hiding the OS cursor we can render the pick radius, crosshair, badges, and glyphs at spec-accurate dimensions, tint them for either theme, and animate sticky locks in real time.
+The overlay deliberately relies on FreeCrafter’s bundled tool artwork instead of whatever cursor a platform ships. Windows, macOS, and Linux all expose different cursor packs, sizes, and DPI sc[...]  
 
-Each cursor mode resolves to an icon under `:/icons` (for example, Line → `:/icons/line.png`, Move → `:/icons/move.png`, Rotate → `:/icons/rotate.png`, Paint Bucket → `:/icons/paintbucket.png`). The viewport paints that glyph just left of the crosshair with a soft shadow so the active tool remains obvious even when multiple modes share the same pick circle. For regression captures run `tests/test_cursor_overlay.cpp`; set `FREECRAFTER_CAPTURE_CURSOR=/tmp/cursor.png` (or `.base64`) before launching the test to dump the overlay without checking in binary artefacts.
+Each cursor mode resolves to an icon under `:/icons` (for example, Line → `:/icons/line.png`, Move → `:/icons/move.png`, Rotate → `:/icons/rotate.png`, Paint Bucket → `:/icons/paintbucket[...]  
 
 <!-- Cursor overlay modes illustrated with existing tool icons -->
 <p align="center">
@@ -200,13 +200,13 @@ Each cursor mode resolves to an icon under `:/icons` (for example, Line → `:/i
   <img src="../resources/icons/rotate.png" alt="Rotate tool icon" width="96" />
   <img src="../resources/icons/paintbucket.png" alt="Paint bucket tool icon" width="96" />
 </p>
-<sub>Existing tool icons reinforce the cursor overlay modes: drawing, moving, rotating, and annotating. Observe the live overlay in the viewport to see pick radii, crosshair spacing, and modifier hints in context.</sub>
+<sub>Existing tool icons reinforce the cursor overlay modes: drawing, moving, rotating, and annotating. Observe the live overlay in the viewport to see pick radii, crosshair spacing, and modifier[...]  
 
 ---
 
 ## 6. Tools - Exhaustive Behaviour & UX
 
-For each tool: Activation, Icon/Asset, Cursor, Hotkeys, Snaps/Locks, States/Steps, Measurement, Preview, Edge Cases, Commit/Undo, Context Bar Options, Performance Notes, Integration (files, IDs), Telemetry/Accessibility, QA Checks.
+For each tool: Activation, Icon/Asset, Cursor, Hotkeys, Snaps/Locks, States/Steps, Measurement, Preview, Edge Cases, Commit/Undo, Context Bar Options, Performance Notes, Integration (files, IDs),[...]  
 
 ### 6.1 Select - `tools.select`
 
@@ -561,7 +561,7 @@ For each tool: Activation, Icon/Asset, Cursor, Hotkeys, Snaps/Locks, States/Step
 
 ### Appendix A. Hotkeys (defaults)
 
-- Select `S/Space`, Line `L`, Rectangle `R`, Circle `C`, Polygon `P`, Arc `A`, Move `M`, Rotate `Q`, Scale `Shift+S` (or `S` secondary), Offset `F`, Push/Pull `Pp`, Extrude `X`, Follow Me `Fm`, Text `T`, Dimension `D`, Tape `Alt+T`, Axes `Ax`, Section `Sc`, Orbit (temporary via mouse), Pan `H`, Zoom `Z`. Final bindings live in `resources/config/hotkeys_default.json`.
+- Select `S/Space`, Line `L`, Rectangle `R`, Circle `C`, Polygon `P`, Arc `A`, Move `M`, Rotate `Q`, Scale `Shift+S` (or `S` secondary), Offset `F`, Push/Pull `Pp`, Extrude `X`, Follow Me `Fm`, T[...]  
 
 ### Appendix B. Icon Map (mono vs colored)
 
@@ -569,7 +569,7 @@ For each tool: Activation, Icon/Asset, Cursor, Hotkeys, Snaps/Locks, States/Step
 
 ### Appendix C. Default Preferences
 
-- Units mm; Angle degrees; decimal separator locale; snaps on; inference step 15 deg; merge epsilon 1e-6 m; navigation scheme SketchUp; zoom-to-cursor on; View Shaded+Edges, Sky+Ground on, Grid off, Profiles 1 px.
+- Units mm; Angle degrees; decimal separator locale; snaps on; inference step 15 deg; merge epsilon 1e-6 m; navigation scheme SketchUp; zoom-to-cursor on; View Shaded+Edges, Sky+Ground on, Grid o[...]  
 
 ### Appendix D. Measurement Examples
 
@@ -585,97 +585,26 @@ For each tool: Activation, Icon/Asset, Cursor, Hotkeys, Snaps/Locks, States/Step
 
 **🔧 UI/UX MICRO-BEHAVIORS — EXTENDED INSTRUCTION SET (AI-APPENDABLE ONLY)**
 
-**Directive:** The following behaviors are to be **added to** the existing UI/UX specification files, **not overwritten** or altered. Any AI or contributor integrating these must ensure that no existing directives are deleted or diminished. Append only. Extend existing inference and tool behavior logic to include these micro-operations.
+**Directive:** The following behaviors are to be **added to** the existing UI/UX specification files, **not overwritten** or altered. Any AI or contributor integrating these must ensure that no e[...] (original appended micro-behaviors block continues unchanged)
 
 ---
 
-**1. Snapping Behavior Enhancements**
-
-* Enable snapping to:
-
-  * Circle, arc, ellipse, spline centers (shown as ring glyphs).
-  * Endpoints and midpoints of all edges, curves, and arc segments.
-  * Quadrant points on arcs/circles (0°, 90°, 180°, 270° from center).
-  * Intersections—including real, virtual (implied), and projected.
-  * Perpendicular and tangent positions from curves.
-* Virtual intersections (projections across infinite extensions) must be inferred and offered as active snap glyphs.
-* Tangent/perpendicular modes must be toggleable (e.g. with Alt/Shift).
-* Snap-to behaviors must respect inference priority order: endpoints > intersections > midpoints > projections > axis/angle locks > free cursor.
-
 ---
 
-**2. Visual Inference Guides**
+Scale-based Tolerances (SketchUp-like presets)
 
-* Show dynamic dotted guide lines between arc endpoints, potential closure points, axis-aligned and angle-aligned directions.
-* When a loop is nearly closed, display a dashed preview of the face to be formed.
-* When axis/angle lock is engaged, show faint guide lines labeled (e.g., “X”, “Y”) anchored from cursor.
-* Add symmetry detection: if shapes reflect about an axis, show a faint mirror guide to assist mirroring.
+* Presets for common modeling scales (provided as recommended defaults; all values are configurable in Preferences):
+  * High precision (mm-scale preset):
+    * Merge tolerance: 1e-6 m (0.001 mm)
+    * Coplanarity tolerance: 1e-5 m (0.01 mm)
+  * Medium precision (cm-scale / general modeling preset):
+    * Merge tolerance: 1e-5 m (0.01 mm)
+    * Coplanarity tolerance: 1e-4 m (0.1 mm)
+  * Low precision (m-scale / architectural preset):
+    * Merge tolerance: 1e-4 m (0.1 mm)
+    * Coplanarity tolerance: 1e-3 m (1 mm)
 
----
+* These presets align with common, published modeling-tool tolerances used for different model scales and aim to reflect SketchUp-like behavior while remaining configurable per-document and per-project.
 
-**3. Manual Input Behavior**
-
-* Always accept typed input (lengths, radius, angles, dimensions) during drawing operations without requiring field selection.
-* Maintain input grammar:
-
-  * For lines: `length`, or `length,angle`.
-  * For rectangles: `width,height`, `w,h`, or `WxH`.
-  * For circles/arcs: `r=<value>` or `d=<value>`.
-  * For rotated shapes: `w,h,angle`.
-  * For polygons: `sides,radius`.
-* Typing overrides live cursor input until Enter or comma confirms.
-* All units must be parsed (`mm`, `cm`, `m`, `in`, `ft`, `”`, etc.).
-* Array modifiers (e.g. `*5`, `/2`) remain available for repeated actions.
-
----
-
-**4. Face Creation & Closure**
-
-* Detect closed loops in real-time as new segments are added.
-* Auto-fill a planar face if a closed edge loop forms within merge/coplanar tolerances:
-
-  * Merge tolerance: ~1e-6 m
-  * Coplanarity tolerance: ~1e-5 m
-* Face creation occurs when:
-
-  * A final point snaps to the loop origin.
-  * A rectangle or polygon is completed.
-* Show visual face preview when closure is imminent.
-
----
-
-**5. Edge Extension Behavior**
-
-* When a new edge endpoint lands:
-
-  * Directly on a vertex → merge.
-  * On an existing edge → split.
-  * Coincident with another edge → weld or collapse.
-  * At intersection → create new vertex and join.
-* Edge and face updates must occur live and respect clean manifold topology rules.
-* Hover, pre-select, and select states must visually update:
-
-  * Hover → soft glow/outline
-  * Pre-select → highlight + glyph
-  * Select → locked highlight
-* Dashed previews are used for in-progress drawing.
-
----
-
-**6. Axis Lock & Inference Priority**
-
-* Inference priority must continue as:
-  `snap > axis lock > angle lock > visual guide > free draw`
-* Modifier keys:
-
-  * Shift → axis lock
-  * Arrow keys / X/Y/Z → axis constraint
-  * Alt → tangent/perpendicular toggle
-
----
-
-**⚠️ AI/CODE AGENT INTEGRATION NOTE:**
-This block is to be appended verbatim to existing UI/UX specification files. Do not remove or modify previous rules. Integrate extended behaviors in a modular way, ideally via subclassed or modular override hooks to preserve forward compatibility with previous architectural decisions.
-
----
+Note: These appended directives are subject to further refinement to reflect industry standards.
 

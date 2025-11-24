@@ -9,6 +9,7 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QHideEvent>
+#include <QDebug>
 
 #include <QOpenGLContext>
 #include <QCursor>
@@ -66,6 +67,27 @@ in vec4 v_color;
 out vec4 fragColor;
 void main() {
     fragColor = v_color;
+}
+)";
+
+constexpr const char* kRawDebugVertexShader = R"(
+#version 330 core
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_color;
+uniform mat4 u_mvp;
+out vec3 v_color;
+void main() {
+    v_color = a_color;
+    gl_Position = u_mvp * vec4(a_position, 1.0);
+}
+)";
+
+constexpr const char* kRawDebugFragmentShader = R"(
+#version 330 core
+in vec3 v_color;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(v_color, 1.0);
 }
 )";
 
@@ -188,6 +210,7 @@ GLViewport::GLViewport(QWidget* parent)
     : QOpenGLWidget(parent)
 {
     setObjectName(QStringLiteral("MainViewport"));
+    debugRawGlMode = qEnvironmentVariableIsSet("FREECRAFTER_DEBUG_RAW_GL");
     setFocusPolicy(Qt::StrongFocus);
     ownedDocument = std::make_unique<Scene::Document>();
     documentPtr = ownedDocument.get();
@@ -221,6 +244,20 @@ GLViewport::GLViewport(QWidget* parent)
 void GLViewport::initializeGL()
 {
     initializeOpenGLFunctions();
+    if (!context() || !context()->isValid()) {
+        qWarning() << "GLViewport: invalid OpenGL context";
+    } else {
+        const auto fmt = context()->format();
+        // Log only GPU/driver metadata; avoid emitting any user-specific paths or identifiers.
+        qInfo() << "GLViewport: OpenGL context" << fmt.majorVersion() << '.' << fmt.minorVersion()
+                << "profile" << fmt.profile();
+        const GLubyte* vendor = glGetString(GL_VENDOR);
+        const GLubyte* rendererStr = glGetString(GL_RENDERER);
+        const GLubyte* version = glGetString(GL_VERSION);
+        qInfo() << "  GL_VENDOR:" << (vendor ? reinterpret_cast<const char*>(vendor) : "");
+        qInfo() << "  GL_RENDERER:" << (rendererStr ? reinterpret_cast<const char*>(rendererStr) : "");
+        qInfo() << "  GL_VERSION:" << (version ? reinterpret_cast<const char*>(version) : "");
+    }
     glEnable(GL_DEPTH_TEST);
     glClearColor(static_cast<float>(skyColor.redF()),
                  static_cast<float>(skyColor.greenF()),
@@ -228,17 +265,19 @@ void GLViewport::initializeGL()
                  1.0f);
     renderer.initialize(context()->extraFunctions());
     initializeHorizonBand();
+    if (debugRawGlMode)
+        initializeRawDebugTriangle();
 }
 
 void GLViewport::resizeGL(int w, int h)
 {
-    glViewport(0,0,w,h);
-    if (toolManager) {
-        const auto ratio = devicePixelRatioF();
-        const int pixelW = std::max(1, static_cast<int>(std::lround(w * ratio)));
-        const int pixelH = std::max(1, static_cast<int>(std::lround(h * ratio)));
+    const qreal ratio = devicePixelRatioF();
+    const int pixelW = std::max(1, static_cast<int>(std::lround(w * ratio)));
+    const int pixelH = std::max(1, static_cast<int>(std::lround(h * ratio)));
+    viewportPixelSize = QSize(pixelW, pixelH);
+    glViewport(0, 0, pixelW, pixelH);
+    if (toolManager)
         toolManager->setViewportSize(pixelW, pixelH);
-    }
 }
 
 void GLViewport::resizeEvent(QResizeEvent* event)
@@ -484,7 +523,25 @@ QString GLViewport::currentViewPresetLabel() const
 void GLViewport::paintGL()
 {
     currentDrawCalls = 0;
+    const qreal ratio = devicePixelRatioF();
+    const int pixelW = std::max(1, static_cast<int>(std::lround(width() * ratio)));
+    const int pixelH = std::max(1, static_cast<int>(std::lround(height() * ratio)));
+    if (viewportPixelSize.width() != pixelW || viewportPixelSize.height() != pixelH) {
+        viewportPixelSize = QSize(pixelW, pixelH);
+        glViewport(0, 0, pixelW, pixelH);
+        if (toolManager)
+            toolManager->setViewportSize(pixelW, pixelH);
+    }
+    glClearColor(static_cast<float>(skyColor.redF()),
+                 static_cast<float>(skyColor.greenF()),
+                 static_cast<float>(skyColor.blueF()),
+                 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    if (debugRawGlMode) {
+        drawRawDebugTriangle();
+        return;
+    }
 
     if (!documentPtr)
         return;
@@ -503,7 +560,9 @@ void GLViewport::paintGL()
     }
     drawHorizonBand();
 
-    float aspect = width() > 0 ? float(width()) / float(height() > 0 ? height() : 1) : 1.0f;
+    float aspect = viewportPixelSize.height() > 0
+                       ? float(viewportPixelSize.width()) / float(viewportPixelSize.height())
+                       : 1.0f;
     QMatrix4x4 projectionMatrix = buildProjectionMatrix(aspect);
 
     QMatrix4x4 viewMatrix = buildViewMatrix();
@@ -549,6 +608,7 @@ void GLViewport::paintGL()
 
     renderer.beginFrame(projectionMatrix, viewMatrix, renderStyle);
     drawGrid();
+    drawOriginMarker();
     drawAxes();
     drawSceneGeometry();
     currentDrawCalls += renderer.flush();
@@ -608,16 +668,16 @@ void GLViewport::paintGL()
 
 void GLViewport::drawAxes()
 {
-    const float axisLength = 1.5f;
-    const float tickSpacing = 0.5f;
-    const float tickSize = 0.08f;
+    const float axisLength = 8.0f;
+    const float tickSpacing = 1.0f;
+    const float tickSize = 0.12f;
     const QVector4D xColor(0.93f, 0.18f, 0.18f, 1.0f);
     const QVector4D yColor(0.10f, 0.68f, 0.21f, 1.0f);
     const QVector4D zColor(0.16f, 0.44f, 0.91f, 1.0f);
 
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(axisLength, 0, 0) }, xColor, 3.0f, true, false);
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, axisLength, 0) }, yColor, 3.0f, true, false);
-    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 0, axisLength) }, zColor, 3.0f, true, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(axisLength, 0, 0) }, xColor, 3.0f, false, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, axisLength, 0) }, yColor, 3.0f, false, false);
+    renderer.addLineSegments(std::vector<QVector3D>{ QVector3D(0, 0, 0), QVector3D(0, 0, axisLength) }, zColor, 3.0f, false, false);
 
     std::vector<QVector3D> tickSegments;
     for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
@@ -625,7 +685,7 @@ void GLViewport::drawAxes()
         tickSegments.push_back(QVector3D(t, 0, tickSize));
     }
     if (!tickSegments.empty())
-        renderer.addLineSegments(tickSegments, xColor, 2.0f, true, false);
+        renderer.addLineSegments(tickSegments, xColor, 2.2f, false, false);
 
     tickSegments.clear();
     for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
@@ -633,7 +693,7 @@ void GLViewport::drawAxes()
         tickSegments.push_back(QVector3D(tickSize, t, 0));
     }
     if (!tickSegments.empty())
-        renderer.addLineSegments(tickSegments, yColor, 2.0f, true, false);
+        renderer.addLineSegments(tickSegments, yColor, 2.2f, false, false);
 
     tickSegments.clear();
     for (float t = tickSpacing; t <= axisLength; t += tickSpacing) {
@@ -641,7 +701,17 @@ void GLViewport::drawAxes()
         tickSegments.push_back(QVector3D(tickSize, 0, t));
     }
     if (!tickSegments.empty())
-        renderer.addLineSegments(tickSegments, zColor, 2.0f, true, false);
+        renderer.addLineSegments(tickSegments, zColor, 2.2f, false, false);
+}
+
+void GLViewport::drawOriginMarker()
+{
+    const float markerLength = 0.35f;
+    const QVector4D neutralColor(0.32f, 0.32f, 0.38f, 1.0f);
+    const std::vector<QVector3D> cross{ QVector3D(-markerLength, 0.0f, 0.0f), QVector3D(markerLength, 0.0f, 0.0f),
+                                        QVector3D(0.0f, -markerLength, 0.0f), QVector3D(0.0f, markerLength, 0.0f),
+                                        QVector3D(0.0f, 0.0f, -markerLength), QVector3D(0.0f, 0.0f, markerLength) };
+    renderer.addLineSegments(cross, neutralColor, 2.0f, false, false, Renderer::LineCategory::Generic, false, 4.0f);
 }
 
 void GLViewport::drawGrid()
@@ -712,17 +782,95 @@ void GLViewport::drawGrid()
     }
 }
 
+void GLViewport::initializeRawDebugTriangle()
+{
+    rawDebugReady = false;
+
+    rawDebugProgram.removeAllShaders();
+    rawDebugVbo.destroy();
+    rawDebugVao.destroy();
+
+    if (!rawDebugProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kRawDebugVertexShader)) {
+        qWarning() << "GLViewport: failed to compile raw debug vertex shader" << rawDebugProgram.log();
+        return;
+    }
+    if (!rawDebugProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kRawDebugFragmentShader)) {
+        qWarning() << "GLViewport: failed to compile raw debug fragment shader" << rawDebugProgram.log();
+        return;
+    }
+    if (!rawDebugProgram.link()) {
+        qWarning() << "GLViewport: failed to link raw debug shader" << rawDebugProgram.log();
+        return;
+    }
+
+    struct RawVertex {
+        QVector3D position;
+        QVector3D color;
+    };
+
+    const std::array<RawVertex, 3> vertices{ { { QVector3D(-0.6f, -0.6f, 0.0f), QVector3D(0.95f, 0.75f, 0.2f) },
+                                               { QVector3D(0.6f, -0.6f, 0.0f), QVector3D(0.2f, 0.85f, 0.55f) },
+                                               { QVector3D(0.0f, 0.7f, 0.0f), QVector3D(0.25f, 0.45f, 0.95f) } } };
+
+    rawDebugVbo.create();
+    rawDebugVbo.bind();
+    rawDebugVbo.allocate(vertices.data(), static_cast<int>(vertices.size() * sizeof(RawVertex)));
+
+    rawDebugVao.create();
+    QOpenGLVertexArrayObject::Binder binder(&rawDebugVao);
+    rawDebugProgram.bind();
+    rawDebugProgram.enableAttributeArray(0);
+    rawDebugProgram.enableAttributeArray(1);
+    rawDebugProgram.setAttributeBuffer(0, GL_FLOAT, offsetof(RawVertex, position), 3, sizeof(RawVertex));
+    rawDebugProgram.setAttributeBuffer(1, GL_FLOAT, offsetof(RawVertex, color), 3, sizeof(RawVertex));
+    rawDebugVbo.release();
+
+    rawDebugReady = true;
+}
+
+void GLViewport::drawRawDebugTriangle()
+{
+    if (!rawDebugReady)
+        return;
+
+    const qreal ratio = devicePixelRatioF();
+    const int pixelW = std::max(1, static_cast<int>(std::lround(width() * ratio)));
+    const int pixelH = std::max(1, static_cast<int>(std::lround(height() * ratio)));
+    if (viewportPixelSize.width() != pixelW || viewportPixelSize.height() != pixelH) {
+        viewportPixelSize = QSize(pixelW, pixelH);
+        glViewport(0, 0, pixelW, pixelH);
+    }
+
+    QMatrix4x4 projection;
+    const float aspect = pixelH > 0 ? static_cast<float>(pixelW) / static_cast<float>(pixelH) : 1.0f;
+    projection.perspective(45.0f, aspect, 0.1f, 1000.0f);
+    QMatrix4x4 view;
+    view.lookAt(QVector3D(4.0f, 4.0f, 4.0f), QVector3D(0.0f, 0.0f, 0.0f), QVector3D(0.0f, 1.0f, 0.0f));
+    const QMatrix4x4 mvp = projection * view;
+
+    rawDebugProgram.bind();
+    rawDebugProgram.setUniformValue("u_mvp", mvp);
+    QOpenGLVertexArrayObject::Binder binder(&rawDebugVao);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
 void GLViewport::initializeHorizonBand()
 {
     horizonReady = false;
     horizonProgram.removeAllShaders();
 
-    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kHorizonVertexShader))
+    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kHorizonVertexShader)) {
+        qWarning() << "GLViewport: failed to compile horizon vertex shader" << horizonProgram.log();
         return;
-    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kHorizonFragmentShader))
+    }
+    if (!horizonProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kHorizonFragmentShader)) {
+        qWarning() << "GLViewport: failed to compile horizon fragment shader" << horizonProgram.log();
         return;
-    if (!horizonProgram.link())
+    }
+    if (!horizonProgram.link()) {
+        qWarning() << "GLViewport: failed to link horizon shader" << horizonProgram.log();
         return;
+    }
 
     if (!horizonVbo.isCreated() && !horizonVbo.create())
         return;
@@ -1069,6 +1217,11 @@ void GLViewport::drawSceneGeometry()
         return;
 
     Scene::Document& document = *documentPtr;
+#ifdef QT_DEBUG
+    std::size_t submittedObjects = 0;
+    std::size_t submittedCurves = 0;
+    std::size_t submittedTriangles = 0;
+#endif
     std::vector<QVector4D> clipPlanes;
     const Scene::SceneSettings& sceneSettings = document.settings();
     if (sceneSettings.sectionPlanesVisible()) {
@@ -1099,6 +1252,10 @@ void GLViewport::drawSceneGeometry()
         }
         const bool treatAsHidden = hidden && showHiddenGeometry;
         if (uptr->getType() == ObjectType::Curve) {
+#ifdef QT_DEBUG
+            ++submittedCurves;
+            ++submittedObjects;
+#endif
             drawCurve(renderer,
                       *static_cast<const Curve*>(uptr.get()),
                       uptr->isSelected(),
@@ -1106,6 +1263,11 @@ void GLViewport::drawSceneGeometry()
                       renderStyle,
                       paletteColors);
         } else if (uptr->getType() == ObjectType::Solid) {
+#ifdef QT_DEBUG
+            ++submittedObjects;
+            const auto& mesh = static_cast<const Solid*>(uptr.get())->getMesh();
+            submittedTriangles += mesh.getTriangles().size();
+#endif
             drawSolid(renderer,
                       *static_cast<const Solid*>(uptr.get()),
                       uptr->isSelected(),
@@ -1114,6 +1276,19 @@ void GLViewport::drawSceneGeometry()
                       paletteColors);
         }
     }
+
+#ifdef QT_DEBUG
+    static std::size_t lastObjects = 0;
+    static std::size_t lastCurves = 0;
+    static std::size_t lastTriangles = 0;
+    if (submittedObjects != lastObjects || submittedCurves != lastCurves || submittedTriangles != lastTriangles) {
+        qDebug() << "Renderer geometry:" << submittedObjects << "objects," << submittedCurves << "curves," << submittedTriangles
+                 << "triangles";
+        lastObjects = submittedObjects;
+        lastCurves = submittedCurves;
+        lastTriangles = submittedTriangles;
+    }
+#endif
 }
 
 void GLViewport::drawSceneOverlays()
@@ -1840,6 +2015,13 @@ bool GLViewport::computeBounds(bool selectedOnly, bool includeHidden, Vector3& o
     return hasBounds;
 }
 
+void GLViewport::fallbackSceneBounds(Vector3& outMin, Vector3& outMax) const
+{
+    constexpr float kFallbackRadius = 10.0f;
+    outMin = Vector3(-kFallbackRadius, -kFallbackRadius, -kFallbackRadius);
+    outMax = Vector3(kFallbackRadius, kFallbackRadius, kFallbackRadius);
+}
+
 GLViewport::CameraKeyframe GLViewport::captureCameraState() const
 {
     return cameraStateFromController(camera);
@@ -2014,10 +2196,8 @@ bool GLViewport::frameSceneToGeometryInternal(bool includeHidden, bool triggerRe
 {
     Vector3 minBounds;
     Vector3 maxBounds;
-    if (!computeBounds(false, includeHidden, minBounds, maxBounds)) {
-        resetCameraToHome(triggerRedraw);
-        return false;
-    }
+    if (!computeBounds(false, includeHidden, minBounds, maxBounds))
+        fallbackSceneBounds(minBounds, maxBounds);
     if (!applyCameraStateForBounds(minBounds, maxBounds, triggerRedraw, animate)) {
         resetCameraToHome(triggerRedraw);
         return false;
@@ -2166,9 +2346,8 @@ bool GLViewport::zoomExtents()
 {
     Vector3 minBounds;
     Vector3 maxBounds;
-    if (!computeBounds(false, showHiddenGeometry, minBounds, maxBounds)) {
-        return false;
-    }
+    if (!computeBounds(false, showHiddenGeometry, minBounds, maxBounds))
+        fallbackSceneBounds(minBounds, maxBounds);
     return applyCameraStateForBounds(minBounds, maxBounds, true, true);
 }
 

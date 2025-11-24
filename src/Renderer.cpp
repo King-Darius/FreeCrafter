@@ -2,6 +2,7 @@
 
 #include <QOpenGLExtraFunctions>
 #include <QOpenGLShader>
+#include <QDebug>
 
 #include <algorithm>
 #include <cmath>
@@ -366,25 +367,34 @@ void Renderer::ensurePrograms()
     if (programsReady)
         return;
 
-    if (!lineProgram.isLinked()) {
-        lineProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kLineVertexShader);
-        lineProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kLineFragmentShader);
-        lineProgram.link();
-    }
+    auto compileProgram = [](QOpenGLShaderProgram& program,
+                             const char* vertexSrc,
+                             const char* fragmentSrc,
+                             const char* label) {
+        program.removeAllShaders();
+        if (!program.addShaderFromSourceCode(QOpenGLShader::Vertex, vertexSrc)) {
+            qWarning() << "Renderer:" << label << "vertex shader compile failed" << program.log();
+            return false;
+        }
+        if (!program.addShaderFromSourceCode(QOpenGLShader::Fragment, fragmentSrc)) {
+            qWarning() << "Renderer:" << label << "fragment shader compile failed" << program.log();
+            return false;
+        }
+        if (!program.link()) {
+            qWarning() << "Renderer:" << label << "program link failed" << program.log();
+            return false;
+        }
+        return true;
+    };
 
-    if (!triangleProgram.isLinked()) {
-        triangleProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kTriangleVertexShader);
-        triangleProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kTriangleFragmentShader);
-        triangleProgram.link();
-    }
+    const bool lineOk = lineProgram.isLinked()
+        || compileProgram(lineProgram, kLineVertexShader, kLineFragmentShader, "line");
+    const bool triOk = triangleProgram.isLinked()
+        || compileProgram(triangleProgram, kTriangleVertexShader, kTriangleFragmentShader, "triangle");
+    const bool shadowOk = shadowProgram.isLinked()
+        || compileProgram(shadowProgram, kShadowVertexShader, kShadowFragmentShader, "shadow");
 
-    if (!shadowProgram.isLinked()) {
-        shadowProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, kShadowVertexShader);
-        shadowProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, kShadowFragmentShader);
-        shadowProgram.link();
-    }
-
-    programsReady = lineProgram.isLinked() && triangleProgram.isLinked() && shadowProgram.isLinked();
+    programsReady = lineOk && triOk && shadowOk;
 }
 
 void Renderer::uploadTriangleBufferIfNeeded()
@@ -660,6 +670,8 @@ void Renderer::releaseShadowResources()
 int Renderer::flush()
 {
     ensurePrograms();
+    if (!programsReady)
+        return 0;
     int draws = 0;
 
     if (!triangleVertices.empty()) {

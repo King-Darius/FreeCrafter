@@ -1,4 +1,4 @@
-# FreeCrafter <img src="docs/media/freecrafter-logo.svg" alt="FreeCrafter logo" height="48" align="top" />
+# FreeCrafter <img src="user-attachments/assets/27a4e54b-a6d0-4513-907d-960175ea2e24" alt="FreeCrafter logo" height="48" align="top" />
 
 > **Status snapshot:** FreeCrafter remains an unstable **pre-release** build. The Qt 6 shell runs with the bundled runtime, but automated builds and tests are currently blocked on staging that toolchain, and significant viewport, layout, and persistence bugs still prevent day-to-day use.
 

@@ -33,6 +33,7 @@ endif()
 add_library(freecrafter_lib
     src/MainWindow.cpp
     src/GLViewport.cpp
+    src/DebugSimpleViewport.cpp
     src/Renderer.cpp
     src/SunModel.cpp
     src/SunSettings.cpp

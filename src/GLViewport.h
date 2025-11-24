@@ -84,6 +84,7 @@ public:
     void zoomOutStep();
     bool zoomExtents();
     bool zoomSelection();
+    void fallbackSceneBounds(Vector3& outMin, Vector3& outMax) const;
     void setAutoFrameOnGeometryChange(bool enabled);
     bool autoFrameOnGeometryChangeEnabled() const { return autoFrameOnGeometryChange; }
     void requestAutoFrameOnGeometryChange();
@@ -137,11 +138,14 @@ protected:
 
 private:
     void drawAxes();
+    void drawOriginMarker();
     void drawGrid();
     void initializeHorizonBand();
     void drawHorizonBand();
     void drawSceneGeometry();
     void drawSceneOverlays();
+    void initializeRawDebugTriangle();
+    void drawRawDebugTriangle();
     QMatrix4x4 buildProjectionMatrix(float aspect) const;
     QMatrix4x4 buildViewMatrix() const;
     bool projectCursorToGround(const QPointF& pos, QVector3D& world) const;
@@ -210,6 +214,14 @@ private:
     QOpenGLBuffer horizonVbo { QOpenGLBuffer::VertexBuffer };
     QOpenGLVertexArrayObject horizonVao;
     bool horizonReady = false;
+
+    QOpenGLShaderProgram rawDebugProgram;
+    QOpenGLBuffer rawDebugVbo { QOpenGLBuffer::VertexBuffer };
+    QOpenGLVertexArrayObject rawDebugVao;
+    bool rawDebugReady = false;
+    bool debugRawGlMode = false;
+
+    QSize viewportPixelSize { 1, 1 };
 
     QColor skyColor = QColor(179, 210, 240);
     QColor groundColor = QColor(188, 206, 188);
